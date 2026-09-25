@@ -10,10 +10,12 @@ import { ConversionDialog } from "./components/ConversionDialog";
 import { SecurityDialog } from "./components/SecurityDialog";
 import { PropertiesDialog } from "./components/PropertiesDialog";
 import { ReportDialog } from "./components/ReportDialog";
+import { OcrDialog } from "./components/OcrDialog";
 import {
   cancelJob,
   closeDocument,
   compareDocuments,
+  createPdfFromImages,
   createBlankDocument,
   getAccessibilityReport,
   getCapabilities,
@@ -21,7 +23,9 @@ import {
   isNativeDesktop,
   openDocument,
   renderPage,
+  reviewOcrPage,
   sanitizeDocument,
+  scanPageToPdf,
   saveCopy,
   searchDocument,
   startCombine,
@@ -34,6 +38,7 @@ import {
   startRotatePages,
   startSplitPages,
   startOcr,
+  startOcrAdvanced,
   startOptimize,
   updateDocumentMetadata,
 } from "./lib/native";
@@ -45,6 +50,8 @@ import type {
   DocumentMetadata,
   DocumentSummary,
   JobStatus,
+  OcrOptions,
+  OcrWord,
   RecentDocument,
   RenderResult,
   SanitizeOptions,
@@ -63,6 +70,9 @@ const emptyCapabilities: Capabilities = {
   scanner: { available: false },
   printing: { available: false },
   certificates: { available: false },
+  pdftotext: { available: false },
+  openssl: { available: false },
+  tesseract: { available: false },
 };
 
 function errorMessage(error: unknown): string {
@@ -106,6 +116,9 @@ export default function App() {
   const [accessibilityReport, setAccessibilityReport] = useState<AccessibilityReport | null>(null);
   const [compareReport, setCompareReport] = useState<CompareReport | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
+  const [ocrOpen, setOcrOpen] = useState(false);
+  const [ocrSuspects, setOcrSuspects] = useState<OcrWord[]>([]);
+  const [ocrReviewLoading, setOcrReviewLoading] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -311,6 +324,12 @@ export default function App() {
         return;
       }
 
+      if (tool === "scan-ocr") {
+        setOcrSuspects([]);
+        setOcrOpen(true);
+        return;
+      }
+
       if (tool === "create") {
         setCreateDialogOpen(true);
         return;
@@ -343,20 +362,6 @@ export default function App() {
         return;
       }
 
-      if (tool === "scan-ocr") {
-        const input = await pickInputPdf();
-        if (!input) return;
-        const output = await save({
-          title: "Salvar PDF com OCR",
-          defaultPath: "Seven-Reader-OCR.pdf",
-          filters: [{ name: "Documento PDF", extensions: ["pdf"] }],
-        });
-        if (!output) return;
-        const started = await startOcr(input, output);
-        setNotice(`OCR iniciado · job ${started.jobId.slice(0, 8)}`);
-        return;
-      }
-
       if (tool === "optimize") {
         const input = await pickInputPdf();
         if (!input) return;
@@ -377,6 +382,58 @@ export default function App() {
   };
 
 
+
+
+  const createImagesPdf = async (inputs: string[], dpi: number) => {
+    const destination = await save({
+      title: "Criar PDF a partir de imagens",
+      defaultPath: "Imagens-Seven.pdf",
+      filters: [{ name: "Documento PDF", extensions: ["pdf"] }],
+    });
+    if (!destination) return;
+    try {
+      await createPdfFromImages(inputs, destination, dpi);
+      setCreateDialogOpen(false);
+      setNotice("PDF criado a partir das imagens.");
+      await openPath(destination);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runAdvancedOcr = async (output: string, options: OcrOptions) => {
+    if (!document) return;
+    try {
+      const started = await startOcrAdvanced(document.path, output, options);
+      setOcrOpen(false);
+      setNotice(`OCR iniciado · job ${started.jobId.slice(0, 8)}`);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const reviewCurrentOcrPage = async (language: string, threshold: number) => {
+    if (!document) return;
+    try {
+      setOcrReviewLoading(true);
+      setOcrSuspects(await reviewOcrPage(document.id, page, language, threshold));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    } finally {
+      setOcrReviewLoading(false);
+    }
+  };
+
+  const runScan = async (output: string, dpi: number) => {
+    try {
+      await scanPageToPdf(output, dpi);
+      setOcrOpen(false);
+      setNotice("Digitalização salva como PDF.");
+      await openPath(output);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
 
   const createBlankPdf = async (pageSize: BlankPageSize, pageCount: number) => {
     const destination = await save({
@@ -554,6 +611,20 @@ export default function App() {
           {notice}
         </button>
       )}
+      {ocrOpen && (
+        <OcrDialog
+          capabilities={capabilities}
+          documentPath={document?.path}
+          documentId={document?.id}
+          pageIndex={page}
+          suspects={ocrSuspects}
+          loadingReview={ocrReviewLoading}
+          onClose={() => setOcrOpen(false)}
+          onRunOcr={(output, options) => void runAdvancedOcr(output, options)}
+          onReview={(language, threshold) => void reviewCurrentOcrPage(language, threshold)}
+          onScan={(output, dpi) => void runScan(output, dpi)}
+        />
+      )}
       {conversionOpen && (
         <ConversionDialog
           capabilities={capabilities}
@@ -599,6 +670,7 @@ export default function App() {
         <CreatePdfDialog
           onClose={() => setCreateDialogOpen(false)}
           onCreate={(pageSize, pageCount) => void createBlankPdf(pageSize, pageCount)}
+          onCreateImages={(inputs, dpi) => void createImagesPdf(inputs, dpi)}
         />
       )}
       {organizerOpen && (

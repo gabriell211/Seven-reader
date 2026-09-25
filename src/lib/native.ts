@@ -7,6 +7,8 @@ import type {
   DocumentMetadata,
   JobStart,
   MetadataUpdate,
+  OcrOptions,
+  OcrWord,
   RenderResult,
   SanitizeOptions,
   SanitizeReport,
@@ -57,6 +59,35 @@ export async function createBlankDocument(
   pageCount: number,
 ): Promise<void> {
   await invoke("create_blank_document", { destination, pageSize, pageCount });
+}
+
+export async function createPdfFromImages(
+  inputs: string[],
+  destination: string,
+  dpi: number,
+): Promise<void> {
+  await invoke("create_pdf_from_images", { inputs, destination, dpi });
+}
+
+export async function startOcrAdvanced(
+  input: string,
+  output: string,
+  options: OcrOptions,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_ocr_advanced", { input, output, options });
+}
+
+export async function reviewOcrPage(
+  documentId: string,
+  pageIndex: number,
+  language: string,
+  threshold: number,
+): Promise<OcrWord[]> {
+  return invoke<OcrWord[]>("review_ocr_page", { documentId, pageIndex, language, threshold });
+}
+
+export async function scanPageToPdf(destination: string, dpi: number): Promise<void> {
+  await invoke("scan_page_to_pdf", { destination, dpi });
 }
 
 export async function startCombine(inputs: string[], output: string): Promise<JobStart> {

@@ -8,7 +8,8 @@ export type CapabilityKey =
   | "printing"
   | "certificates"
   | "pdftotext"
-  | "openssl";
+  | "openssl"
+  | "tesseract";
 
 export interface Capability {
   available: boolean;
@@ -127,6 +128,24 @@ export interface CompareReport {
   rightPages: number;
   changedPages: number;
   pages: ComparePage[];
+}
+
+export interface OcrOptions {
+  language: string;
+  deskew: boolean;
+  rotatePages: boolean;
+  outputType: "auto" | "pdf" | "pdfa" | "pdfa-1" | "pdfa-2" | "pdfa-3";
+  mode: "skip" | "redo" | "force";
+  sidecar?: string;
+}
+
+export interface OcrWord {
+  text: string;
+  confidence: number;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
 }
 
 export type ToolId =

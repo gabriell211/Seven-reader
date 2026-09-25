@@ -22,7 +22,7 @@ export const tools: ToolDefinition[] = [
   { id: "comment", label: "Comentar", description: "Destaques, notas, desenho, carimbos e revisão.", icon: "comment", group: "Revisão", capability: "pdf_engine", implemented: false },
   { id: "fill-sign", label: "Preencher e assinar", description: "Campos, assinatura eletrônica e iniciais.", icon: "sign", group: "Revisão", capability: "pdf_engine", implemented: false },
   { id: "certificates", label: "Certificados", description: "IDs digitais, assinatura, certificação e validação.", icon: "certificate", group: "Segurança", capability: "certificates", implemented: false },
-  { id: "scan-ocr", label: "Digitalizar e OCR", description: "OCR pesquisável local com rotação e deskew.", icon: "ocr", group: "Documento", capability: "ocr", implemented: true },
+  { id: "scan-ocr", label: "Digitalizar e OCR", description: "Digitalização local, OCR pesquisável, PDF/A e revisão de confiança.", icon: "ocr", group: "Documento", capability: ["ocr", "scanner", "tesseract"], implemented: true },
   { id: "forms", label: "Preparar formulário", description: "AcroForm, campos, validação e ordem de tabulação.", icon: "form", group: "Revisão", capability: "pdf_engine", implemented: false },
   { id: "protect", label: "Proteger", description: "Criptografia AES-256 e remoção de criptografia autorizada.", icon: "shield", group: "Segurança", capability: "qpdf", implemented: true },
   { id: "sanitize", label: "Sanitizar", description: "Remova JavaScript, ações automáticas, anexos, XFA e metadados selecionados.", icon: "lock", group: "Segurança", implemented: true },

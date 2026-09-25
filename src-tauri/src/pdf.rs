@@ -54,7 +54,7 @@ pub struct NormalizedRect {
 }
 
 impl NormalizedRect {
-    fn validated(&self) -> Result<Self, SevenError> {
+    pub(crate) fn validated(&self) -> Result<Self, SevenError> {
         let values = [self.x, self.y, self.width, self.height];
         if values.iter().any(|value| !value.is_finite())
             || self.width <= 0.0

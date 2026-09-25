@@ -80,6 +80,9 @@ import {
   sessionReplaceImageObject,
   sessionRemoveImageObject,
   sessionEditAddImage,
+  listPdfNamedDestinations,
+  sessionUpsertPdfNamedDestination,
+  sessionRemovePdfNamedDestination,
   listPdfLinks,
   sessionEditUpdateLink,
   sessionEditRemoveLink,
@@ -164,6 +167,7 @@ import type {
   LinkPlacement,
   LinkInfo,
   LinkUpdate,
+  NamedDestinationInfo,
   NewFormField,
   OcrOptions,
   OcrWord,
@@ -304,6 +308,7 @@ export default function App() {
   const [editingOpen, setEditingOpen] = useState(false);
   const [imageObjects, setImageObjects] = useState<ImageObjectInfo[]>([]);
   const [pdfLinks, setPdfLinks] = useState<LinkInfo[]>([]);
+  const [namedDestinations, setNamedDestinations] = useState<NamedDestinationInfo[]>([]);
   const [pdfLinksLoading, setPdfLinksLoading] = useState(false);
   const [imageObjectsLoading, setImageObjectsLoading] = useState(false);
   const [redactionOpen, setRedactionOpen] = useState(false);
@@ -1120,6 +1125,7 @@ export default function App() {
         }
         setImageObjects([]);
         setPdfLinks([]);
+        setNamedDestinations([]);
         setEditingOpen(true);
         return;
       }
@@ -1591,6 +1597,42 @@ export default function App() {
     try {
       const summary = await sessionEditAddImage(document.id, placement);
       await acceptDocumentRevision(summary, "Imagem inserida na sessão.");
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const reloadNamedDestinations = async () => {
+    if (!document) return;
+    try {
+      setNamedDestinations(await listPdfNamedDestinations(document.id));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runUpsertNamedDestination = async (
+    oldName: string | undefined,
+    name: string,
+    pageIndex: number,
+  ) => {
+    if (!document) return;
+    try {
+      const summary = await sessionUpsertPdfNamedDestination(document.id, oldName, name, pageIndex);
+      await acceptDocumentRevision(summary, `Destino nomeado "${name}" atualizado.`);
+      setNamedDestinations(await listPdfNamedDestinations(document.id));
+      setPdfLinks(await listPdfLinks(document.id));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runRemoveNamedDestination = async (name: string) => {
+    if (!document) return;
+    try {
+      const summary = await sessionRemovePdfNamedDestination(document.id, name);
+      await acceptDocumentRevision(summary, `Destino nomeado "${name}" removido.`);
+      setNamedDestinations(await listPdfNamedDestinations(document.id));
     } catch (error) {
       setNotice(errorMessage(error));
     }
@@ -2412,6 +2454,7 @@ export default function App() {
           imageObjectsLoading={imageObjectsLoading}
           links={pdfLinks}
           linksLoading={pdfLinksLoading}
+          namedDestinations={namedDestinations}
           onClose={() => setEditingOpen(false)}
           onAddText={(placement) => void runEditAddText(placement)}
           onReplaceText={(find, replacement, allPages) => void runEditReplaceText(find, replacement, allPages)}
@@ -2420,6 +2463,9 @@ export default function App() {
           onRemoveImage={(resourceName) => void runRemoveImageObject(resourceName)}
           onAddImage={(placement) => void runEditAddImage(placement)}
           onReloadLinks={() => void reloadPdfLinks()}
+          onReloadNamedDestinations={() => void reloadNamedDestinations()}
+          onUpsertNamedDestination={(oldName,name,pageIndex)=>void runUpsertNamedDestination(oldName,name,pageIndex)}
+          onRemoveNamedDestination={(name)=>void runRemoveNamedDestination(name)}
           onUpdateLink={(update) => void runEditUpdateLink(update)}
           onRemoveLink={(pageIndex,objectId) => void runEditRemoveLink(pageIndex,objectId)}
           onAddLink={(link) => void runEditAddLink(link)}

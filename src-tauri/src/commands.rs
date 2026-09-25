@@ -58,6 +58,11 @@ pub async fn open_document(
 #[tauri::command]
 pub fn close_document(state: State<'_, AppState>, document_id: String) -> CommandResult<()> {
     state.documents.lock().remove(&document_id);
+    let editing_dir = state.cache_dir.join("editing").join(&document_id);
+    if editing_dir.exists() {
+        fs::remove_dir_all(&editing_dir)
+            .map_err(|error| ErrorPayload::from(SevenError::Io(error.to_string())))?;
+    }
     Ok(())
 }
 

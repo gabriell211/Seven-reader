@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
+import { readImage, readText } from "@tauri-apps/plugin-clipboard-manager";
 import type { Capabilities } from "../types";
 import { SevenIcon } from "./SevenIcon";
 
@@ -12,6 +13,7 @@ interface CreatePdfDialogProps {
   onCreate: (pageSize: BlankPageSize, pageCount: number) => void;
   onCreateImages: (inputs: string[], dpi: number) => void;
   onCreateText: (text: string, pageSize: BlankPageSize, fontSize: number) => void;
+  onCreateClipboardImage: (rgba: number[], width: number, height: number, dpi: number) => void;
   onCreateFile: (input: string, outputDirectory: string) => void;
   onCreateWeb: (url: string) => void;
 }
@@ -37,6 +39,7 @@ export function CreatePdfDialog({
   onCreate,
   onCreateImages,
   onCreateText,
+  onCreateClipboardImage,
   onCreateFile,
   onCreateWeb,
 }: CreatePdfDialogProps) {
@@ -47,6 +50,7 @@ export function CreatePdfDialog({
   const [dpi, setDpi] = useState(150);
   const [text, setText] = useState("");
   const [fontSize, setFontSize] = useState(11);
+  const [clipboardImage, setClipboardImage] = useState<{ rgba: number[]; width: number; height: number } | null>(null);
   const [fileInput, setFileInput] = useState("");
   const [fileOutputDirectory, setFileOutputDirectory] = useState("");
   const [url, setUrl] = useState("");
@@ -81,28 +85,50 @@ export function CreatePdfDialog({
     if (typeof selected === "string") setFileOutputDirectory(selected);
   };
 
-  const readClipboard = async () => {
+  const readClipboardText = async () => {
     try {
-      const value = await navigator.clipboard.readText();
+      const value = await readText();
+      setClipboardImage(null);
       setText(value);
       setClipboardError(value ? "" : "A área de transferência não contém texto.");
     } catch {
-      setClipboardError("O sistema não permitiu ler texto da área de transferência.");
+      setClipboardError("Não foi possível ler texto da área de transferência.");
+    }
+  };
+
+  const readClipboardImage = async () => {
+    try {
+      const image = await readImage();
+      const [{ width, height }, rgba] = await Promise.all([image.size(), image.rgba()]);
+      await image.close();
+      if (!width || !height || rgba.length !== width * height * 4) {
+        throw new Error("Imagem do clipboard inválida");
+      }
+      setText("");
+      setClipboardImage({ rgba: Array.from(rgba), width, height });
+      setClipboardError("");
+    } catch {
+      setClipboardImage(null);
+      setClipboardError("A área de transferência não contém uma imagem compatível.");
     }
   };
 
   const valid =
     mode === "blank" ? pageCount >= 1 :
       mode === "images" ? images.length > 0 :
-        mode === "text" || mode === "clipboard" ? text.trim().length > 0 :
+        mode === "text" ? text.trim().length > 0 :
+        mode === "clipboard" ? Boolean(text.trim() || clipboardImage) :
           mode === "file" ? Boolean(fileInput && fileOutputDirectory && capabilities?.office.available) :
             Boolean(url.trim() && capabilities?.web_pdf.available);
 
   const submit = () => {
     if (mode === "blank") onCreate(pageSize, pageCount);
     else if (mode === "images") onCreateImages(images, dpi);
-    else if (mode === "text" || mode === "clipboard") onCreateText(text, pageSize, fontSize);
-    else if (mode === "file") onCreateFile(fileInput, fileOutputDirectory);
+    else if (mode === "text") onCreateText(text, pageSize, fontSize);
+    else if (mode === "clipboard") {
+      if (clipboardImage) onCreateClipboardImage(clipboardImage.rgba, clipboardImage.width, clipboardImage.height, dpi);
+      else onCreateText(text, pageSize, fontSize);
+    } else if (mode === "file") onCreateFile(fileInput, fileOutputDirectory);
     else onCreateWeb(url.trim());
   };
 
@@ -175,9 +201,17 @@ export function CreatePdfDialog({
           <div className="workflow-body">
             {mode === "clipboard" && (
               <div className="clipboard-actions">
-                <button className="secondary-light-button" onClick={() => void readClipboard()}>
-                  <SevenIcon name="open" /> Ler texto da área de transferência
+                <button className="secondary-light-button" onClick={() => void readClipboardText()}>
+                  <SevenIcon name="text" /> Ler texto
                 </button>
+                <button className="secondary-light-button" onClick={() => void readClipboardImage()}>
+                  <SevenIcon name="open" /> Ler imagem
+                </button>
+                {clipboardImage && (
+                  <span className="clipboard-image-state">
+                    <SevenIcon name="image" /> {clipboardImage.width}×{clipboardImage.height}px
+                  </span>
+                )}
                 {clipboardError && <small className="dependency-note">{clipboardError}</small>}
               </div>
             )}
@@ -187,10 +221,10 @@ export function CreatePdfDialog({
                 className="document-textarea"
                 value={text}
                 onChange={(event) => setText(event.target.value)}
-                placeholder={mode === "clipboard" ? "Use o botão acima ou cole o texto aqui." : "Digite ou cole o texto que será gravado no PDF."}
+                placeholder={mode === "clipboard" ? "Leia o texto do clipboard ou cole manualmente aqui." : "Digite ou cole o texto que será gravado no PDF."}
                 spellCheck
               />
-              <small>O texto é gravado como texto pesquisável, não como imagem.</small>
+              <small>{mode === "clipboard" && clipboardImage ? "Uma imagem do clipboard será usada como página PDF." : "O texto é gravado como texto pesquisável, não como imagem."}</small>
             </label>
             <div className="two-column-fields">
               <label className="workflow-field">

@@ -549,6 +549,56 @@ pub fn start_ocr_advanced(
 }
 
 #[tauri::command]
+pub fn start_batch_ocr(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    inputs: Vec<String>,
+    output_directory: String,
+    options: ocr::OcrOptions,
+) -> CommandResult<JobStart> {
+    if inputs.is_empty() || inputs.len() > 200 {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "Selecione entre 1 e 200 PDFs para OCR em lote".into(),
+        )));
+    }
+    options.validated().map_err(ErrorPayload::from)?;
+
+    let executable = jobs::require_executable(&["ocrmypdf"], "OCRmyPDF").map_err(ErrorPayload::from)?;
+    let output_directory = jobs::validated_directory(&output_directory).map_err(ErrorPayload::from)?;
+    let total = inputs.len();
+    let mut steps = Vec::with_capacity(total);
+
+    for (index, input) in inputs.into_iter().enumerate() {
+        let canonical = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+        let stem = canonical.file_stem().and_then(|value| value.to_str()).unwrap_or("documento");
+        let mut output = output_directory.join(format!("{stem}-ocr.pdf"));
+        let mut suffix = 2usize;
+        while output.exists() {
+            output = output_directory.join(format!("{stem}-ocr-{suffix}.pdf"));
+            suffix += 1;
+        }
+
+        let args = options
+            .args(canonical.to_string_lossy().as_ref(), output.to_string_lossy().as_ref())
+            .map_err(ErrorPayload::from)?;
+        let name = canonical.file_name().and_then(|value| value.to_str()).unwrap_or("documento.pdf");
+        steps.push(jobs::ProcessStep {
+            program: executable.clone(),
+            args,
+            label: format!("OCR {} de {} · {name}", index + 1, total),
+        });
+    }
+
+    Ok(jobs::start_process_sequence_job(
+        app,
+        &state,
+        "batch-ocr",
+        steps,
+        Some(output_directory),
+    ))
+}
+
+#[tauri::command]
 pub async fn review_ocr_page(
     state: State<'_, AppState>,
     document_id: String,
@@ -1101,6 +1151,63 @@ pub fn start_convert_to_pdf(
         "convert-to-pdf",
         executable,
         args,
+        Some(output_directory),
+    ))
+}
+
+#[tauri::command]
+pub fn start_batch_convert_to_pdf(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    inputs: Vec<String>,
+    output_directory: String,
+) -> CommandResult<JobStart> {
+    if inputs.is_empty() || inputs.len() > 200 {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "Selecione entre 1 e 200 arquivos para conversão em lote".into(),
+        )));
+    }
+
+    let executable = jobs::require_executable(&["soffice", "libreoffice"], "LibreOffice").map_err(ErrorPayload::from)?;
+    let output_directory = jobs::validated_directory(&output_directory).map_err(ErrorPayload::from)?;
+    let mut steps = Vec::with_capacity(inputs.len());
+
+    for (index, input) in inputs.into_iter().enumerate() {
+        let path = std::path::Path::new(&input);
+        if !path.exists() || !path.is_file() {
+            return Err(ErrorPayload::from(SevenError::NotFound(input)));
+        }
+        let extension = path.extension().and_then(|value| value.to_str()).unwrap_or_default().to_ascii_lowercase();
+        if !matches!(
+            extension.as_str(),
+            "doc" | "docx" | "xls" | "xlsx" | "ppt" | "pptx" | "odt" | "ods" | "odp" | "rtf" | "txt" | "html" | "htm"
+        ) {
+            return Err(ErrorPayload::from(SevenError::UnsupportedFormat(extension)));
+        }
+
+        let canonical = fs::canonicalize(path)
+            .map_err(|error| ErrorPayload::from(SevenError::InvalidPath(error.to_string())))?;
+        let name = canonical.file_name().and_then(|value| value.to_str()).unwrap_or("arquivo").to_owned();
+        let args = vec![
+            "--headless".into(),
+            "--convert-to".into(),
+            "pdf".into(),
+            "--outdir".into(),
+            output_directory.to_string_lossy().into_owned(),
+            canonical.to_string_lossy().into_owned(),
+        ];
+        steps.push(jobs::ProcessStep {
+            program: executable.clone(),
+            args,
+            label: format!("Convertendo {} de {} · {name}", index + 1, inputs.len()),
+        });
+    }
+
+    Ok(jobs::start_process_sequence_job(
+        app,
+        &state,
+        "batch-convert",
+        steps,
         Some(output_directory),
     ))
 }

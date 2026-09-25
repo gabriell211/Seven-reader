@@ -17,6 +17,15 @@ pub struct OptimizeOptions {
     pub embed_fonts: bool,
     pub subset_fonts: bool,
     pub linearize: bool,
+    pub cleanup: bool,
+    pub remove_javascript: bool,
+    pub remove_open_actions: bool,
+    pub remove_embedded_files: bool,
+    pub remove_metadata: bool,
+    pub remove_xfa: bool,
+    pub remove_annotations: bool,
+    pub remove_forms: bool,
+    pub remove_multimedia: bool,
 }
 
 impl OptimizeOptions {

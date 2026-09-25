@@ -39,7 +39,7 @@ export const tools: ToolDefinition[] = [
   { id: "portfolio", label: "Portfólios PDF", description: "Inspecione Collection/Portfólio e componentes incorporados sem executar conteúdo.", icon: "attachment", group: "Avançado", capability: "pdf_engine", implemented: true },
   { id: "layers", label: "Camadas", description: "OCGs, intenção e visibilidade inicial; edição segura do estado padrão.", icon: "layers", group: "Avançado", capability: "pdf_engine", implemented: true },
   { id: "articles", label: "Artigos PDF", description: "Inspecione threads Articles preservando sua estrutura.", icon: "bookmark", group: "Avançado", capability: "pdf_engine", implemented: true },
-  { id: "catalog", label: "Índices e catálogo", description: "Índice local e pesquisa em coleções.", icon: "search", group: "Avançado", implemented: false },
+  { id: "catalog", label: "Índices e catálogo", description: "Índice local persistente com texto por página e pesquisa em coleções.", icon: "search", group: "Avançado", implemented: true },
   { id: "rich-media", label: "Rich Media", description: "Detecte Rich Media/áudio/vídeo e mantenha execução automática bloqueada.", icon: "attachment", group: "Avançado", capability: "pdf_engine", implemented: true },
   { id: "three-d", label: "3D", description: "Detecte anotações/streams 3D U3D/PRC sem ativação automática.", icon: "layers", group: "Avançado", capability: "pdf_engine", implemented: true },
   { id: "shared-review", label: "Revisão compartilhada", description: "Importação e exportação de comentários.", icon: "comment", group: "Avançado", capability: "pdf_engine", implemented: false },

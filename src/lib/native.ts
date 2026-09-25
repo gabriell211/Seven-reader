@@ -99,6 +99,51 @@ export async function saveCopy(documentId: string, destination: string): Promise
   await invoke("save_document_as", { documentId, destination });
 }
 
+export async function saveDocument(documentId: string): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("save_document", { documentId });
+}
+
+export async function undoDocument(documentId: string): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("undo_document", { documentId });
+}
+
+export async function redoDocument(documentId: string): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("redo_document", { documentId });
+}
+
+export async function sessionAddAnnotation(
+  documentId: string,
+  annotation: AnnotationInput,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_add_annotation", { documentId, annotation });
+}
+
+export async function sessionDeleteAnnotation(
+  documentId: string,
+  objectId: string,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_delete_annotation", { documentId, objectId });
+}
+
+export async function sessionAddInk(
+  documentId: string,
+  ink: InkAnnotationInput,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_add_ink", { documentId, ink });
+}
+
+export async function sessionAddMarkup(
+  documentId: string,
+  pageIndex: number,
+  kind: "highlight" | "underline" | "strikeout",
+  author: string,
+  rect: NormalizedRect,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_add_markup", {
+    documentId, pageIndex, kind, author, rect,
+  });
+}
+
 export async function printDocument(input: string): Promise<JobStart> {
   return invoke<JobStart>("start_print_document", { input });
 }

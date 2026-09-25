@@ -966,7 +966,7 @@ pub fn start_print_document(
     #[cfg(target_os = "windows")]
     {
         let executable = jobs::require_executable(&["powershell"], "Windows Print").map_err(ErrorPayload::from)?;
-        let escaped = input.to_string_lossy().replace(''', "''");
+        let escaped = input.to_string_lossy().replace('\'', "''");
         let script = format!("Start-Process -FilePath '{}' -Verb Print", escaped);
         let args = vec![
             "-NoProfile".into(),

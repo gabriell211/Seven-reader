@@ -244,31 +244,6 @@ fn append_content(document: &mut Document, page_id: ObjectId, content: Content<V
         .map_err(|error| SevenError::Operation(error.to_string()))
 }
 
-fn prepend_content(document: &mut Document, page_id: ObjectId, bytes: Vec<u8>) -> Result<(), SevenError> {
-    let existing = document
-        .get_object(page_id)
-        .map_err(|error| SevenError::Operation(error.to_string()))?
-        .as_dict()
-        .map_err(|error| SevenError::Operation(error.to_string()))?
-        .get(b"Contents")
-        .ok()
-        .cloned();
-
-    let stream_id = document.add_object(Stream::new(Dictionary::new(), bytes));
-    let mut contents = vec![Object::Reference(stream_id)];
-    match existing {
-        Some(Object::Reference(id)) => contents.push(Object::Reference(id)),
-        Some(Object::Array(values)) => contents.extend(values),
-        _ => {}
-    }
-    document
-        .get_object_mut(page_id)
-        .map_err(|error| SevenError::Operation(error.to_string()))?
-        .as_dict_mut()
-        .map_err(|error| SevenError::Operation(error.to_string()))?
-        .set("Contents", contents);
-    Ok(())
-}
 
 fn object_string(object: &Object) -> Option<String> {
     match object {

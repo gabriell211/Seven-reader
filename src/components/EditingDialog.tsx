@@ -293,7 +293,7 @@ export function EditingDialog({
             ["overlay", "Cabeçalho / Bates", "pages"],
             ["background", "Fundo", "layers"],
           ] as const).map(([id, label, icon]) => (
-            <button key={id} className={mode === id ? "edit-mode active" : "edit-mode"} onClick={() => setMode(id)}>
+            <button key={id} className={mode === id ? "edit-mode active" : "edit-mode"} onClick={() => { setMode(id); if (id === "link") onReloadNamedDestinations(); }}>
               <SevenIcon name={icon} /><span>{label}</span>
             </button>
           ))}

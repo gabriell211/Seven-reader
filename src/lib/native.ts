@@ -16,6 +16,7 @@ import type {
   BackgroundOptions,
   BookmarkInput,
   FormFieldInfo,
+  FormFieldUpdate,
   FormValue,
   ImagePlacement,
   ImageObjectInfo,
@@ -291,6 +292,20 @@ export async function sessionCreateFormField(
   field: NewFormField,
 ): Promise<DocumentSummary> {
   return invoke<DocumentSummary>("session_create_form_field", { documentId, field });
+}
+
+export async function sessionUpdateFormField(
+  documentId: string,
+  update: FormFieldUpdate,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_update_form_field", { documentId, update });
+}
+
+export async function sessionDeleteFormField(
+  documentId: string,
+  objectId: string,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_delete_form_field", { documentId, objectId });
 }
 
 export async function sessionAddPdfBookmark(

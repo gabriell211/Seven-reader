@@ -11,6 +11,7 @@ use crate::{
     pdf,
     redaction,
     search,
+    session,
     signatures,
     state::{AppState, JobStatus},
 };
@@ -164,6 +165,128 @@ pub async fn crop_page_selection(
 }
 
 #[tauri::command]
+pub fn save_document(
+    state: State<'_, AppState>,
+    document_id: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::save(&state, &document_id).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn undo_document(
+    state: State<'_, AppState>,
+    document_id: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::undo(&state, &document_id).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn redo_document(
+    state: State<'_, AppState>,
+    document_id: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::redo(&state, &document_id).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_add_annotation(
+    state: State<'_, AppState>,
+    document_id: String,
+    annotation: annotations::AnnotationInput,
+) -> CommandResult<pdf::DocumentSummary> {
+    let prepared = session::prepare_revision(&state, &document_id, "annotation")
+        .map_err(ErrorPayload::from)?;
+    annotations::add_annotation(
+        prepared.document.active_path(),
+        &prepared.output,
+        annotation,
+    )
+    .map_err(ErrorPayload::from)?;
+    session::commit_revision(
+        &state,
+        &document_id,
+        prepared.expected_revision,
+        prepared.output,
+    )
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_delete_annotation(
+    state: State<'_, AppState>,
+    document_id: String,
+    object_id: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    let prepared = session::prepare_revision(&state, &document_id, "delete-annotation")
+        .map_err(ErrorPayload::from)?;
+    annotations::delete_annotation(
+        prepared.document.active_path(),
+        &prepared.output,
+        &object_id,
+    )
+    .map_err(ErrorPayload::from)?;
+    session::commit_revision(
+        &state,
+        &document_id,
+        prepared.expected_revision,
+        prepared.output,
+    )
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_add_ink(
+    state: State<'_, AppState>,
+    document_id: String,
+    ink: annotations::InkAnnotationInput,
+) -> CommandResult<pdf::DocumentSummary> {
+    let prepared = session::prepare_revision(&state, &document_id, "ink")
+        .map_err(ErrorPayload::from)?;
+    annotations::add_ink_annotation(
+        prepared.document.active_path(),
+        &prepared.output,
+        ink,
+    )
+    .map_err(ErrorPayload::from)?;
+    session::commit_revision(
+        &state,
+        &document_id,
+        prepared.expected_revision,
+        prepared.output,
+    )
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_add_markup(
+    state: State<'_, AppState>,
+    document_id: String,
+    page_index: usize,
+    kind: String,
+    author: String,
+    rect: pdf::NormalizedRect,
+) -> CommandResult<pdf::DocumentSummary> {
+    let prepared = session::prepare_revision(&state, &document_id, "markup")
+        .map_err(ErrorPayload::from)?;
+    annotations::add_markup_annotation_normalized(
+        prepared.document.active_path(),
+        &prepared.output,
+        page_index,
+        &kind,
+        &author,
+        rect,
+    )
+    .map_err(ErrorPayload::from)?;
+    session::commit_revision(
+        &state,
+        &document_id,
+        prepared.expected_revision,
+        prepared.output,
+    )
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn save_document_as(
     state: State<'_, AppState>,
     document_id: String,
@@ -172,7 +295,7 @@ pub fn save_document_as(
     let document = state.documents.lock().get(&document_id).cloned().ok_or_else(|| ErrorPayload::from(SevenError::DocumentNotOpen))?;
     let output = jobs::validated_output(&destination, "pdf").map_err(ErrorPayload::from)?;
     let temp = output.with_extension("seven.tmp.pdf");
-    fs::copy(&document.path, &temp).map_err(|error| ErrorPayload::from(SevenError::Io(error.to_string())))?;
+    fs::copy(document.active_path(), &temp).map_err(|error| ErrorPayload::from(SevenError::Io(error.to_string())))?;
     pdf::validate_pdf_path(temp.to_string_lossy().as_ref()).map_err(ErrorPayload::from)?;
     fs::rename(&temp, &output).map_err(|error| ErrorPayload::from(SevenError::Io(error.to_string())))?;
     Ok(())

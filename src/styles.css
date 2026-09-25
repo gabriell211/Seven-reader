@@ -891,3 +891,7 @@ svg { width: 20px; height: 20px; }
 .layer-lock { min-height:28px; padding:0 7px; border:1px solid #e5e4e9; border-radius:7px; display:flex; gap:5px; align-items:center; font-size:8.2px; }
 .layer-lock input { accent-color:var(--violet); }
 @media (max-width:760px) { .layer-row { grid-template-columns:34px 1fr; margin-left:0 !important; } .layer-row-actions { grid-column:1/-1; grid-template-columns:repeat(3,1fr); } .layer-selects { grid-template-columns:1fr; } }
+
+.layer-context-toolbar { display:flex; gap:6px; flex-wrap:wrap; }
+.layer-context-toolbar button { min-height:32px; padding:0 10px; border:1px solid #dedde4; border-radius:8px; background:white; cursor:pointer; color:#5f616a; font-size:8.5px; font-weight:700; }
+.layer-context-toolbar button:hover { border-color:#cfc4f4; color:#5837ba; background:#f8f5ff; }

@@ -57,8 +57,43 @@ pub struct LinkPlacement {
     pub y: f64,
     pub width: f64,
     pub height: f64,
+    pub target_kind: String,
     pub target: String,
     pub target_page: Option<usize>,
+    pub named_destination: Option<String>,
+    pub border_width: f64,
+    pub border_color: [f64; 3],
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LinkInfo {
+    pub object_id: String,
+    pub page_index: usize,
+    pub rect: [f64; 4],
+    pub target_kind: String,
+    pub target: String,
+    pub target_page: Option<usize>,
+    pub named_destination: Option<String>,
+    pub border_width: f64,
+    pub border_color: [f64; 3],
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LinkUpdate {
+    pub object_id: String,
+    pub page_index: usize,
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    pub target_kind: String,
+    pub target: String,
+    pub target_page: Option<usize>,
+    pub named_destination: Option<String>,
+    pub border_width: f64,
+    pub border_color: [f64; 3],
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -605,41 +640,329 @@ pub fn add_image(input: &Path, output: &Path, placement: ImagePlacement) -> Resu
     atomic_save(document, output)
 }
 
+fn parse_object_id(value: &str) -> Result<ObjectId, SevenError> {
+    let (object, generation) = value
+        .split_once(':')
+        .ok_or_else(|| SevenError::OperationRejected("Object ID inválido".into()))?;
+    Ok((
+        object.parse::<u32>().map_err(|_| SevenError::OperationRejected("Object ID inválido".into()))?,
+        generation.parse::<u16>().map_err(|_| SevenError::OperationRejected("Object ID inválido".into()))?,
+    ))
+}
+
+fn rect_array(dictionary: &Dictionary) -> Option<[f64; 4]> {
+    let values = dictionary.get(b"Rect").ok()?.as_array().ok()?;
+    if values.len() < 4 { return None; }
+    Some([
+        number(&values[0])?,
+        number(&values[1])?,
+        number(&values[2])?,
+        number(&values[3])?,
+    ])
+}
+
+fn page_index_for_id(document: &Document, id: ObjectId) -> Option<usize> {
+    document
+        .get_pages()
+        .into_iter()
+        .find_map(|(number, page_id)| (page_id == id).then_some(number.saturating_sub(1) as usize))
+}
+
+fn link_action_dictionary<'a>(document: &'a Document, annotation: &'a Dictionary) -> Option<&'a Dictionary> {
+    match annotation.get(b"A").ok()? {
+        Object::Dictionary(dictionary) => Some(dictionary),
+        Object::Reference(id) => document.get_object(*id).ok()?.as_dict().ok(),
+        _ => None,
+    }
+}
+
+fn link_target_info(
+    document: &Document,
+    annotation: &Dictionary,
+) -> (String, String, Option<usize>, Option<String>) {
+    if let Ok(dest) = annotation.get(b"Dest") {
+        match dest {
+            Object::Array(values) => {
+                if let Some(Object::Reference(page_id)) = values.first() {
+                    return ("page".into(), String::new(), page_index_for_id(document, *page_id), None);
+                }
+            }
+            Object::Name(name) | Object::String(name, _) => {
+                let value = String::from_utf8_lossy(name).into_owned();
+                return ("named".into(), String::new(), None, Some(value));
+            }
+            _ => {}
+        }
+    }
+
+    let Some(action) = link_action_dictionary(document, annotation) else {
+        return ("unknown".into(), String::new(), None, None);
+    };
+    let action_type = action
+        .get(b"S")
+        .ok()
+        .and_then(|value| value.as_name().ok())
+        .unwrap_or_default();
+    match action_type {
+        b"URI" => (
+            "url".into(),
+            action.get(b"URI").ok().map(|value| match value {
+                Object::String(bytes, _) | Object::Name(bytes) => String::from_utf8_lossy(bytes).into_owned(),
+                _ => String::new(),
+            }).unwrap_or_default(),
+            None,
+            None,
+        ),
+        b"Launch" => (
+            "file".into(),
+            action.get(b"F").ok().map(|value| match value {
+                Object::String(bytes, _) | Object::Name(bytes) => String::from_utf8_lossy(bytes).into_owned(),
+                _ => String::new(),
+            }).unwrap_or_default(),
+            None,
+            None,
+        ),
+        b"GoTo" => {
+            if let Ok(destination) = action.get(b"D") {
+                match destination {
+                    Object::Array(values) => {
+                        if let Some(Object::Reference(page_id)) = values.first() {
+                            return ("page".into(), String::new(), page_index_for_id(document, *page_id), None);
+                        }
+                    }
+                    Object::Name(name) | Object::String(name, _) => {
+                        return (
+                            "named".into(),
+                            String::new(),
+                            None,
+                            Some(String::from_utf8_lossy(name).into_owned()),
+                        );
+                    }
+                    _ => {}
+                }
+            }
+            ("unknown".into(), String::new(), None, None)
+        }
+        _ => ("unknown".into(), String::new(), None, None),
+    }
+}
+
+fn link_border(dictionary: &Dictionary) -> (f64, [f64; 3]) {
+    let width = dictionary
+        .get(b"Border")
+        .ok()
+        .and_then(|value| value.as_array().ok())
+        .and_then(|values| values.get(2))
+        .and_then(number)
+        .unwrap_or(0.0);
+    let color = dictionary
+        .get(b"C")
+        .ok()
+        .and_then(|value| value.as_array().ok())
+        .and_then(|values| {
+            if values.len() < 3 { return None; }
+            Some([number(&values[0])?, number(&values[1])?, number(&values[2])?])
+        })
+        .unwrap_or([0.0, 0.0, 1.0]);
+    (width, color)
+}
+
+fn validate_link_style(width: f64, color: [f64; 3]) -> Result<(), SevenError> {
+    if !(0.0..=20.0).contains(&width) {
+        return Err(SevenError::OperationRejected("Espessura da borda do link inválida".into()));
+    }
+    if color.iter().any(|component| !(0.0..=1.0).contains(component)) {
+        return Err(SevenError::OperationRejected("Cor da borda do link inválida".into()));
+    }
+    Ok(())
+}
+
+fn configure_link_target(
+    document: &Document,
+    annotation: &mut Dictionary,
+    target_kind: &str,
+    target: &str,
+    target_page: Option<usize>,
+    named_destination: Option<&str>,
+) -> Result<(), SevenError> {
+    annotation.remove(b"A");
+    annotation.remove(b"Dest");
+    match target_kind {
+        "url" => {
+            let uri = target.trim();
+            if uri.len() > 4096 || !(uri.starts_with("https://") || uri.starts_with("http://")) {
+                return Err(SevenError::OperationRejected("URL deve usar HTTP ou HTTPS".into()));
+            }
+            annotation.set("A", dictionary! {
+                "S" => "URI",
+                "URI" => Object::string_literal(uri),
+            });
+        }
+        "page" => {
+            let page = target_page.ok_or_else(|| SevenError::OperationRejected("Página de destino ausente".into()))?;
+            let target_id = page_id(document, page)?;
+            annotation.set("Dest", vec![target_id.into(), Object::Name(b"Fit".to_vec())]);
+        }
+        "file" => {
+            let path = target.trim();
+            if path.is_empty() || path.chars().count() > 4096 {
+                return Err(SevenError::OperationRejected("Arquivo de destino inválido".into()));
+            }
+            annotation.set("A", dictionary! {
+                "S" => "Launch",
+                "F" => Object::string_literal(path),
+            });
+        }
+        "named" => {
+            let name = named_destination.unwrap_or_default().trim();
+            if name.is_empty() || name.chars().count() > 500 {
+                return Err(SevenError::OperationRejected("Destino nomeado inválido".into()));
+            }
+            annotation.set("Dest", Object::string_literal(name));
+        }
+        _ => return Err(SevenError::OperationRejected("Tipo de destino de link inválido".into())),
+    }
+    Ok(())
+}
+
+pub fn list_links(input: &Path) -> Result<Vec<LinkInfo>, SevenError> {
+    let document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let mut output = Vec::new();
+    for (number, page_id) in document.get_pages() {
+        let annotations = document
+            .get_object(page_id)
+            .ok()
+            .and_then(|object| object.as_dict().ok())
+            .and_then(|page| page.get(b"Annots").ok())
+            .and_then(|value| value.as_array().ok())
+            .cloned()
+            .unwrap_or_default();
+        for annotation in annotations {
+            let Ok(id) = annotation.as_reference() else { continue };
+            let Ok(dictionary) = document.get_object(id).and_then(Object::as_dict) else { continue };
+            if dictionary.get(b"Subtype").ok().and_then(|value| value.as_name().ok()) != Some(b"Link") {
+                continue;
+            }
+            let Some(rect) = rect_array(dictionary) else { continue };
+            let (target_kind, target, target_page, named_destination) = link_target_info(&document, dictionary);
+            let (border_width, border_color) = link_border(dictionary);
+            output.push(LinkInfo {
+                object_id: format!("{}:{}", id.0, id.1),
+                page_index: number.saturating_sub(1) as usize,
+                rect,
+                target_kind,
+                target,
+                target_page,
+                named_destination,
+                border_width,
+                border_color,
+            });
+        }
+    }
+    Ok(output)
+}
+
+pub fn update_link(input: &Path, output: &Path, update: LinkUpdate) -> Result<(), SevenError> {
+    if update.width <= 0.0 || update.height <= 0.0 {
+        return Err(SevenError::OperationRejected("Área do link inválida".into()));
+    }
+    validate_link_style(update.border_width, update.border_color)?;
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let id = parse_object_id(&update.object_id)?;
+    let mut annotation = document
+        .get_object(id)
+        .map_err(|_| SevenError::OperationRejected("Link não encontrado".into()))?
+        .as_dict()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .clone();
+    if annotation.get(b"Subtype").ok().and_then(|value| value.as_name().ok()) != Some(b"Link") {
+        return Err(SevenError::OperationRejected("Objeto não é uma anotação Link".into()));
+    }
+    configure_link_target(
+        &document,
+        &mut annotation,
+        &update.target_kind,
+        &update.target,
+        update.target_page,
+        update.named_destination.as_deref(),
+    )?;
+    annotation.set("Rect", vec![
+        update.x.into(),
+        update.y.into(),
+        (update.x + update.width).into(),
+        (update.y + update.height).into(),
+    ]);
+    annotation.set("Border", vec![0.into(), 0.into(), update.border_width.into()]);
+    annotation.set("C", vec![
+        update.border_color[0].into(),
+        update.border_color[1].into(),
+        update.border_color[2].into(),
+    ]);
+    document.objects.insert(id, Object::Dictionary(annotation));
+    atomic_save(document, output)
+}
+
+pub fn remove_link(
+    input: &Path,
+    output: &Path,
+    page_index: usize,
+    object_id: &str,
+) -> Result<(), SevenError> {
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let id = parse_object_id(object_id)?;
+    let page_id = page_id(&document, page_index)?;
+    let page = document
+        .get_object_mut(page_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    let annotations = page
+        .get_mut(b"Annots")
+        .map_err(|_| SevenError::OperationRejected("Página não possui anotações".into()))?
+        .as_array_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    let before = annotations.len();
+    annotations.retain(|value| value.as_reference().ok() != Some(id));
+    if annotations.len() == before {
+        return Err(SevenError::OperationRejected("Link não encontrado na página".into()));
+    }
+    document.objects.remove(&id);
+    atomic_save(document, output)
+}
+
 pub fn add_link(input: &Path, output: &Path, link: LinkPlacement) -> Result<(), SevenError> {
     if link.width <= 0.0 || link.height <= 0.0 {
         return Err(SevenError::OperationRejected("Área do link inválida".into()));
     }
+    validate_link_style(link.border_width, link.border_color)?;
     let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
     let page_id = page_id(&document, link.page_index)?;
-    let rect = vec![
-        link.x.into(),
-        link.y.into(),
-        (link.x + link.width).into(),
-        (link.y + link.height).into(),
-    ];
     let mut annotation = dictionary! {
         "Type" => "Annot",
         "Subtype" => "Link",
-        "Rect" => rect,
-        "Border" => vec![0.into(), 0.into(), 0.into()],
+        "Rect" => vec![
+            link.x.into(),
+            link.y.into(),
+            (link.x + link.width).into(),
+            (link.y + link.height).into(),
+        ],
+        "Border" => vec![0.into(), 0.into(), link.border_width.into()],
+        "C" => vec![
+            link.border_color[0].into(),
+            link.border_color[1].into(),
+            link.border_color[2].into(),
+        ],
+        "H" => "I",
         "F" => 4,
     };
-    if let Some(target_page) = link.target_page {
-        let target_id = page_id(&document, target_page)?;
-        annotation.set("Dest", vec![target_id.into(), Object::Name(b"Fit".to_vec())]);
-    } else {
-        let uri = link.target.trim();
-        if uri.is_empty() || uri.chars().count() > 4096 {
-            return Err(SevenError::OperationRejected("Destino do link inválido".into()));
-        }
-        annotation.set(
-            "A",
-            dictionary! {
-                "S" => "URI",
-                "URI" => Object::string_literal(uri),
-            },
-        );
-    }
+    configure_link_target(
+        &document,
+        &mut annotation,
+        &link.target_kind,
+        &link.target,
+        link.target_page,
+        link.named_destination.as_deref(),
+    )?;
     let annotation_id = document.add_object(annotation);
     let page = document
         .get_object_mut(page_id)

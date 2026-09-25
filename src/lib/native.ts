@@ -24,6 +24,7 @@ import type {
   OcrOptions,
   OcrWord,
   OverlayTextOptions,
+  PdfActionInfo,
   RedactionArea,
   RedactionReport,
   RenderResult,
@@ -504,6 +505,10 @@ export async function editSetBackground(
 
 export async function inspectAdvancedPdf(path: string): Promise<AdvancedPdfReport> {
   return invoke<AdvancedPdfReport>("inspect_advanced_pdf", { path });
+}
+
+export async function listPdfActions(path: string): Promise<PdfActionInfo[]> {
+  return invoke<PdfActionInfo[]>("list_pdf_actions", { path });
 }
 
 export async function addPdfAttachment(

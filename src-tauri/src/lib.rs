@@ -39,6 +39,8 @@ pub fn run() {
             commands::search_document,
             commands::save_document_as,
             commands::create_blank_document,
+            commands::create_pdf_from_text,
+            commands::start_web_to_pdf,
             commands::create_pdf_from_images,
             commands::start_ocr_advanced,
             commands::review_ocr_page,

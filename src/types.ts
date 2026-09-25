@@ -148,6 +148,55 @@ export interface OcrWord {
   height: number;
 }
 
+export type AnnotationKind = "note" | "highlight" | "underline" | "strikeout" | "stamp" | "freetext";
+
+export interface AnnotationInput {
+  pageIndex: number;
+  kind: AnnotationKind;
+  text: string;
+  author: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface AnnotationInfo {
+  objectId: string;
+  pageIndex: number;
+  kind: string;
+  text: string;
+  author: string;
+  rect: [number, number, number, number];
+}
+
+export interface FormFieldInfo {
+  objectId: string;
+  name: string;
+  fieldType: "text" | "button" | "choice" | "signature" | "unknown";
+  value: string;
+  required: boolean;
+}
+
+export interface FormValue {
+  name: string;
+  value: string;
+}
+
+export type NewFormFieldType = "text" | "checkbox" | "radio" | "dropdown" | "list" | "button" | "signature";
+
+export interface NewFormField {
+  name: string;
+  fieldType: NewFormFieldType;
+  pageIndex: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  required: boolean;
+  options: string[];
+}
+
 export type ToolId =
   | "edit" | "convert" | "create" | "organize" | "combine" | "comment"
   | "fill-sign" | "certificates" | "scan-ocr" | "forms" | "protect"

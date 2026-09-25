@@ -11,18 +11,26 @@ import { SecurityDialog } from "./components/SecurityDialog";
 import { PropertiesDialog } from "./components/PropertiesDialog";
 import { ReportDialog } from "./components/ReportDialog";
 import { OcrDialog } from "./components/OcrDialog";
+import { CommentsDialog } from "./components/CommentsDialog";
+import { FormsDialog } from "./components/FormsDialog";
 import {
+  addAnnotation,
   cancelJob,
   closeDocument,
   compareDocuments,
+  createFormField,
   createPdfFromImages,
   createBlankDocument,
   getAccessibilityReport,
   getCapabilities,
   getDocumentMetadata,
   isNativeDesktop,
+  listAnnotations,
+  listFormFields,
   openDocument,
   renderPage,
+  deleteAnnotation,
+  fillFormFields,
   reviewOcrPage,
   sanitizeDocument,
   scanPageToPdf,
@@ -45,11 +53,16 @@ import {
 import { canRunTool } from "./data/tools";
 import type {
   AccessibilityReport,
+  AnnotationInfo,
+  AnnotationInput,
   Capabilities,
   CompareReport,
   DocumentMetadata,
   DocumentSummary,
+  FormFieldInfo,
+  FormValue,
   JobStatus,
+  NewFormField,
   OcrOptions,
   OcrWord,
   RecentDocument,
@@ -119,6 +132,12 @@ export default function App() {
   const [ocrOpen, setOcrOpen] = useState(false);
   const [ocrSuspects, setOcrSuspects] = useState<OcrWord[]>([]);
   const [ocrReviewLoading, setOcrReviewLoading] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [annotations, setAnnotations] = useState<AnnotationInfo[]>([]);
+  const [annotationsLoading, setAnnotationsLoading] = useState(false);
+  const [formsOpen, setFormsOpen] = useState(false);
+  const [formFields, setFormFields] = useState<FormFieldInfo[]>([]);
+  const [formsLoading, setFormsLoading] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -324,6 +343,26 @@ export default function App() {
         return;
       }
 
+      if (tool === "comment") {
+        if (!document) {
+          setNotice("Abra um PDF para comentar.");
+          return;
+        }
+        setAnnotations([]);
+        setCommentsOpen(true);
+        return;
+      }
+
+      if (tool === "forms") {
+        if (!document) {
+          setNotice("Abra um PDF para preparar formulário.");
+          return;
+        }
+        setFormFields([]);
+        setFormsOpen(true);
+        return;
+      }
+
       if (tool === "scan-ocr") {
         setOcrSuspects([]);
         setOcrOpen(true);
@@ -383,6 +422,79 @@ export default function App() {
 
 
 
+
+
+  const reloadAnnotations = async () => {
+    if (!document) return;
+    try {
+      setAnnotationsLoading(true);
+      setAnnotations(await listAnnotations(document.path));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    } finally {
+      setAnnotationsLoading(false);
+    }
+  };
+
+  const runAddAnnotation = async (output: string, annotation: AnnotationInput) => {
+    if (!document) return;
+    try {
+      await addAnnotation(document.path, output, annotation);
+      setCommentsOpen(false);
+      setNotice("Comentário persistido no PDF.");
+      await openPath(output);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runDeleteAnnotation = async (output: string, objectId: string) => {
+    if (!document) return;
+    try {
+      await deleteAnnotation(document.path, output, objectId);
+      setCommentsOpen(false);
+      setNotice("Comentário removido da cópia.");
+      await openPath(output);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const reloadFormFields = async () => {
+    if (!document) return;
+    try {
+      setFormsLoading(true);
+      setFormFields(await listFormFields(document.path));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    } finally {
+      setFormsLoading(false);
+    }
+  };
+
+  const runFillForm = async (output: string, values: FormValue[]) => {
+    if (!document) return;
+    try {
+      const changed = await fillFormFields(document.path, output, values);
+      setFormsOpen(false);
+      setNotice(`${changed} campo(s) preenchido(s).`);
+      await openPath(output);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runCreateFormField = async (output: string, field: NewFormField) => {
+    if (!document) return;
+    try {
+      await createFormField(document.path, output, field);
+      setFormsOpen(false);
+      setNotice(`Campo "${field.name}" criado no AcroForm.`);
+      await openPath(output);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
 
   const createImagesPdf = async (inputs: string[], dpi: number) => {
     const destination = await save({
@@ -610,6 +722,30 @@ export default function App() {
         <button className="global-notice" onClick={() => setNotice(null)} aria-label="Fechar aviso">
           {notice}
         </button>
+      )}
+      {commentsOpen && document && (
+        <CommentsDialog
+          documentPath={document.path}
+          pageIndex={page}
+          annotations={annotations}
+          loading={annotationsLoading}
+          onClose={() => setCommentsOpen(false)}
+          onReload={() => void reloadAnnotations()}
+          onAdd={(output, annotation) => void runAddAnnotation(output, annotation)}
+          onDelete={(output, objectId) => void runDeleteAnnotation(output, objectId)}
+        />
+      )}
+      {formsOpen && document && (
+        <FormsDialog
+          documentPath={document.path}
+          pageIndex={page}
+          fields={formFields}
+          loading={formsLoading}
+          onClose={() => setFormsOpen(false)}
+          onReload={() => void reloadFormFields()}
+          onFill={(output, values) => void runFillForm(output, values)}
+          onCreate={(output, field) => void runCreateFormField(output, field)}
+        />
       )}
       {ocrOpen && (
         <OcrDialog

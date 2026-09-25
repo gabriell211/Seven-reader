@@ -3,10 +3,15 @@ import type {
   Capabilities,
   DocumentSummary,
   AccessibilityReport,
+  AnnotationInfo,
+  AnnotationInput,
   CompareReport,
   DocumentMetadata,
   JobStart,
+  FormFieldInfo,
+  FormValue,
   MetadataUpdate,
+  NewFormField,
   OcrOptions,
   OcrWord,
   RenderResult,
@@ -141,6 +146,46 @@ export async function startOptimize(
   preset = "default",
 ): Promise<JobStart> {
   return invoke<JobStart>("start_optimize_pdf", { input, output, preset });
+}
+
+export async function listAnnotations(path: string): Promise<AnnotationInfo[]> {
+  return invoke<AnnotationInfo[]>("list_annotations", { path });
+}
+
+export async function addAnnotation(
+  input: string,
+  output: string,
+  annotation: AnnotationInput,
+): Promise<void> {
+  await invoke("add_annotation", { input, output, annotation });
+}
+
+export async function deleteAnnotation(
+  input: string,
+  output: string,
+  objectId: string,
+): Promise<void> {
+  await invoke("delete_annotation", { input, output, objectId });
+}
+
+export async function listFormFields(path: string): Promise<FormFieldInfo[]> {
+  return invoke<FormFieldInfo[]>("list_form_fields", { path });
+}
+
+export async function fillFormFields(
+  input: string,
+  output: string,
+  values: FormValue[],
+): Promise<number> {
+  return invoke<number>("fill_form_fields", { input, output, values });
+}
+
+export async function createFormField(
+  input: string,
+  output: string,
+  field: NewFormField,
+): Promise<void> {
+  await invoke("create_form_field", { input, output, field });
 }
 
 export async function getDocumentMetadata(path: string): Promise<DocumentMetadata> {

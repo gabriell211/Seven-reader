@@ -117,7 +117,7 @@ export function DocumentWorkspace({
           >
             <SevenIcon name="search" />
           </button>
-          <button className="rail-button" aria-label="Comentários" disabled><SevenIcon name="comment" /></button>
+          <button className="rail-button" aria-label="Comentários" onClick={() => onTool("comment")}><SevenIcon name="comment" /></button>
           <button className="rail-button" aria-label="Anexos" disabled><SevenIcon name="attachment" /></button>
           <button className="rail-button" aria-label="Camadas" disabled><SevenIcon name="layers" /></button>
         </aside>
@@ -169,7 +169,7 @@ export function DocumentWorkspace({
             <button className={viewerTool === "select" ? "active" : ""} aria-label="Seleção" onClick={() => setViewerTool("select")}><SevenIcon name="text" /></button>
             <button className={viewerTool === "hand" ? "active" : ""} aria-label="Mão" onClick={() => setViewerTool("hand")}><SevenIcon name="hand" /></button>
             <span />
-            <button aria-label="Comentário" disabled><SevenIcon name="comment" /></button>
+            <button aria-label="Comentário" onClick={() => onTool("comment")}><SevenIcon name="comment" /></button>
             <button aria-label="Destaque" disabled><SevenIcon name="highlight" /></button>
             <button aria-label="Desenho" disabled><SevenIcon name="draw" /></button>
             <button aria-label="Assinatura" disabled><SevenIcon name="sign" /></button>

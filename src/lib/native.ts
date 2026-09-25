@@ -57,6 +57,18 @@ export async function openDocument(path: string, password?: string): Promise<Doc
   return invoke<DocumentSummary>("open_document", { path, password: password ?? null });
 }
 
+export async function restoreDocumentSession(
+  path: string,
+  workingPath: string,
+  password?: string,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("restore_document_session", {
+    path,
+    workingPath,
+    password: password ?? null,
+  });
+}
+
 export async function closeDocument(documentId: string): Promise<void> {
   await invoke("close_document", { documentId });
 }

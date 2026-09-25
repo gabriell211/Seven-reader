@@ -103,6 +103,8 @@ import {
   sessionAddPdfAttachment,
   sessionUpdatePdfAttachment,
   sessionRemovePdfAttachment,
+  sessionApplyPdfLayerOverrides,
+  sessionResetPdfLayerVisibility,
   sessionUpdatePdfLayerProperties,
   sessionSetPdfLayerVisibility,
   sessionUpdateDocumentMetadata,
@@ -1445,6 +1447,28 @@ export default function App() {
     }
   };
 
+  const runApplyLayerOverrides = async (context: "view" | "print" | "export") => {
+    if (!document) return;
+    try {
+      const summary = await sessionApplyPdfLayerOverrides(document.id, context);
+      await acceptDocumentRevision(summary, `Overrides de layer para ${context} aplicados.`);
+      await refreshAdvancedFrom(summary);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runResetLayerVisibility = async () => {
+    if (!document) return;
+    try {
+      const summary = await sessionResetPdfLayerVisibility(document.id);
+      await acceptDocumentRevision(summary, "Visibilidade das layers restaurada ao BaseState.");
+      await refreshAdvancedFrom(summary);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
   const runUpdateLayerProperties = async (update: LayerPropertiesUpdate) => {
     if (!document) return;
     try {
@@ -2323,6 +2347,8 @@ export default function App() {
           onExtractAttachment={(objectId,destination)=>void runExtractAttachment(objectId,destination)}
           onLayerVisibility={(objectId,visible)=>void runLayerVisibility(objectId,visible)}
           onUpdateLayer={(update)=>void runUpdateLayerProperties(update)}
+          onApplyLayerOverrides={(context)=>void runApplyLayerOverrides(context)}
+          onResetLayerVisibility={()=>void runResetLayerVisibility()}
         />
       )}
       {redactionOpen && document && (

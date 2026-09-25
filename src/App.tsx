@@ -24,12 +24,15 @@ import { ActionsDialog } from "./components/ActionsDialog";
 import { PrintProductionDialog } from "./components/PrintProductionDialog";
 import { CatalogDialog } from "./components/CatalogDialog";
 import { GuidedActionsDialog, type GuidedActionKind } from "./components/GuidedActionsDialog";
+import { SharedReviewDialog } from "./components/SharedReviewDialog";
 import { applyAppearance, isTrustedPath, loadSettings, saveSettings, type SevenSettings } from "./lib/settings";
 import {
   buildCatalog,
   listCatalogs,
   searchCatalog,
   deleteCatalog,
+  exportReviewXfdf,
+  sessionImportReviewXfdf,
   addAnnotation,
   addInkAnnotation,
   cancelJob,
@@ -137,6 +140,7 @@ import type {
   PageBoxUpdate,
   RecentDocument,
   RedactionArea,
+  ReviewTransferReport,
   RenderResult,
   SanitizeOptions,
   SearchHit,
@@ -231,6 +235,8 @@ export default function App() {
   const [notice, setNotice] = useState<string | null>(null);
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [guidedActionsOpen, setGuidedActionsOpen] = useState(false);
+  const [sharedReviewOpen, setSharedReviewOpen] = useState(false);
+  const [reviewTransferReport, setReviewTransferReport] = useState<ReviewTransferReport | null>(null);
   const [catalogs, setCatalogs] = useState<CatalogSummary[]>([]);
   const [catalogHits, setCatalogHits] = useState<CatalogHit[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -1013,6 +1019,16 @@ export default function App() {
         return;
       }
 
+      if (tool === "shared-review") {
+        if (!document) {
+          setNotice("Abra um PDF para importar ou exportar comentários.");
+          return;
+        }
+        setReviewTransferReport(null);
+        setSharedReviewOpen(true);
+        return;
+      }
+
       if (tool === "automation") {
         setGuidedActionsOpen(true);
         return;
@@ -1526,6 +1542,29 @@ export default function App() {
     }
   };
 
+  const runExportReview = async (destination: string) => {
+    if (!document) return;
+    try {
+      const report = await exportReviewXfdf(document.activePath, destination);
+      setReviewTransferReport(report);
+      setNotice(`XFDF exportado · ${report.annotations} anotação(ões).`);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runImportReview = async (xfdf: string) => {
+    if (!document) return;
+    try {
+      const result = await sessionImportReviewXfdf(document.id, xfdf);
+      setReviewTransferReport(result.report);
+      await acceptDocumentRevision(result.document, `${result.report.annotations} comentário(s) importado(s) do XFDF.`);
+      setAnnotations(await listAnnotations(result.document.activePath));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
   const runGuidedAction = async (
     kind: GuidedActionKind,
     inputs: string[],
@@ -1974,6 +2013,7 @@ export default function App() {
           onCancel={cancelClosePrompt}
         />
       )}
+      {sharedReviewOpen && document && <SharedReviewDialog documentPath={document.activePath} lastReport={reviewTransferReport} onClose={() => setSharedReviewOpen(false)} onExport={(destination) => void runExportReview(destination)} onImport={(xfdf) => void runImportReview(xfdf)} />}
       {guidedActionsOpen && <GuidedActionsDialog onClose={() => setGuidedActionsOpen(false)} onRun={(kind, inputs, outputDirectory) => void runGuidedAction(kind, inputs, outputDirectory)} />}
       {catalogOpen && <CatalogDialog catalogs={catalogs} hits={catalogHits} loading={catalogLoading} onClose={() => setCatalogOpen(false)} onReload={() => void reloadCatalogs()} onBuild={(name, inputs) => void runBuildCatalog(name, inputs)} onSearch={(id, query, matchCase) => void runCatalogSearch(id, query, matchCase)} onDelete={(id) => void runDeleteCatalog(id)} onOpenHit={(path, pageIndex) => { setCatalogOpen(false); void openPath(path, { page: pageIndex, zoom: settings.defaultZoom }); }} />}
       {settingsOpen && <SettingsDialog settings={settings} onClose={() => setSettingsOpen(false)} onChange={setSettings} />}

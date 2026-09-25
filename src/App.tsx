@@ -122,7 +122,6 @@ import {
   validateSignatures,
   startOcr,
   startOcrAdvanced,
-  startOptimize,
   startOptimizeAdvanced,
   startBatchOptimize,
 } from "./lib/native";

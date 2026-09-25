@@ -90,6 +90,7 @@ pub fn run() {
             commands::start_replace_pages,
             commands::start_ocr,
             commands::start_optimize_pdf,
+            commands::start_batch_optimize_pdf,
             commands::find_redaction_matches,
             commands::apply_redactions,
             commands::edit_add_text,

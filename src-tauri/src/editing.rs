@@ -1658,11 +1658,18 @@ fn apply_background_to_document(
     options: &BackgroundOptions,
     element_id: &str,
 ) -> Result<(), SevenError> {
-    for component in [options.red, options.green, options.blue] {
+    for component in [options.red, options.green, options.blue, options.opacity] {
         if !(0.0..=1.0).contains(&component) {
-            return Err(SevenError::OperationRejected("Cor de fundo inválida".into()));
+            return Err(SevenError::OperationRejected("Cor/opacidade de fundo inválida".into()));
         }
     }
+    if !(0.01..=10.0).contains(&options.image_scale) {
+        return Err(SevenError::OperationRejected("Escala de imagem de fundo inválida".into()));
+    }
+    if !matches!(options.position.as_str(), "center" | "stretch" | "tile") {
+        return Err(SevenError::OperationRejected("Posição do fundo inválida".into()));
+    }
+
     let total = document.get_pages().len();
     if total == 0 {
         return Err(SevenError::OperationRejected("Documento sem páginas".into()));
@@ -1672,23 +1679,86 @@ fn apply_background_to_document(
     if start > end {
         return Err(SevenError::OperationRejected("Intervalo de páginas inválido".into()));
     }
+
+    let image_object = if let Some(path) = options.image_path.as_ref().filter(|value| !value.trim().is_empty()) {
+        let path = Path::new(path);
+        if !path.is_file() {
+            return Err(SevenError::NotFound(path.to_string_lossy().into_owned()));
+        }
+        let stream = lopdf::xobject::image(path)
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+        let dimensions = image::image_dimensions(path)
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+        Some((document.add_object(stream), dimensions))
+    } else {
+        None
+    };
+
     let options_json = serde_json::to_string(options)
         .map_err(|error| SevenError::Operation(error.to_string()))?;
 
     for index in start..=end {
         let id = page_id(document, index)?;
         let (width, height) = page_dimensions(document, id);
-        let bytes = Content {
-            operations: vec![
-                Operation::new("q", vec![]),
-                Operation::new("rg", vec![options.red.into(), options.green.into(), options.blue.into()]),
-                Operation::new("re", vec![0.into(), 0.into(), width.into(), height.into()]),
-                Operation::new("f", vec![]),
-                Operation::new("Q", vec![]),
-            ],
+        let gs = ensure_ext_gstate(document, id, options.opacity)?;
+        let mut operations = vec![
+            Operation::new("q", vec![]),
+            Operation::new("gs", vec![Object::Name(gs.clone())]),
+            Operation::new("rg", vec![options.red.into(), options.green.into(), options.blue.into()]),
+            Operation::new("re", vec![0.into(), 0.into(), width.into(), height.into()]),
+            Operation::new("f", vec![]),
+        ];
+
+        if let Some((image_id, (pixel_width, pixel_height))) = image_object {
+            let name = format!("SRBG{}", image_id.0);
+            document
+                .add_xobject(id, name.as_bytes(), image_id)
+                .map_err(|error| SevenError::Operation(error.to_string()))?;
+            let aspect = if pixel_height == 0 { 1.0 } else { f64::from(pixel_width) / f64::from(pixel_height) };
+
+            match options.position.as_str() {
+                "stretch" => {
+                    operations.push(Operation::new("cm", vec![
+                        width.into(), 0.into(), 0.into(), height.into(), 0.into(), 0.into(),
+                    ]));
+                    operations.push(Operation::new("Do", vec![Object::Name(name.into_bytes())]));
+                }
+                "center" => {
+                    let target_width = (width * 0.6 * options.image_scale).min(width);
+                    let target_height = (target_width / aspect.max(0.001)).min(height);
+                    let x = (width - target_width) / 2.0;
+                    let y = (height - target_height) / 2.0;
+                    operations.push(Operation::new("cm", vec![
+                        target_width.into(), 0.into(), 0.into(), target_height.into(), x.into(), y.into(),
+                    ]));
+                    operations.push(Operation::new("Do", vec![Object::Name(name.into_bytes())]));
+                }
+                "tile" => {
+                    let tile_width = (width * 0.25 * options.image_scale).max(24.0).min(width);
+                    let tile_height = (tile_width / aspect.max(0.001)).max(24.0).min(height);
+                    let mut y = 0.0;
+                    while y < height {
+                        let mut x = 0.0;
+                        while x < width {
+                            operations.push(Operation::new("q", vec![]));
+                            operations.push(Operation::new("cm", vec![
+                                tile_width.into(), 0.into(), 0.into(), tile_height.into(), x.into(), y.into(),
+                            ]));
+                            operations.push(Operation::new("Do", vec![Object::Name(name.as_bytes().to_vec())]));
+                            operations.push(Operation::new("Q", vec![]));
+                            x += tile_width;
+                        }
+                        y += tile_height;
+                    }
+                }
+                _ => unreachable!(),
+            }
         }
-        .encode()
-        .map_err(|error| SevenError::Operation(error.to_string()))?;
+
+        operations.push(Operation::new("Q", vec![]));
+        let bytes = Content { operations }
+            .encode()
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
         add_managed_content_stream(
             document,
             id,
@@ -1700,6 +1770,60 @@ fn apply_background_to_document(
         )?;
     }
     Ok(())
+}
+
+fn page_label_style(style: &str) -> Result<Vec<u8>, SevenError> {
+    match style {
+        "decimal" => Ok(b"D".to_vec()),
+        "roman-lower" => Ok(b"r".to_vec()),
+        "roman-upper" => Ok(b"R".to_vec()),
+        "letters-lower" => Ok(b"a".to_vec()),
+        "letters-upper" => Ok(b"A".to_vec()),
+        _ => Err(SevenError::OperationRejected("Estilo de page label inválido".into())),
+    }
+}
+
+pub fn set_page_labels(
+    input: &Path,
+    output: &Path,
+    options: PageLabelOptions,
+) -> Result<(), SevenError> {
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let total = document.get_pages().len();
+    if total == 0 {
+        return Err(SevenError::OperationRejected("Documento sem páginas".into()));
+    }
+    let start = options.page_start.min(total.saturating_sub(1));
+    let end = options.page_end.unwrap_or(total.saturating_sub(1)).min(total.saturating_sub(1));
+    if start > end || options.start_number == 0 {
+        return Err(SevenError::OperationRejected("Intervalo/numeração inválidos".into()));
+    }
+    let style = page_label_style(&options.style)?;
+    let mut nums = vec![
+        (start as i64).into(),
+        Object::Dictionary(dictionary! {
+            "S" => Object::Name(style),
+            "P" => Object::string_literal(format!("{}{}", options.prefix, options.suffix)),
+            "St" => options.start_number as i64,
+        }),
+    ];
+
+    if end + 1 < total {
+        nums.push(((end + 1) as i64).into());
+        nums.push(Object::Dictionary(dictionary! {
+            "S" => "D",
+            "St" => (end + 2) as i64,
+        }));
+    }
+
+    let labels = dictionary! {
+        "Nums" => nums,
+    };
+    document
+        .catalog_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .set("PageLabels", labels);
+    atomic_save(document, output)
 }
 
 pub fn set_background(

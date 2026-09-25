@@ -574,6 +574,48 @@ pub fn session_edit_add_image(
 }
 
 #[tauri::command]
+pub fn list_pdf_named_destinations(
+    state: State<'_, AppState>,
+    document_id: String,
+) -> CommandResult<Vec<editing::NamedDestinationInfo>> {
+    let document = state
+        .documents
+        .lock()
+        .get(&document_id)
+        .cloned()
+        .ok_or_else(|| ErrorPayload::from(SevenError::DocumentNotOpen))?;
+    editing::list_named_destinations(document.active_path()).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_upsert_pdf_named_destination(
+    state: State<'_, AppState>,
+    document_id: String,
+    old_name: Option<String>,
+    name: String,
+    page_index: usize,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "named-destination", move |input, output| {
+        editing::upsert_named_destination(input, output, old_name.as_deref(), &name, page_index)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_remove_pdf_named_destination(
+    state: State<'_, AppState>,
+    document_id: String,
+    name: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "remove-named-destination", move |input, output| {
+        editing::remove_named_destination(input, output, &name)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn list_pdf_links(
     state: State<'_, AppState>,
     document_id: String,

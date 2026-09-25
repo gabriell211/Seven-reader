@@ -2,7 +2,7 @@ use crate::error::SevenError;
 use lopdf::{dictionary, Dictionary, Document, Object, ObjectId, Stream};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::{collections::{HashMap, HashSet}, fs, path::Path};
+use std::{collections::{HashMap, HashSet}, fs, path::{Path, PathBuf}};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -902,6 +902,26 @@ pub fn extract_attachment(path: &Path, object_id: &str, destination: &Path) -> R
     fs::write(destination, data).map_err(|error| SevenError::Io(error.to_string()))
 }
 
+fn ensure_outlines_id(document: &mut Document) -> Result<ObjectId, SevenError> {
+    if let Ok(id) = outlines_id(document) {
+        return Ok(id);
+    }
+    let root_id = document
+        .trailer
+        .get(b"Root")
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_reference()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    let id = document.add_object(dictionary! { "Type" => "Outlines", "Count" => 0 });
+    document
+        .get_object_mut(root_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .set("Outlines", id);
+    Ok(id)
+}
+
 fn outlines_id(document: &Document) -> Result<ObjectId, SevenError> {
     document
         .catalog()
@@ -1514,6 +1534,87 @@ pub fn generate_bookmarks_from_structure(
 
     recompute_outline_counts(&mut document)?;
     atomic_save(document, output)?;
+    Ok(created)
+}
+
+pub fn append_bookmarks_from_sources(
+    combined: &Path,
+    sources: &[(PathBuf, usize)],
+) -> Result<usize, SevenError> {
+    let mut document = Document::load(combined).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let root = ensure_outlines_id(&mut document)?;
+    let combined_pages = document.get_pages();
+    let mut created = 0usize;
+
+    for (source_path, page_offset) in sources {
+        let source = Document::load(source_path).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+        let bookmarks = bookmark_list(&source);
+        if bookmarks.is_empty() {
+            continue;
+        }
+
+        let mut mapping = HashMap::<String, ObjectId>::new();
+        for bookmark in bookmarks {
+            let parent = bookmark
+                .parent_object_id
+                .as_ref()
+                .and_then(|parent| mapping.get(parent).copied())
+                .unwrap_or(root);
+
+            let after = document
+                .get_object(parent)
+                .ok()
+                .and_then(|object| object.as_dict().ok())
+                .and_then(|dictionary| dictionary.get(b"Last").ok())
+                .and_then(|value| value.as_reference().ok());
+
+            let mut item = dictionary! {
+                "Title" => Object::string_literal(bookmark.title),
+                "Parent" => parent,
+                "F" => (if bookmark.italic { 1i64 } else { 0 }) | (if bookmark.bold { 2i64 } else { 0 }),
+                "C" => vec![bookmark.color[0].into(), bookmark.color[1].into(), bookmark.color[2].into()],
+            };
+
+            match bookmark.action_type.as_str() {
+                "goto" => {
+                    if let Some(page_index) = bookmark.page_index {
+                        let target = page_offset.saturating_add(page_index);
+                        if let Some(page_id) = combined_pages.get(&((target + 1) as u32)).copied() {
+                            item.set("A", dictionary! {
+                                "S" => "GoTo",
+                                "D" => vec![Object::Reference(page_id), Object::Name(b"Fit".to_vec())],
+                            });
+                        }
+                    }
+                }
+                "uri" if !bookmark.action_target.is_empty() => {
+                    item.set("A", dictionary! {
+                        "S" => "URI",
+                        "URI" => Object::string_literal(bookmark.action_target),
+                    });
+                }
+                _ => {}
+            }
+
+            let id = document.add_object(item);
+            insert_outline_after(&mut document, id, parent, after)?;
+            if bookmark.has_children && !bookmark.open {
+                document
+                    .get_object_mut(id)
+                    .map_err(|error| SevenError::Operation(error.to_string()))?
+                    .as_dict_mut()
+                    .map_err(|error| SevenError::Operation(error.to_string()))?
+                    .set("Count", -1i64);
+            }
+            mapping.insert(bookmark.object_id, id);
+            created += 1;
+        }
+    }
+
+    if created > 0 {
+        recompute_outline_counts(&mut document)?;
+        atomic_save(document, combined)?;
+    }
     Ok(created)
 }
 

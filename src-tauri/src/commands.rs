@@ -14,12 +14,20 @@ use crate::{
     redaction,
     search,
     session,
+    shared_review,
     signatures,
     state::{AppState, JobStatus},
 };
 use serde::Serialize;
 use std::{fs, process::Command, sync::atomic::Ordering};
 use tauri::{AppHandle, State};
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionReviewImportResult {
+    pub document: pdf::DocumentSummary,
+    pub report: shared_review::ReviewTransferReport,
+}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -80,6 +88,46 @@ pub async fn search_catalog(
 #[tauri::command]
 pub fn delete_catalog(state: State<'_, AppState>, id: String) -> CommandResult<()> {
     catalog::delete_catalog(&state, &id).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn export_review_xfdf(
+    input: String,
+    destination: String,
+) -> CommandResult<shared_review::ReviewTransferReport> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let destination = std::path::PathBuf::from(destination);
+    let parent = destination.parent()
+        .ok_or_else(|| ErrorPayload::from(SevenError::InvalidPath("Destino XFDF inválido".into())))?;
+    fs::canonicalize(parent)
+        .map_err(|error| ErrorPayload::from(SevenError::InvalidPath(error.to_string())))?;
+    if destination.extension().and_then(|value| value.to_str()).unwrap_or_default().to_ascii_lowercase() != "xfdf" {
+        return Err(ErrorPayload::from(SevenError::UnsupportedFormat(
+            destination.extension().and_then(|value| value.to_str()).unwrap_or_default().into(),
+        )));
+    }
+    shared_review::export_xfdf(&input, &destination).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_import_review_xfdf(
+    state: State<'_, AppState>,
+    document_id: String,
+    xfdf: String,
+) -> CommandResult<SessionReviewImportResult> {
+    let path = std::path::PathBuf::from(xfdf);
+    if !path.is_file() || path.extension().and_then(|value| value.to_str()).unwrap_or_default().to_ascii_lowercase() != "xfdf" {
+        return Err(ErrorPayload::from(SevenError::InvalidPath(
+            "Selecione um arquivo XFDF válido".into(),
+        )));
+    }
+    let (document, report) = session::apply_revision(
+        &state,
+        &document_id,
+        "import-review",
+        |input, output| shared_review::import_xfdf(input, output, &path),
+    ).map_err(ErrorPayload::from)?;
+    Ok(SessionReviewImportResult { document, report })
 }
 
 #[tauri::command]

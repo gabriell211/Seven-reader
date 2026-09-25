@@ -33,7 +33,7 @@ export const tools: ToolDefinition[] = [
   { id: "compare", label: "Comparar arquivos", description: "Compare texto normalizado página a página entre duas versões.", icon: "compare", group: "Revisão", capability: "pdf_engine", implemented: true },
   { id: "optimize", label: "Otimizar PDF", description: "Compressão local com presets de qualidade.", icon: "compress", group: "Profissional", capability: "ghostscript", implemented: true },
   { id: "accessibility", label: "Acessibilidade", description: "Auditoria de tags, idioma, título e estrutura básica.", icon: "accessibility", group: "Profissional", implemented: true },
-  { id: "print-production", label: "Produção de impressão", description: "Preflight, cores, sangria e separações.", icon: "print", group: "Profissional", capability: "printing", implemented: false },
+  { id: "print-production", label: "Produção de impressão", description: "Preflight estrutural, cores, fontes, transparência, overprint, spot colors, TrimBox e BleedBox.", icon: "print", group: "Profissional", capability: "pdf_engine", implemented: true },
   { id: "automation", label: "Ações guiadas", description: "Fluxos repetíveis e processamento em lote.", icon: "automation", group: "Profissional", implemented: false },
   { id: "javascript", label: "JavaScript e ações PDF", description: "Inspecione JavaScript, Launch, URI, GoTo e outras ações sem executar conteúdo ativo.", icon: "lock", group: "Avançado", capability: "pdf_engine", implemented: true },
   { id: "portfolio", label: "Portfólios PDF", description: "Inspecione Collection/Portfólio e componentes incorporados sem executar conteúdo.", icon: "attachment", group: "Avançado", capability: "pdf_engine", implemented: true },

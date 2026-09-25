@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type { AdvancedPdfReport } from "../types";
+import type { AdvancedPdfReport, LayerPropertiesUpdate } from "../types";
 import { SevenIcon } from "./SevenIcon";
 
 type AdvancedTab = "overview" | "bookmarks" | "attachments" | "layers";
@@ -22,6 +22,7 @@ interface AdvancedPdfDialogProps {
   onRemoveAttachment: (objectId: string) => void;
   onExtractAttachment: (objectId: string, destination: string) => void;
   onLayerVisibility: (objectId: string, visible: boolean) => void;
+  onUpdateLayer: (update: LayerPropertiesUpdate) => void;
 }
 
 function fileSize(value?: number): string {
@@ -48,6 +49,7 @@ export function AdvancedPdfDialog({
   onRemoveAttachment,
   onExtractAttachment,
   onLayerVisibility,
+  onUpdateLayer,
 }: AdvancedPdfDialogProps) {
   const [tab, setTab] = useState<AdvancedTab>(initialTab);
   const [bookmarkTitle, setBookmarkTitle] = useState("");
@@ -56,6 +58,7 @@ export function AdvancedPdfDialog({
   const [attachmentDescription, setAttachmentDescription] = useState("");
   const [attachmentPath, setAttachmentPath] = useState("");
   const [attachmentEdits, setAttachmentEdits] = useState<Record<string,{name:string;description:string}>>({});
+  const [layerEdits, setLayerEdits] = useState<Record<string,LayerPropertiesUpdate>>({});
 
   useEffect(() => { onReload(); }, [onReload]);
 
@@ -186,9 +189,40 @@ export function AdvancedPdfDialog({
 
           {!loading && report && tab==="layers" && <>
             <div className="organizer-note"><SevenIcon name="layers"/><span>Alterar visibilidade grava o estado inicial ON/OFF da OCG na sessão atual; conteúdo da layer é preservado e a ação pode ser desfeita.</span></div>
-            <div className="structure-list">{report.layers.map((layer)=>(
-              <div className="structure-row" key={layer.objectId}><SevenIcon name="layers"/><div><strong>{layer.name}</strong><small>{layer.intent.length?`Intent: ${layer.intent.join(", ")}`:"Intent não declarado"}</small></div><button className={layer.visible?"layer-toggle active":"layer-toggle"} onClick={()=>onLayerVisibility(layer.objectId,!layer.visible)}>{layer.visible?"Visível":"Oculta"}</button></div>
-            ))}{report.layers.length===0&&<div className="empty-panel">Nenhuma Optional Content Group detectada.</div>}</div>
+            <div className="layer-list">
+              {report.layers.map((layer)=>{
+                const edit=layerEdits[layer.objectId]??{
+                  objectId:layer.objectId,
+                  name:layer.name,
+                  locked:layer.locked,
+                  viewState:layer.viewState,
+                  printState:layer.printState,
+                  exportState:layer.exportState,
+                };
+                const patchLayer=<K extends keyof LayerPropertiesUpdate>(key:K,value:LayerPropertiesUpdate[K])=>
+                  setLayerEdits(current=>({...current,[layer.objectId]:{...edit,[key]:value}}));
+                return (
+                  <article className="layer-row" key={layer.objectId} style={{marginLeft:layer.depth*14}}>
+                    <span className="layer-glyph"><SevenIcon name="layers"/></span>
+                    <div className="layer-editor">
+                      <input value={edit.name} onChange={(e)=>patchLayer("name",e.target.value)}/>
+                      <div className="layer-selects">
+                        <label>View<select value={edit.viewState} onChange={(e)=>patchLayer("viewState",e.target.value as LayerPropertiesUpdate["viewState"])}><option value="unchanged">Estado</option><option value="on">Sempre ON</option><option value="off">Sempre OFF</option></select></label>
+                        <label>Print<select value={edit.printState} onChange={(e)=>patchLayer("printState",e.target.value as LayerPropertiesUpdate["printState"])}><option value="unchanged">Estado</option><option value="on">Sempre ON</option><option value="off">Sempre OFF</option></select></label>
+                        <label>Export<select value={edit.exportState} onChange={(e)=>patchLayer("exportState",e.target.value as LayerPropertiesUpdate["exportState"])}><option value="unchanged">Estado</option><option value="on">Sempre ON</option><option value="off">Sempre OFF</option></select></label>
+                      </div>
+                      <small>{layer.intent.length?`Intent: ${layer.intent.join(", ")}`:"Intent não declarado"} · nível {layer.depth+1}</small>
+                    </div>
+                    <div className="layer-row-actions">
+                      <label className="layer-lock"><input type="checkbox" checked={edit.locked} onChange={(e)=>patchLayer("locked",e.target.checked)}/> Bloqueada</label>
+                      <button className={layer.visible?"layer-toggle active":"layer-toggle"} onClick={()=>onLayerVisibility(layer.objectId,!layer.visible)}>{layer.visible?"Visível":"Oculta"}</button>
+                      <button onClick={()=>onUpdateLayer(edit)}>Salvar propriedades</button>
+                    </div>
+                  </article>
+                );
+              })}
+              {report.layers.length===0&&<div className="empty-panel">Nenhuma Optional Content Group detectada.</div>}
+            </div>
           </>}
         </div>
       </section>

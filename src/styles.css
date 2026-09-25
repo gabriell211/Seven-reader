@@ -822,3 +822,25 @@ svg { width: 20px; height: 20px; }
 .field-action-row > div { min-width:0; display:grid; gap:2px; }
 .field-action-row strong { font-size:9.8px; }
 .field-action-row small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#8d8f98; font-size:8.3px; }
+
+.optimizer-dialog { width:min(1040px,100%); max-height:min(860px,calc(100vh - 42px)); overflow:auto; border:1px solid rgba(255,255,255,.72); border-radius:22px; background:#fbfbfd; box-shadow:0 34px 100px rgba(14,12,24,.34); }
+.optimizer-layout { display:grid; grid-template-columns:300px minmax(0,1fr); min-height:560px; }
+.optimizer-audit { padding:20px; border-right:1px solid #e5e4e9; background:#f7f7fa; }
+.optimizer-audit .section-heading { margin-bottom:12px; }
+.audit-total { padding:14px; border:1px solid #ddd9eb; border-radius:12px; display:grid; gap:3px; background:white; }
+.audit-total span { color:#858790; font-size:8.5px; text-transform:uppercase; letter-spacing:.06em; }
+.audit-total strong { font-size:21px; }
+.audit-total small { color:#8f9199; font-size:8.5px; }
+.audit-categories { margin-top:10px; display:grid; gap:6px; }
+.audit-categories > div { min-height:48px; padding:8px 10px; border:1px solid #e4e3e8; border-radius:9px; display:flex; justify-content:space-between; gap:9px; align-items:center; background:white; }
+.audit-categories span { display:grid; gap:2px; font-size:9.5px; font-weight:700; }
+.audit-categories small { color:#9a9ba3; font-size:7.8px; font-weight:500; }
+.audit-categories strong { font-size:9px; }
+.optimizer-options { padding:20px 22px; display:grid; gap:15px; align-content:start; }
+.optimizer-presets { display:flex; gap:6px; flex-wrap:wrap; }
+.optimizer-presets button { min-height:32px; padding:0 10px; border:1px solid #dedde4; border-radius:8px; background:white; cursor:pointer; font-size:8.8px; font-weight:700; }
+.optimizer-presets button:hover { color:#5733bd; border-color:#cfc3f5; background:#f6f2ff; }
+.optimizer-section { padding:13px; border:1px solid #e2e1e7; border-radius:12px; display:grid; gap:12px; background:white; }
+.optimizer-save-preset { padding-top:12px; border-top:1px solid #ecebf0; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; }
+.optimizer-save-preset input { min-width:0; height:40px; padding:0 10px; border:1px solid #d9d8df; border-radius:9px; background:white; }
+@media (max-width:800px) { .optimizer-layout { grid-template-columns:1fr; } .optimizer-audit { border-right:0; border-bottom:1px solid #e5e4e9; } }

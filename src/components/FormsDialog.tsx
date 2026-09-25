@@ -143,7 +143,7 @@ export function FormsDialog({ pageIndex, fields, loading, onClose, onReload, onF
               )}
               <button className="primary-button workflow-submit" disabled={!fields.length} onClick={submitFill}><SevenIcon name="form" /> Aplicar preenchimento</button>
             </>
-          ) : (
+          ) : tab === "create" ? (
             <>
               <div className="format-grid form-type-grid">{fieldTypes.map((type) => (
                 <button key={type.id} className={fieldType === type.id ? "format-card active" : "format-card"} onClick={() => setFieldType(type.id)}><SevenIcon name={type.id === "signature" ? "sign" : "form"} /><strong>{type.label}</strong></button>

@@ -13,7 +13,7 @@ use crate::{
     signatures,
     state::{AppState, JobStatus},
 };
-use std::{fs, sync::atomic::Ordering};
+use std::{fs, process::Command, sync::atomic::Ordering};
 use tauri::{AppHandle, State};
 
 #[tauri::command]
@@ -908,6 +908,84 @@ pub async fn validate_signatures(
     .await
     .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
     .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn start_print_document(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: String,
+) -> CommandResult<JobStart> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+
+    #[cfg(target_os = "windows")]
+    {
+        let executable = jobs::require_executable(&["powershell"], "Windows Print").map_err(ErrorPayload::from)?;
+        let escaped = input.to_string_lossy().replace(''', "''");
+        let script = format!("Start-Process -FilePath '{}' -Verb Print", escaped);
+        let args = vec![
+            "-NoProfile".into(),
+            "-NonInteractive".into(),
+            "-Command".into(),
+            script,
+        ];
+        return Ok(jobs::start_process_job(app, &state, "print", executable, args, None));
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    {
+        let executable = jobs::require_executable(&["lp"], "CUPS/lp").map_err(ErrorPayload::from)?;
+        let args = vec![input.to_string_lossy().into_owned()];
+        return Ok(jobs::start_process_job(app, &state, "print", executable, args, None));
+    }
+
+    #[allow(unreachable_code)]
+    Err(ErrorPayload::from(SevenError::CapabilityUnavailable(
+        "Impressão não suportada neste sistema".into(),
+    )))
+}
+
+#[tauri::command]
+pub fn reveal_in_file_manager(path: String) -> CommandResult<()> {
+    let canonical = fs::canonicalize(&path)
+        .map_err(|error| ErrorPayload::from(SevenError::InvalidPath(error.to_string())))?;
+
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("explorer")
+            .arg("/select,")
+            .arg(&canonical)
+            .spawn()
+            .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?;
+        return Ok(());
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let parent = canonical.parent().ok_or_else(|| ErrorPayload::from(
+            SevenError::InvalidPath("Arquivo sem pasta pai".into())
+        ))?;
+        Command::new("xdg-open")
+            .arg(parent)
+            .spawn()
+            .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?;
+        return Ok(());
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg("-R")
+            .arg(&canonical)
+            .spawn()
+            .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?;
+        return Ok(());
+    }
+
+    #[allow(unreachable_code)]
+    Err(ErrorPayload::from(SevenError::CapabilityUnavailable(
+        "Gerenciador de arquivos não suportado neste sistema".into(),
+    )))
 }
 
 #[tauri::command]

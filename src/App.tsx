@@ -255,6 +255,21 @@ export default function App() {
         event.preventDefault();
         window.dispatchEvent(new Event("seven:focus-search"));
       }
+      if (modifier && event.key === "Tab" && openTabs.length > 1) {
+        event.preventDefault();
+        const currentIndex = Math.max(0, openTabs.findIndex((tab) => tab.id === document?.id));
+        const delta = event.shiftKey ? -1 : 1;
+        const nextIndex = (currentIndex + delta + openTabs.length) % openTabs.length;
+        void selectTab(openTabs[nextIndex]);
+      }
+      if (modifier && event.key.toLowerCase() === "w" && document) {
+        event.preventDefault();
+        void closeTab(document.id);
+      }
+      if (modifier && event.shiftKey && event.key.toLowerCase() === "t" && closedTabs.length) {
+        event.preventDefault();
+        void reopenClosedTab();
+      }
       if (document && modifier && (event.key === "+" || event.key === "=")) {
         event.preventDefault();
         void render(page, Math.min(400, zoom + 10));
@@ -274,11 +289,17 @@ export default function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [document, page, zoom]);
+  }, [document, page, zoom, openTabs, closedTabs]);
 
   const activeJobs = useMemo(
     () => Object.values(jobs).filter((job) => job.state === "queued" || job.state === "running"),
     [jobs],
+  );
+
+  const currentNavigation = document ? navHistories[document.id] : undefined;
+  const canNavigateBack = Boolean(currentNavigation && currentNavigation.index > 0);
+  const canNavigateForward = Boolean(
+    currentNavigation && currentNavigation.index < currentNavigation.entries.length - 1,
   );
 
   const rememberRecent = (summary: DocumentSummary) => {
@@ -1564,6 +1585,9 @@ export default function App() {
           document={document}
           tabs={openTabs}
           rendered={rendered}
+          canReopenClosed={closedTabs.length > 0}
+          canNavigateBack={canNavigateBack}
+          canNavigateForward={canNavigateForward}
           capabilities={capabilities}
           searchHits={searchHits}
           page={page}
@@ -1571,6 +1595,11 @@ export default function App() {
           onHome={() => void closeCurrent()}
           onSelectTab={(tab) => void selectTab(tab)}
           onCloseTab={(documentId) => void closeTab(documentId)}
+          onCloseOtherTabs={(documentId) => void closeOtherTabs(documentId)}
+          onReopenClosed={() => void reopenClosedTab()}
+          onReorderTabs={reorderTabs}
+          onNavigateBack={() => void navigateHistory(-1)}
+          onNavigateForward={() => void navigateHistory(1)}
           onOpen={() => void choosePdf()}
           onSaveAs={() => void saveAs()}
           onPrint={() => void runPrint()}

@@ -27,6 +27,7 @@ interface WorkspaceProps {
   quickTools: QuickToolId[];
   quickToolsPosition: { x: number; y: number } | null;
   sidePanels: SidePanelId[];
+  taskHistory: JobStatus[];
   searchHits: SearchHit[];
   advancedSearchHits: AdvancedSearchHit[];
   page: number;
@@ -74,6 +75,7 @@ export function DocumentWorkspace({
   quickTools,
   quickToolsPosition,
   sidePanels,
+  taskHistory,
   searchHits,
   advancedSearchHits,
   page,
@@ -102,7 +104,7 @@ export function DocumentWorkspace({
   onTrustLocation,
 }: WorkspaceProps) {
   const [toolsOpen, setToolsOpen] = useState(false);
-  const [leftPanel, setLeftPanel] = useState<"thumbs" | "search" | null>("thumbs");
+  const [leftPanel, setLeftPanel] = useState<"thumbs" | "search" | "tasks" | null>("thumbs");
   const [search, setSearch] = useState("");
   const [advancedSearch, setAdvancedSearch] = useState(false);
   const [searchMatchCase, setSearchMatchCase] = useState(false);
@@ -266,7 +268,7 @@ export function DocumentWorkspace({
   };
 
   const panelAction = (id: SidePanelId) => {
-    if (id === "thumbs" || id === "search") {
+    if (id === "thumbs" || id === "search" || id === "tasks") {
       setLeftPanel((current) => current === id ? null : id);
       return;
     }
@@ -276,10 +278,6 @@ export function DocumentWorkspace({
     if (id === "layers") return onTool("layers");
     if (id === "signatures") return onTool("certificates");
     if (id === "fields") return onTool("forms");
-    if (id === "tasks") {
-      setToolsOpen(false);
-      return;
-    }
   };
 
   const panelIcon = (id: SidePanelId): IconName => ({
@@ -460,7 +458,7 @@ export function DocumentWorkspace({
         {leftPanel && (
           <aside className="left-panel">
             <div className="panel-title">
-              <strong>{leftPanel === "thumbs" ? "Miniaturas" : "Resultados"}</strong>
+              <strong>{leftPanel === "thumbs" ? "Miniaturas" : leftPanel === "search" ? "Resultados" : "Tarefas"}</strong>
               <button onClick={() => setLeftPanel(null)}><SevenIcon name="close" /></button>
             </div>
             {leftPanel === "thumbs" ? (
@@ -474,7 +472,7 @@ export function DocumentWorkspace({
                   </button>
                 ))}
               </div>
-            ) : (
+            ) : leftPanel === "search" ? (
               <div className="search-panel-content">
                 <div className="search-mode-toggle">
                   <button className={!advancedSearch ? "active" : ""} onClick={() => setAdvancedSearch(false)}>Simples</button>
@@ -540,6 +538,21 @@ export function DocumentWorkspace({
                     </button>
                   ))}
                 </div>
+              </div>
+            ) : (
+              <div className="panel-task-list">
+                {!taskHistory.length && <div className="empty-panel">Nenhuma tarefa registrada nesta sessão ou no histórico local.</div>}
+                {taskHistory.slice(0, 30).map((job) => (
+                  <article className="panel-task-row" key={job.id}>
+                    <span className={`task-state task-state--${job.state}`} />
+                    <div>
+                      <strong>{job.kind.replace(/-/g, " ")}</strong>
+                      <small>{job.stage}</small>
+                      {job.error && <em>{job.error}</em>}
+                    </div>
+                    <b>{job.progress !== undefined ? `${Math.round(job.progress * 100)}%` : job.state}</b>
+                  </article>
+                ))}
               </div>
             )}
           </aside>

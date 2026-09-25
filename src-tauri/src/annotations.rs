@@ -18,6 +18,15 @@ pub struct AnnotationInput {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct InkAnnotationInput {
+    pub page_index: usize,
+    pub author: String,
+    pub points: Vec<[f64; 2]>,
+    pub line_width: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AnnotationInfo {
     pub object_id: String,
     pub page_index: usize,
@@ -105,6 +114,104 @@ pub fn add_annotation(input: &Path, output: &Path, annotation: AnnotationInput) 
     }
 
     let annotation_id = document.add_object(dictionary);
+    append_page_annotation(&mut document, page_id, annotation_id)?;
+    atomic_save(document, output)
+}
+
+fn inherited_box(document: &Document, mut id: (u32, u16), key: &[u8]) -> Option<[f64; 4]> {
+    for _ in 0..32 {
+        let dictionary = document.get_object(id).ok()?.as_dict().ok()?;
+        if let Ok(Object::Array(values)) = dictionary.get(key) {
+            if values.len() >= 4 {
+                let mut result = [0.0; 4];
+                for (index, value) in values.iter().take(4).enumerate() {
+                    result[index] = number_value(value);
+                }
+                return Some(result);
+            }
+        }
+        id = dictionary.get(b"Parent").ok()?.as_reference().ok()?;
+    }
+    None
+}
+
+pub fn add_ink_annotation(
+    input: &Path,
+    output: &Path,
+    ink: InkAnnotationInput,
+) -> Result<(), SevenError> {
+    if ink.author.chars().count() > 256 {
+        return Err(SevenError::OperationRejected("Autor excede o limite permitido".into()));
+    }
+    if ink.points.len() < 2 || ink.points.len() > 20_000 {
+        return Err(SevenError::OperationRejected(
+            "O traço deve conter entre 2 e 20.000 pontos".into(),
+        ));
+    }
+    if !(0.5..=24.0).contains(&ink.line_width) {
+        return Err(SevenError::OperationRejected(
+            "Espessura do traço deve ficar entre 0,5 e 24 pontos".into(),
+        ));
+    }
+    if ink.points.iter().any(|point| {
+        !point[0].is_finite()
+            || !point[1].is_finite()
+            || !(0.0..=1.0).contains(&point[0])
+            || !(0.0..=1.0).contains(&point[1])
+    }) {
+        return Err(SevenError::OperationRejected(
+            "Coordenadas normalizadas do desenho são inválidas".into(),
+        ));
+    }
+
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let page_id = page_id(&document, ink.page_index)?;
+    let media = inherited_box(&document, page_id, b"CropBox")
+        .or_else(|| inherited_box(&document, page_id, b"MediaBox"))
+        .unwrap_or([0.0, 0.0, 612.0, 792.0]);
+    let page_width = (media[2] - media[0]).abs().max(1.0);
+    let page_height = (media[3] - media[1]).abs().max(1.0);
+
+    let mut mapped = Vec::with_capacity(ink.points.len() * 2);
+    let mut min_x = f64::MAX;
+    let mut min_y = f64::MAX;
+    let mut max_x = f64::MIN;
+    let mut max_y = f64::MIN;
+
+    for [nx, ny] in ink.points {
+        let x = media[0] + nx * page_width;
+        let y = media[1] + (1.0 - ny) * page_height;
+        min_x = min_x.min(x);
+        min_y = min_y.min(y);
+        max_x = max_x.max(x);
+        max_y = max_y.max(y);
+        mapped.push(Object::Real(x as f32));
+        mapped.push(Object::Real(y as f32));
+    }
+
+    let padding = ink.line_width.max(2.0);
+    let annotation = dictionary! {
+        "Type" => "Annot",
+        "Subtype" => "Ink",
+        "Rect" => vec![
+            (min_x - padding).into(),
+            (min_y - padding).into(),
+            (max_x + padding).into(),
+            (max_y + padding).into(),
+        ],
+        "InkList" => vec![Object::Array(mapped)],
+        "T" => Object::string_literal(ink.author),
+        "Contents" => Object::string_literal("Desenho à mão livre"),
+        "F" => 4,
+        "C" => vec![0.44.into(), 0.26.into(), 0.94.into()],
+        "BS" => dictionary! {
+            "Type" => "Border",
+            "W" => ink.line_width,
+            "S" => "S",
+        },
+    };
+
+    let annotation_id = document.add_object(annotation);
     append_page_annotation(&mut document, page_id, annotation_id)?;
     atomic_save(document, output)
 }

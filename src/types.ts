@@ -259,6 +259,14 @@ export interface FormFieldInfo {
   pageIndex?: number;
   rect?: [number, number, number, number];
   options: string[];
+  borderColor?: [number, number, number];
+  fillColor?: [number, number, number];
+  borderWidth: number;
+  borderStyle: "S" | "D" | "B" | "I" | "U";
+  fontSize: number;
+  textColor: [number, number, number];
+  rotation: 0 | 90 | 180 | 270;
+  visibility: "visible" | "visible-no-print" | "hidden" | "hidden-printable";
 }
 
 export interface FormValue {
@@ -283,6 +291,14 @@ export interface NewFormField {
   tooltip: string;
   defaultValue: string;
   options: string[];
+  borderColor?: [number, number, number];
+  fillColor?: [number, number, number];
+  borderWidth: number;
+  borderStyle: "S" | "D" | "B" | "I" | "U";
+  fontSize: number;
+  textColor: [number, number, number];
+  rotation: 0 | 90 | 180 | 270;
+  visibility: "visible" | "visible-no-print" | "hidden" | "hidden-printable";
 }
 
 export interface DuplicateFieldRequest {
@@ -311,6 +327,14 @@ export interface FormFieldUpdate {
   width: number;
   height: number;
   options: string[];
+  borderColor?: [number, number, number];
+  fillColor?: [number, number, number];
+  borderWidth: number;
+  borderStyle: "S" | "D" | "B" | "I" | "U";
+  fontSize: number;
+  textColor: [number, number, number];
+  rotation: 0 | 90 | 180 | 270;
+  visibility: "visible" | "visible-no-print" | "hidden" | "hidden-printable";
 }
 
 export type PadesLevelId = "bb" | "bt" | "blt" | "blta";

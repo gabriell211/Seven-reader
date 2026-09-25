@@ -3,6 +3,7 @@ use lopdf::{
     content::{Content, Operation},
     dictionary, Dictionary, Document, Object, ObjectId, Stream,
 };
+use chrono::Local;
 use serde::{Deserialize, Serialize};
 use std::{collections::{HashMap, HashSet}, fs, path::Path};
 
@@ -260,6 +261,75 @@ fn ensure_helvetica(document: &mut Document, page_id: ObjectId) -> Result<Vec<u8
     }
 
     Err(SevenError::Operation("Não foi possível alocar recurso de fonte".into()))
+}
+
+fn ensure_ext_gstate(
+    document: &mut Document,
+    page_id: ObjectId,
+    opacity: f64,
+) -> Result<Vec<u8>, SevenError> {
+    if !(0.0..=1.0).contains(&opacity) {
+        return Err(SevenError::OperationRejected("Opacidade deve ficar entre 0 e 1".into()));
+    }
+    let mut resources = effective_resources(document, page_id);
+    let mut states = match resources.get(b"ExtGState") {
+        Ok(Object::Dictionary(dictionary)) => dictionary.clone(),
+        Ok(Object::Reference(id)) => document
+            .get_object(*id)
+            .ok()
+            .and_then(|object| object.as_dict().ok())
+            .cloned()
+            .unwrap_or_default(),
+        _ => Dictionary::new(),
+    };
+
+    for index in 1..1000 {
+        let name = format!("SRGS{index}");
+        if states.get(name.as_bytes()).is_err() {
+            let state_id = document.add_object(dictionary! {
+                "Type" => "ExtGState",
+                "ca" => opacity,
+                "CA" => opacity,
+            });
+            states.set(name.as_str(), state_id);
+            resources.set("ExtGState", states);
+            document
+                .get_object_mut(page_id)
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .as_dict_mut()
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .set("Resources", resources);
+            return Ok(name.into_bytes());
+        }
+    }
+    Err(SevenError::Operation("Não foi possível alocar ExtGState".into()))
+}
+
+fn align_x(
+    position: &str,
+    page_width: f64,
+    margin_x: f64,
+    text: &str,
+    font_size: f64,
+) -> Result<f64, SevenError> {
+    let approximate_width = text.chars().count() as f64 * font_size * 0.52;
+    match position {
+        "left" => Ok(margin_x),
+        "center" => Ok((page_width - approximate_width) / 2.0),
+        "right" => Ok((page_width - margin_x - approximate_width).max(0.0)),
+        _ => Err(SevenError::OperationRejected("Posição horizontal inválida".into())),
+    }
+}
+
+fn render_overlay_template(
+    template: &str,
+    page: usize,
+    total: usize,
+) -> String {
+    template
+        .replace("{page}", &(page + 1).to_string())
+        .replace("{total}", &total.to_string())
+        .replace("{date}", &Local::now().format("%Y-%m-%d").to_string())
 }
 
 fn append_content(document: &mut Document, page_id: ObjectId, content: Content<Vec<Operation>>) -> Result<(), SevenError> {

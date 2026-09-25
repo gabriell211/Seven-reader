@@ -2,12 +2,14 @@ import { useMemo, useState } from "react";
 import { BrandMark } from "./BrandMark";
 import { SevenIcon } from "./SevenIcon";
 import { canRunTool, tools } from "../data/tools";
-import type { Capabilities, RecentDocument, ToolId } from "../types";
+import type { Capabilities, JobStatus, RecentDocument, ToolId } from "../types";
 
 interface HomeProps {
   native: boolean;
   capabilities: Capabilities | null;
   recents: RecentDocument[];
+  recentTools: ToolId[];
+  taskHistory: JobStatus[];
   onOpen: () => void;
   onOpenFolder: () => void;
   lastSessionPath: string | null;
@@ -35,6 +37,8 @@ export function Home({
   native,
   capabilities,
   recents,
+  recentTools,
+  taskHistory,
   onOpen,
   onOpenFolder,
   lastSessionPath,
@@ -207,6 +211,54 @@ export function Home({
               })}
             </div>
           </aside>
+        </section>
+
+        <section className="home-activity-grid">
+          <div className="activity-panel">
+            <div className="section-heading section-heading--compact">
+              <div><span className="eyebrow">ATALHOS</span><h2>Ferramentas recentes</h2></div>
+            </div>
+            {recentTools.length === 0 ? (
+              <div className="activity-empty">As ferramentas que você usar aparecerão aqui.</div>
+            ) : (
+              <div className="recent-tool-list">
+                {recentTools.map((id) => {
+                  const tool = tools.find((item) => item.id === id);
+                  if (!tool) return null;
+                  const enabled = native && canRunTool(tool.id, capabilities);
+                  return (
+                    <button key={id} disabled={!enabled} onClick={() => enabled && onTool(id)}>
+                      <span><SevenIcon name={tool.icon} /></span>
+                      <div><strong>{tool.label}</strong><small>{tool.group}</small></div>
+                      <SevenIcon name="chevronRight" />
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="activity-panel">
+            <div className="section-heading section-heading--compact">
+              <div><span className="eyebrow">PROCESSAMENTO</span><h2>Tarefas recentes</h2></div>
+            </div>
+            {taskHistory.length === 0 ? (
+              <div className="activity-empty">Conversões, OCR e outras tarefas em background aparecerão aqui.</div>
+            ) : (
+              <div className="task-history-list">
+                {taskHistory.slice(0, 6).map((job) => (
+                  <div className="task-history-row" key={job.id}>
+                    <span className={`task-state task-state--${job.state}`} />
+                    <div>
+                      <strong>{job.kind.replace(/-/g, " ")}</strong>
+                      <small>{job.stage}{job.error ? ` · ${job.error}` : ""}</small>
+                    </div>
+                    <span>{job.progress !== undefined ? `${Math.round(job.progress * 100)}%` : job.state}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </section>
 
         <section className="tool-preview" id="all-tools">

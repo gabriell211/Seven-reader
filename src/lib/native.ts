@@ -18,6 +18,7 @@ import type {
   FormFieldInfo,
   FormValue,
   ImagePlacement,
+  ImageObjectInfo,
   InkAnnotationInput,
   LinkPlacement,
   MetadataUpdate,
@@ -215,6 +216,34 @@ export async function sessionEditReplaceText(
 ): Promise<SessionReplaceTextResult> {
   return invoke<SessionReplaceTextResult>("session_edit_replace_text", {
     documentId, find, replacement, allPages, pageIndex,
+  });
+}
+
+export async function listPageImageObjects(
+  documentId: string,
+  pageIndex: number,
+): Promise<ImageObjectInfo[]> {
+  return invoke<ImageObjectInfo[]>("list_page_image_objects", { documentId, pageIndex });
+}
+
+export async function sessionReplaceImageObject(
+  documentId: string,
+  pageIndex: number,
+  resourceName: string,
+  imagePath: string,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_replace_image_object", {
+    documentId, pageIndex, resourceName, imagePath,
+  });
+}
+
+export async function sessionRemoveImageObject(
+  documentId: string,
+  pageIndex: number,
+  resourceName: string,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_remove_image_object", {
+    documentId, pageIndex, resourceName,
   });
 }
 

@@ -7,6 +7,7 @@ use crate::{
     jobs::{self, JobStart},
     forms,
     ocr,
+    optimizer,
     document_ops,
     editing,
     pdf,
@@ -1604,37 +1605,90 @@ pub fn start_optimize_pdf_advanced(
         .map_err(ErrorPayload::from)?;
     let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
     let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    let jobs_dir = state.cache_dir.join("jobs");
+    fs::create_dir_all(&jobs_dir)
+        .map_err(|error| ErrorPayload::from(SevenError::Io(error.to_string())))?;
 
-    if options.linearize {
+    let has_discard = options.remove_javascript
+        || options.remove_open_actions
+        || options.remove_embedded_files
+        || options.remove_metadata
+        || options.remove_xfa
+        || options.remove_annotations
+        || options.remove_forms
+        || options.remove_multimedia;
+
+    let effective_input = if has_discard {
+        let sanitized = jobs_dir.join(format!("sanitize-{}.pdf", uuid::Uuid::new_v4()));
+        document_ops::sanitize_document(
+            &input,
+            &sanitized,
+            document_ops::SanitizeOptions {
+                remove_javascript: options.remove_javascript,
+                remove_open_actions: options.remove_open_actions,
+                remove_embedded_files: options.remove_embedded_files,
+                remove_metadata: options.remove_metadata,
+                remove_xfa: options.remove_xfa,
+                remove_annotations: options.remove_annotations,
+                remove_forms: options.remove_forms,
+                remove_multimedia: options.remove_multimedia,
+            },
+        )
+        .map_err(ErrorPayload::from)?;
+        sanitized
+    } else {
+        input
+    };
+
+    let needs_qpdf = options.cleanup || options.linearize;
+    if needs_qpdf {
         let qpdf = jobs::require_executable(&["qpdf"], "qpdf").map_err(ErrorPayload::from)?;
-        let intermediate = state
-            .cache_dir
-            .join("jobs")
-            .join(format!("optimize-{}.pdf", uuid::Uuid::new_v4()));
-        if let Some(parent) = intermediate.parent() {
-            fs::create_dir_all(parent).map_err(|error| ErrorPayload::from(SevenError::Io(error.to_string())))?;
-        }
+        let intermediate = jobs_dir.join(format!("optimize-{}.pdf", uuid::Uuid::new_v4()));
         let gs_args = options
-            .ghostscript_args(&input, &intermediate)
+            .ghostscript_args(&effective_input, &intermediate)
             .map_err(ErrorPayload::from)?;
-        let qpdf_args = vec![
-            "--linearize".into(),
-            intermediate.to_string_lossy().into_owned(),
-            output.to_string_lossy().into_owned(),
+
+        let mut qpdf_args = vec![
+            "--stream-data=compress".into(),
+            "--recompress-flate".into(),
+            "--compression-level=9".into(),
+            "--object-streams=generate".into(),
         ];
+        if options.linearize {
+            qpdf_args.push("--linearize".into());
+        }
+        qpdf_args.push(intermediate.to_string_lossy().into_owned());
+        qpdf_args.push(output.to_string_lossy().into_owned());
+
         Ok(jobs::start_process_sequence_job(
             app,
             &state,
             "optimize-advanced",
             vec![
-                jobs::ProcessStep { program: ghostscript, args: gs_args, label: "Compactando e regravando PDF".into() },
-                jobs::ProcessStep { program: qpdf, args: qpdf_args, label: "Aplicando Fast Web View".into() },
+                jobs::ProcessStep {
+                    program: ghostscript,
+                    args: gs_args,
+                    label: if has_discard {
+                        "Compactando PDF sanitizado".into()
+                    } else {
+                        "Compactando e regravando PDF".into()
+                    },
+                },
+                jobs::ProcessStep {
+                    program: qpdf,
+                    args: qpdf_args,
+                    label: if options.linearize {
+                        "Clean Up e Fast Web View".into()
+                    } else {
+                        "Clean Up estrutural".into()
+                    },
+                },
             ],
             Some(output),
         ))
     } else {
         let args = options
-            .ghostscript_args(&input, &output)
+            .ghostscript_args(&effective_input, &output)
             .map_err(ErrorPayload::from)?;
         Ok(jobs::start_process_job(
             app,

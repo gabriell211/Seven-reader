@@ -94,7 +94,7 @@ export function CommentsDialog({
                 <label className="workflow-field"><span>Largura</span><input type="number" min={1} value={width} onChange={(event) => setWidth(Number(event.target.value))} /></label>
                 <label className="workflow-field"><span>Altura</span><input type="number" min={1} value={height} onChange={(event) => setHeight(Number(event.target.value))} /></label>
               </div>
-              <div className="organizer-note"><SevenIcon name="comment" /><span>As coordenadas usam pontos PDF. O editor visual por arraste será ligado ao canvas quando o módulo de seleção de objetos estiver concluído.</span></div>
+              <div className="organizer-note"><SevenIcon name="comment" /><span>As coordenadas usam pontos PDF. Para desenho livre com mouse ou caneta, use o ícone de lápis na barra flutuante do documento.</span></div>
               <button className="primary-button workflow-submit" disabled={!text.trim() || width <= 0 || height <= 0} onClick={() => void submit()}><SevenIcon name="comment" /> Adicionar comentário</button>
             </>
           ) : (

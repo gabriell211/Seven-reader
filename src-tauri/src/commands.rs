@@ -1278,6 +1278,69 @@ pub fn start_ocr(
 }
 
 #[tauri::command]
+pub fn start_batch_optimize_pdf(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    inputs: Vec<String>,
+    output_directory: String,
+    preset: Option<String>,
+) -> CommandResult<JobStart> {
+    if inputs.is_empty() || inputs.len() > 200 {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "Selecione entre 1 e 200 PDFs para otimização em lote".into(),
+        )));
+    }
+
+    let executable = jobs::require_executable(&["gswin64c", "gswin32c", "gs"], "Ghostscript")
+        .map_err(ErrorPayload::from)?;
+    let output_directory = jobs::validated_directory(&output_directory).map_err(ErrorPayload::from)?;
+    let setting = match preset.as_deref() {
+        Some("screen") => "/screen",
+        Some("ebook") => "/ebook",
+        Some("printer") => "/printer",
+        Some("prepress") => "/prepress",
+        _ => "/default",
+    };
+    let total = inputs.len();
+    let mut steps = Vec::with_capacity(total);
+
+    for (index, input) in inputs.into_iter().enumerate() {
+        let canonical = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+        let stem = canonical.file_stem().and_then(|value| value.to_str()).unwrap_or("documento");
+        let mut output = output_directory.join(format!("{stem}-otimizado.pdf"));
+        let mut suffix = 2usize;
+        while output.exists() {
+            output = output_directory.join(format!("{stem}-otimizado-{suffix}.pdf"));
+            suffix += 1;
+        }
+        let name = canonical.file_name().and_then(|value| value.to_str()).unwrap_or("documento.pdf");
+        let args = vec![
+            "-sDEVICE=pdfwrite".into(),
+            "-dCompatibilityLevel=1.7".into(),
+            format!("-dPDFSETTINGS={setting}"),
+            "-dNOPAUSE".into(),
+            "-dQUIET".into(),
+            "-dBATCH".into(),
+            format!("-sOutputFile={}", output.to_string_lossy()),
+            canonical.to_string_lossy().into_owned(),
+        ];
+        steps.push(jobs::ProcessStep {
+            program: executable.clone(),
+            args,
+            label: format!("Otimizando {} de {} · {name}", index + 1, total),
+        });
+    }
+
+    Ok(jobs::start_process_sequence_job(
+        app,
+        &state,
+        "batch-optimize",
+        steps,
+        Some(output_directory),
+    ))
+}
+
+#[tauri::command]
 pub fn start_optimize_pdf(
     app: AppHandle,
     state: State<'_, AppState>,

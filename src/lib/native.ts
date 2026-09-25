@@ -32,6 +32,8 @@ import type {
   SignRequest,
   SignatureValidationReport,
   SanitizeReport,
+  SessionFormFillResult,
+  SessionReplaceTextResult,
   TextPlacement,
   TextSelectionResult,
   SearchHit,
@@ -142,6 +144,67 @@ export async function sessionAddMarkup(
   return invoke<DocumentSummary>("session_add_markup", {
     documentId, pageIndex, kind, author, rect,
   });
+}
+
+export async function sessionEditAddText(
+  documentId: string,
+  placement: TextPlacement,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_edit_add_text", { documentId, placement });
+}
+
+export async function sessionEditReplaceText(
+  documentId: string,
+  find: string,
+  replacement: string,
+  allPages: boolean,
+  pageIndex: number,
+): Promise<SessionReplaceTextResult> {
+  return invoke<SessionReplaceTextResult>("session_edit_replace_text", {
+    documentId, find, replacement, allPages, pageIndex,
+  });
+}
+
+export async function sessionEditAddImage(
+  documentId: string,
+  placement: ImagePlacement,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_edit_add_image", { documentId, placement });
+}
+
+export async function sessionEditAddLink(
+  documentId: string,
+  link: LinkPlacement,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_edit_add_link", { documentId, link });
+}
+
+export async function sessionEditOverlayText(
+  documentId: string,
+  options: OverlayTextOptions,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_edit_overlay_text", { documentId, options });
+}
+
+export async function sessionEditSetBackground(
+  documentId: string,
+  options: BackgroundOptions,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_edit_set_background", { documentId, options });
+}
+
+export async function sessionFillFormFields(
+  documentId: string,
+  values: FormValue[],
+): Promise<SessionFormFillResult> {
+  return invoke<SessionFormFillResult>("session_fill_form_fields", { documentId, values });
+}
+
+export async function sessionCreateFormField(
+  documentId: string,
+  field: NewFormField,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_create_form_field", { documentId, field });
 }
 
 export async function printDocument(input: string): Promise<JobStart> {

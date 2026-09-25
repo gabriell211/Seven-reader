@@ -30,6 +30,8 @@ import type {
   NormalizedRect,
   OcrOptions,
   OcrWord,
+  OptimizationAudit,
+  OptimizeOptions,
   OverlayTextOptions,
   PdfActionInfo,
   PrintPreflightReport,
@@ -571,6 +573,18 @@ export async function startOcr(
   language = "por+eng",
 ): Promise<JobStart> {
   return invoke<JobStart>("start_ocr", { input, output, language });
+}
+
+export async function getOptimizationAudit(input: string): Promise<OptimizationAudit> {
+  return invoke<OptimizationAudit>("get_optimization_audit", { input });
+}
+
+export async function startOptimizeAdvanced(
+  input: string,
+  output: string,
+  options: OptimizeOptions,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_optimize_pdf_advanced", { input, output, options });
 }
 
 export async function startOptimize(

@@ -911,6 +911,51 @@ pub async fn validate_signatures(
 }
 
 #[tauri::command]
+pub fn list_pdf_files_in_folder(
+    path: String,
+    recursive: bool,
+    limit: Option<usize>,
+) -> CommandResult<Vec<String>> {
+    let root = jobs::validated_directory(&path).map_err(ErrorPayload::from)?;
+    let limit = limit.unwrap_or(500).clamp(1, 5000);
+    let mut found = Vec::new();
+    let mut pending = vec![root];
+
+    while let Some(directory) = pending.pop() {
+        let entries = fs::read_dir(&directory)
+            .map_err(|error| ErrorPayload::from(SevenError::Io(error.to_string())))?;
+
+        for entry in entries {
+            let entry = entry.map_err(|error| ErrorPayload::from(SevenError::Io(error.to_string())))?;
+            let file_type = entry.file_type()
+                .map_err(|error| ErrorPayload::from(SevenError::Io(error.to_string())))?;
+            let entry_path = entry.path();
+
+            if file_type.is_dir() {
+                if recursive {
+                    pending.push(entry_path);
+                }
+                continue;
+            }
+
+            if file_type.is_file()
+                && entry_path.extension().and_then(|value| value.to_str())
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("pdf"))
+            {
+                found.push(entry_path.to_string_lossy().into_owned());
+                if found.len() >= limit {
+                    found.sort_by_key(|value| value.to_lowercase());
+                    return Ok(found);
+                }
+            }
+        }
+    }
+
+    found.sort_by_key(|value| value.to_lowercase());
+    Ok(found)
+}
+
+#[tauri::command]
 pub fn start_print_document(
     app: AppHandle,
     state: State<'_, AppState>,

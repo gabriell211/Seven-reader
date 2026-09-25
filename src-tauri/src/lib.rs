@@ -91,6 +91,8 @@ pub fn run() {
             commands::session_add_pdf_attachment,
             commands::session_update_pdf_attachment,
             commands::session_remove_pdf_attachment,
+            commands::session_apply_pdf_layer_overrides,
+            commands::session_reset_pdf_layer_visibility,
             commands::session_update_pdf_layer_properties,
             commands::session_set_pdf_layer_visibility,
             commands::session_update_document_metadata,

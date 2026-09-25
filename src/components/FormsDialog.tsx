@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type { FormFieldInfo, FormFieldUpdate, FormValue, NewFormField, NewFormFieldType } from "../types";
+import type { DuplicateFieldRequest, FormFieldInfo, FormFieldUpdate, FormValue, NewFormField, NewFormFieldType } from "../types";
 import { SevenIcon } from "./SevenIcon";
 
 interface FormsDialogProps {
@@ -16,6 +16,8 @@ interface FormsDialogProps {
   onExportData: (destination: string) => void;
   onImportData: (path: string) => void;
   onReset: (useDefaults: boolean) => void;
+  onDuplicate: (request: DuplicateFieldRequest) => void;
+  onSetTabOrder: (order: "row" | "column" | "structure") => void;
 }
 
 const fieldTypes: Array<{ id: NewFormFieldType; label: string }> = [
@@ -28,7 +30,7 @@ const fieldTypes: Array<{ id: NewFormFieldType; label: string }> = [
   { id: "signature", label: "Assinatura" },
 ];
 
-export function FormsDialog({ pageIndex, fields, loading, onClose, onReload, onFill, onCreate, onUpdate, onDelete, onExportData, onImportData, onReset }: FormsDialogProps) {
+export function FormsDialog({ pageIndex, fields, loading, onClose, onReload, onFill, onCreate, onUpdate, onDelete, onExportData, onImportData, onReset, onDuplicate, onSetTabOrder }: FormsDialogProps) {
   const [tab, setTab] = useState<"fill" | "create" | "edit" | "data">("fill");
   const [values, setValues] = useState<Record<string, string>>({});
   const [name, setName] = useState("campo_1");
@@ -45,6 +47,14 @@ export function FormsDialog({ pageIndex, fields, loading, onClose, onReload, onF
   const [defaultValue, setDefaultValue] = useState("");
   const [optionsText, setOptionsText] = useState("");
   const [editingId, setEditingId] = useState("");
+  const [duplicatePageStart, setDuplicatePageStart] = useState(pageIndex + 1);
+  const [duplicatePageEnd, setDuplicatePageEnd] = useState(pageIndex + 1);
+  const [duplicateRows, setDuplicateRows] = useState(1);
+  const [duplicateColumns, setDuplicateColumns] = useState(1);
+  const [duplicateGapX, setDuplicateGapX] = useState(8);
+  const [duplicateGapY, setDuplicateGapY] = useState(8);
+  const [duplicateOffsetX, setDuplicateOffsetX] = useState(12);
+  const [duplicateOffsetY, setDuplicateOffsetY] = useState(0);
 
   useEffect(() => { onReload(); }, [onReload]);
   useEffect(() => {
@@ -118,6 +128,21 @@ export function FormsDialog({ pageIndex, fields, loading, onClose, onReload, onF
       setHeight(Math.max(1, y2 - y1));
     }
     setTab("edit");
+  };
+
+  const submitDuplicate = () => {
+    if (!editingId) return;
+    onDuplicate({
+      objectId: editingId,
+      pageStart: Math.max(0, duplicatePageStart - 1),
+      pageEnd: Math.max(0, duplicatePageEnd - 1),
+      rows: duplicateRows,
+      columns: duplicateColumns,
+      gapX: duplicateGapX,
+      gapY: duplicateGapY,
+      offsetX: duplicateOffsetX,
+      offsetY: duplicateOffsetY,
+    });
   };
 
   const submitUpdate = () => {
@@ -232,6 +257,34 @@ export function FormsDialog({ pageIndex, fields, loading, onClose, onReload, onF
                   </div>
                   <label className="workflow-field"><span>Máximo de caracteres</span><input type="number" min={1} max={1000000} value={maxLength} onChange={(event) => setMaxLength(event.target.value ? Math.max(1, Number(event.target.value)) : "")} placeholder="Sem limite" /></label>
                   <label className="workflow-field"><span>Opções (choice), uma por linha</span><textarea rows={4} value={optionsText} onChange={(event) => setOptionsText(event.target.value)} /></label>
+                  <section className="form-duplicate-box">
+                    <div className="section-mini-title">Duplicar campo</div>
+                    <div className="two-column-fields">
+                      <label className="workflow-field"><span>Da página</span><input type="number" min={1} value={duplicatePageStart} onChange={(event) => setDuplicatePageStart(Math.max(1, Number(event.target.value) || 1))} /></label>
+                      <label className="workflow-field"><span>Até a página</span><input type="number" min={1} value={duplicatePageEnd} onChange={(event) => setDuplicatePageEnd(Math.max(1, Number(event.target.value) || 1))} /></label>
+                    </div>
+                    <div className="two-column-fields">
+                      <label className="workflow-field"><span>Linhas</span><input type="number" min={1} max={100} value={duplicateRows} onChange={(event) => setDuplicateRows(Math.max(1, Math.min(100, Number(event.target.value) || 1)))} /></label>
+                      <label className="workflow-field"><span>Colunas</span><input type="number" min={1} max={100} value={duplicateColumns} onChange={(event) => setDuplicateColumns(Math.max(1, Math.min(100, Number(event.target.value) || 1)))} /></label>
+                    </div>
+                    <div className="four-column-fields">
+                      <label className="workflow-field"><span>Gap X</span><input type="number" value={duplicateGapX} onChange={(event) => setDuplicateGapX(Number(event.target.value))} /></label>
+                      <label className="workflow-field"><span>Gap Y</span><input type="number" value={duplicateGapY} onChange={(event) => setDuplicateGapY(Number(event.target.value))} /></label>
+                      <label className="workflow-field"><span>Offset X</span><input type="number" value={duplicateOffsetX} onChange={(event) => setDuplicateOffsetX(Number(event.target.value))} /></label>
+                      <label className="workflow-field"><span>Offset Y</span><input type="number" value={duplicateOffsetY} onChange={(event) => setDuplicateOffsetY(Number(event.target.value))} /></label>
+                    </div>
+                    <button className="secondary-light-button choose-wide" onClick={submitDuplicate}><SevenIcon name="create" /> Criar cópias</button>
+                  </section>
+
+                  <section className="form-tab-order-box">
+                    <div><strong>Ordem de tabulação da página {pageIndex + 1}</strong><small>Grava a chave /Tabs da página.</small></div>
+                    <div className="segmented">
+                      <button onClick={() => onSetTabOrder("row")}>Por linha</button>
+                      <button onClick={() => onSetTabOrder("column")}>Por coluna</button>
+                      <button onClick={() => onSetTabOrder("structure")}>Estrutura</button>
+                    </div>
+                  </section>
+
                   <div className="form-edit-actions">
                     <button className="danger-quiet" onClick={() => { onDelete(editingId); setEditingId(""); }}>Remover campo</button>
                     <button className="primary-button" disabled={!name.trim() || width <= 0 || height <= 0} onClick={submitUpdate}><SevenIcon name="save" /> Aplicar propriedades</button>

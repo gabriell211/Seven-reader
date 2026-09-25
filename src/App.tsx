@@ -24,8 +24,6 @@ import { applyAppearance, isTrustedPath, loadSettings, saveSettings, type SevenS
 import {
   addAnnotation,
   addInkAnnotation,
-  addPdfAttachment,
-  addPdfBookmark,
   cancelJob,
   closeDocument,
   compareDocuments,
@@ -42,8 +40,6 @@ import {
   listAnnotations,
   listFormFields,
   extractPdfAttachment,
-  renamePdfBookmark,
-  setPdfLayerVisibility,
   openDocument,
   printDocument,
   renderPage,
@@ -71,6 +67,11 @@ import {
   sessionEditSetBackground,
   sessionFillFormFields,
   sessionCreateFormField,
+  sessionAddPdfBookmark,
+  sessionRenamePdfBookmark,
+  sessionAddPdfAttachment,
+  sessionSetPdfLayerVisibility,
+  sessionUpdateDocumentMetadata,
   searchDocument,
   searchDocumentAdvanced,
   startCombine,
@@ -93,7 +94,6 @@ import {
   startOcr,
   startOcrAdvanced,
   startOptimize,
-  updateDocumentMetadata,
 } from "./lib/native";
 import { canRunTool } from "./data/tools";
 import type {
@@ -1174,25 +1174,42 @@ export default function App() {
     }
   };
 
-  const reopenAdvancedOutput = async (operation: () => Promise<void>, output: string, success: string) => {
+  const refreshAdvancedFrom = async (summary: DocumentSummary) => {
+    setAdvancedReport(await inspectAdvancedPdf(summary.activePath));
+  };
+
+  const runAddBookmark = async (title: string, pageIndex: number) => {
+    if (!document) return;
     try {
-      await operation();
-      setAdvancedTab(null);
-      setNotice(success);
-      await openPath(output);
+      const summary = await sessionAddPdfBookmark(document.id, { title, pageIndex });
+      await acceptDocumentRevision(summary, "Marcador criado na sessão.");
+      await refreshAdvancedFrom(summary);
     } catch (error) {
       setNotice(errorMessage(error));
     }
   };
 
-  const runAddBookmark = (output: string, title: string, pageIndex: number) =>
-    reopenAdvancedOutput(() => addPdfBookmark(document!.path, output, {title,pageIndex}), output, "Marcador criado.");
+  const runRenameBookmark = async (objectId: string, title: string) => {
+    if (!document) return;
+    try {
+      const summary = await sessionRenamePdfBookmark(document.id, objectId, title);
+      await acceptDocumentRevision(summary, "Marcador renomeado na sessão.");
+      await refreshAdvancedFrom(summary);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
 
-  const runRenameBookmark = (output: string, objectId: string, title: string) =>
-    reopenAdvancedOutput(() => renamePdfBookmark(document!.path, output, objectId, title), output, "Marcador renomeado.");
-
-  const runAddAttachment = (output: string, filePath: string, displayName: string, description: string) =>
-    reopenAdvancedOutput(() => addPdfAttachment(document!.path, output, filePath, displayName, description), output, "Arquivo incorporado ao PDF.");
+  const runAddAttachment = async (filePath: string, displayName: string, description: string) => {
+    if (!document) return;
+    try {
+      const summary = await sessionAddPdfAttachment(document.id, filePath, displayName, description);
+      await acceptDocumentRevision(summary, "Arquivo incorporado à sessão.");
+      await refreshAdvancedFrom(summary);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
 
   const runExtractAttachment = async (objectId: string, destination: string) => {
     if (!document) return;
@@ -1204,8 +1221,19 @@ export default function App() {
     }
   };
 
-  const runLayerVisibility = (output: string, objectId: string, visible: boolean) =>
-    reopenAdvancedOutput(() => setPdfLayerVisibility(document!.path, output, objectId, visible), output, visible ? "Layer marcada como visível." : "Layer marcada como oculta.");
+  const runLayerVisibility = async (objectId: string, visible: boolean) => {
+    if (!document) return;
+    try {
+      const summary = await sessionSetPdfLayerVisibility(document.id, objectId, visible);
+      await acceptDocumentRevision(
+        summary,
+        visible ? "Layer marcada como visível na sessão." : "Layer marcada como oculta na sessão.",
+      );
+      await refreshAdvancedFrom(summary);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
 
   const searchRedactions = async (query: string, matchCase: boolean, wholeWord: boolean) => {
     if (!document) return;
@@ -1696,12 +1724,12 @@ export default function App() {
     }
   };
 
-  const saveMetadata = async (output: string, update: { title: string; author: string; subject: string; keywords: string }) => {
+  const saveMetadata = async (update: { title: string; author: string; subject: string; keywords: string }) => {
     if (!document) return;
     try {
-      await updateDocumentMetadata(document.activePath, output, update);
-      setPropertiesOpen(false);
-      setNotice("Metadados salvos em uma nova cópia.");
+      const summary = await sessionUpdateDocumentMetadata(document.id, update);
+      await acceptDocumentRevision(summary, "Metadados atualizados na sessão.");
+      setMetadata(await getDocumentMetadata(summary.activePath));
     } catch (error) {
       setNotice(errorMessage(error));
     }
@@ -1799,18 +1827,17 @@ export default function App() {
       {settingsOpen && <SettingsDialog settings={settings} onClose={() => setSettingsOpen(false)} onChange={setSettings} />}
       {advancedTab && document && (
         <AdvancedPdfDialog
-          documentPath={document.path}
           pageIndex={page}
           report={advancedReport}
           loading={advancedLoading}
           initialTab={advancedTab}
           onClose={() => setAdvancedTab(null)}
           onReload={() => void reloadAdvanced()}
-          onAddBookmark={(output,title,pageIndex)=>void runAddBookmark(output,title,pageIndex)}
-          onRenameBookmark={(output,objectId,title)=>void runRenameBookmark(output,objectId,title)}
-          onAddAttachment={(output,filePath,displayName,description)=>void runAddAttachment(output,filePath,displayName,description)}
+          onAddBookmark={(title,pageIndex)=>void runAddBookmark(title,pageIndex)}
+          onRenameBookmark={(objectId,title)=>void runRenameBookmark(objectId,title)}
+          onAddAttachment={(filePath,displayName,description)=>void runAddAttachment(filePath,displayName,description)}
           onExtractAttachment={(objectId,destination)=>void runExtractAttachment(objectId,destination)}
-          onLayerVisibility={(output,objectId,visible)=>void runLayerVisibility(output,objectId,visible)}
+          onLayerVisibility={(objectId,visible)=>void runLayerVisibility(objectId,visible)}
         />
       )}
       {redactionOpen && document && (
@@ -1909,12 +1936,11 @@ export default function App() {
       )}
       {propertiesOpen && document && (
         <PropertiesDialog
-          path={document.path}
           metadata={metadata}
           loading={reportLoading}
           onClose={() => setPropertiesOpen(false)}
           onReload={() => void loadMetadata()}
-          onSave={(output, update) => void saveMetadata(output, update)}
+          onSave={(update) => void saveMetadata(update)}
         />
       )}
       {reportMode && document && (

@@ -4,7 +4,7 @@ use lopdf::{
     dictionary, Dictionary, Document, Object, ObjectId, Stream,
 };
 use serde::{Deserialize, Serialize};
-use std::{fs, path::Path};
+use std::{collections::HashMap, fs, path::Path};
 
 const MAX_PAGE_CONTENT: usize = 64 * 1024 * 1024;
 
@@ -104,7 +104,7 @@ pub struct NamedDestinationInfo {
     pub editable: bool,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OverlayTextOptions {
     pub kind: String,
@@ -117,7 +117,7 @@ pub struct OverlayTextOptions {
     pub page_end: Option<usize>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BackgroundOptions {
     pub page_start: usize,
@@ -125,6 +125,15 @@ pub struct BackgroundOptions {
     pub red: f64,
     pub green: f64,
     pub blue: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManagedElementInfo {
+    pub id: String,
+    pub kind: String,
+    pub page_indices: Vec<usize>,
+    pub options_json: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -259,6 +268,187 @@ fn prepend_content(document: &mut Document, page_id: ObjectId, bytes: Vec<u8>) -
         .map_err(|error| SevenError::Operation(error.to_string()))?
         .set("Contents", contents);
     Ok(())
+}
+
+fn object_string(object: &Object) -> Option<String> {
+    match object {
+        Object::String(bytes, _) | Object::Name(bytes) => Some(String::from_utf8_lossy(bytes).into_owned()),
+        _ => None,
+    }
+}
+
+fn add_managed_content_stream(
+    document: &mut Document,
+    page_id: ObjectId,
+    bytes: Vec<u8>,
+    element_id: &str,
+    kind: &str,
+    options_json: &str,
+    prepend: bool,
+) -> Result<(), SevenError> {
+    let existing = document
+        .get_object(page_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .get(b"Contents")
+        .ok()
+        .cloned();
+
+    let stream_id = document.add_object(Stream::new(
+        dictionary! {
+            "SevenReaderElement" => true,
+            "SevenElementId" => Object::string_literal(element_id),
+            "SevenElementKind" => Object::string_literal(kind),
+            "SevenElementOptions" => Object::string_literal(options_json),
+        },
+        bytes,
+    ));
+    let managed = Object::Reference(stream_id);
+
+    let contents = match existing {
+        Some(Object::Reference(id)) if prepend => vec![managed, Object::Reference(id)],
+        Some(Object::Reference(id)) => vec![Object::Reference(id), managed],
+        Some(Object::Array(mut values)) if prepend => {
+            values.insert(0, managed);
+            values
+        }
+        Some(Object::Array(mut values)) => {
+            values.push(managed);
+            values
+        }
+        _ => vec![managed],
+    };
+
+    document
+        .get_object_mut(page_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .set("Contents", contents);
+    Ok(())
+}
+
+fn managed_stream_metadata(document: &Document, id: ObjectId) -> Option<(String, String, String)> {
+    let stream = document.get_object(id).ok()?.as_stream().ok()?;
+    let marked = stream
+        .dict
+        .get(b"SevenReaderElement")
+        .ok()
+        .and_then(|value| match value { Object::Boolean(value) => Some(*value), _ => None })
+        .unwrap_or(false);
+    if !marked { return None; }
+    Some((
+        stream.dict.get(b"SevenElementId").ok().and_then(object_string)?,
+        stream.dict.get(b"SevenElementKind").ok().and_then(object_string)?,
+        stream.dict.get(b"SevenElementOptions").ok().and_then(object_string).unwrap_or_default(),
+    ))
+}
+
+pub fn list_managed_elements(input: &Path) -> Result<Vec<ManagedElementInfo>, SevenError> {
+    let document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let mut grouped: HashMap<String, ManagedElementInfo> = HashMap::new();
+    for (number, page_id) in document.get_pages() {
+        let contents = document
+            .get_object(page_id)
+            .ok()
+            .and_then(|object| object.as_dict().ok())
+            .and_then(|page| page.get(b"Contents").ok())
+            .cloned();
+        let ids = match contents {
+            Some(Object::Reference(id)) => vec![id],
+            Some(Object::Array(values)) => values.into_iter().filter_map(|value| value.as_reference().ok()).collect(),
+            _ => Vec::new(),
+        };
+        for id in ids {
+            let Some((element_id, kind, options_json)) = managed_stream_metadata(&document, id) else { continue };
+            let entry = grouped.entry(element_id.clone()).or_insert_with(|| ManagedElementInfo {
+                id: element_id,
+                kind,
+                page_indices: Vec::new(),
+                options_json,
+            });
+            entry.page_indices.push(number.saturating_sub(1) as usize);
+        }
+    }
+    let mut result = grouped.into_values().collect::<Vec<_>>();
+    result.sort_by(|left, right| left.kind.cmp(&right.kind).then_with(|| left.id.cmp(&right.id)));
+    Ok(result)
+}
+
+fn remove_managed_element_from_document(
+    document: &mut Document,
+    element_id: &str,
+) -> Result<usize, SevenError> {
+    let pages = document.get_pages().values().copied().collect::<Vec<_>>();
+    let mut removed_ids = HashSet::new();
+
+    for page_id in pages {
+        let current = document
+            .get_object(page_id)
+            .ok()
+            .and_then(|object| object.as_dict().ok())
+            .and_then(|page| page.get(b"Contents").ok())
+            .cloned();
+        let Some(current) = current else { continue };
+
+        let mut retained = Vec::new();
+        let values = match current {
+            Object::Reference(id) => vec![Object::Reference(id)],
+            Object::Array(values) => values,
+            other => vec![other],
+        };
+        for value in values {
+            let remove = value
+                .as_reference()
+                .ok()
+                .and_then(|id| managed_stream_metadata(document, id).map(|meta| (id, meta)))
+                .is_some_and(|(id, (candidate, _, _))| {
+                    if candidate == element_id {
+                        removed_ids.insert(id);
+                        true
+                    } else {
+                        false
+                    }
+                });
+            if !remove {
+                retained.push(value);
+            }
+        }
+
+        let page = document
+            .get_object_mut(page_id)
+            .map_err(|error| SevenError::Operation(error.to_string()))?
+            .as_dict_mut()
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+        if retained.is_empty() {
+            page.remove(b"Contents");
+        } else if retained.len() == 1 {
+            page.set("Contents", retained.remove(0));
+        } else {
+            page.set("Contents", retained);
+        }
+    }
+
+    let count = removed_ids.len();
+    for id in removed_ids {
+        document.objects.remove(&id);
+    }
+    Ok(count)
+}
+
+pub fn remove_managed_element(
+    input: &Path,
+    output: &Path,
+    element_id: &str,
+) -> Result<usize, SevenError> {
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let removed = remove_managed_element_from_document(&mut document, element_id)?;
+    if removed == 0 {
+        return Err(SevenError::OperationRejected("Elemento gerenciado não encontrado".into()));
+    }
+    atomic_save(document, output)?;
+    Ok(removed)
 }
 
 fn text_operations(font: Vec<u8>, placement: &TextPlacement) -> Vec<Operation> {

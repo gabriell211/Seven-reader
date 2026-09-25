@@ -317,10 +317,53 @@ export interface RedactionReport {
   output: string;
 }
 
+export interface BookmarkInfo {
+  objectId: string;
+  title: string;
+  depth: number;
+  pageIndex?: number;
+  open: boolean;
+}
+
+export interface BookmarkInput {
+  title: string;
+  pageIndex: number;
+}
+
+export interface AttachmentInfo {
+  name: string;
+  description: string;
+  size?: number;
+  objectId: string;
+}
+
+export interface LayerInfo {
+  objectId: string;
+  name: string;
+  visible: boolean;
+  intent: string[];
+}
+
+export interface AdvancedPdfReport {
+  bookmarks: BookmarkInfo[];
+  attachments: AttachmentInfo[];
+  layers: LayerInfo[];
+  isPortfolio: boolean;
+  portfolioView?: string;
+  hasRichMedia: boolean;
+  hasThreeD: boolean;
+  hasGeospatial: boolean;
+  hasArticles: boolean;
+  hasJavascript: boolean;
+  hasLaunchActions: boolean;
+  hasOpenAction: boolean;
+  suspiciousActions: number;
+}
+
 export type ToolId =
   | "edit" | "convert" | "create" | "organize" | "combine" | "comment"
   | "fill-sign" | "certificates" | "scan-ocr" | "forms" | "protect"
-  | "sanitize" | "properties" | "export"
+  | "sanitize" | "properties" | "export" | "bookmarks" | "attachments"
   | "redact" | "compare" | "optimize" | "accessibility" | "print-production"
   | "automation" | "javascript" | "portfolio" | "layers" | "articles"
   | "catalog" | "rich-media" | "three-d" | "shared-review" | "geospatial";

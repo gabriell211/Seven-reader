@@ -118,8 +118,8 @@ export function DocumentWorkspace({
             <SevenIcon name="search" />
           </button>
           <button className="rail-button" aria-label="Comentários" onClick={() => onTool("comment")}><SevenIcon name="comment" /></button>
-          <button className="rail-button" aria-label="Anexos" disabled><SevenIcon name="attachment" /></button>
-          <button className="rail-button" aria-label="Camadas" disabled><SevenIcon name="layers" /></button>
+          <button className="rail-button" aria-label="Anexos" onClick={() => onTool("attachments")}><SevenIcon name="attachment" /></button>
+          <button className="rail-button" aria-label="Camadas" onClick={() => onTool("layers")}><SevenIcon name="layers" /></button>
         </aside>
 
         {leftPanel && (

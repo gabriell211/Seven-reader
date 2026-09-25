@@ -16,8 +16,11 @@ import { FormsDialog } from "./components/FormsDialog";
 import { SignatureDialog } from "./components/SignatureDialog";
 import { EditingDialog } from "./components/EditingDialog";
 import { RedactionDialog } from "./components/RedactionDialog";
+import { AdvancedPdfDialog } from "./components/AdvancedPdfDialog";
 import {
   addAnnotation,
+  addPdfAttachment,
+  addPdfBookmark,
   cancelJob,
   closeDocument,
   compareDocuments,
@@ -27,9 +30,13 @@ import {
   getAccessibilityReport,
   getCapabilities,
   getDocumentMetadata,
+  inspectAdvancedPdf,
   isNativeDesktop,
   listAnnotations,
   listFormFields,
+  extractPdfAttachment,
+  renamePdfBookmark,
+  setPdfLayerVisibility,
   openDocument,
   renderPage,
   deleteAnnotation,
@@ -66,6 +73,7 @@ import {
 import { canRunTool } from "./data/tools";
 import type {
   AccessibilityReport,
+  AdvancedPdfReport,
   AnnotationInfo,
   BackgroundOptions,
   AnnotationInput,
@@ -166,6 +174,9 @@ export default function App() {
   const [redactionOpen, setRedactionOpen] = useState(false);
   const [redactionMatches, setRedactionMatches] = useState<RedactionArea[]>([]);
   const [redactionLoading, setRedactionLoading] = useState(false);
+  const [advancedTab, setAdvancedTab] = useState<"overview"|"bookmarks"|"attachments"|"layers"|null>(null);
+  const [advancedReport, setAdvancedReport] = useState<AdvancedPdfReport|null>(null);
+  const [advancedLoading, setAdvancedLoading] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -327,6 +338,16 @@ export default function App() {
     }
 
     try {
+      if (["bookmarks","attachments","layers","portfolio","articles","rich-media","three-d","geospatial"].includes(tool)) {
+        if (!document) {
+          setNotice("Abra um PDF para inspecionar sua estrutura.");
+          return;
+        }
+        setAdvancedReport(null);
+        setAdvancedTab(tool === "bookmarks" ? "bookmarks" : tool === "attachments" ? "attachments" : tool === "layers" ? "layers" : "overview");
+        return;
+      }
+
       if (tool === "redact") {
         if (!document) {
           setNotice("Abra um PDF para redigir conteúdo.");
@@ -483,6 +504,52 @@ export default function App() {
 
 
 
+
+
+  const reloadAdvanced = async () => {
+    if (!document) return;
+    try {
+      setAdvancedLoading(true);
+      setAdvancedReport(await inspectAdvancedPdf(document.path));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    } finally {
+      setAdvancedLoading(false);
+    }
+  };
+
+  const reopenAdvancedOutput = async (operation: () => Promise<void>, output: string, success: string) => {
+    try {
+      await operation();
+      setAdvancedTab(null);
+      setNotice(success);
+      await openPath(output);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runAddBookmark = (output: string, title: string, pageIndex: number) =>
+    reopenAdvancedOutput(() => addPdfBookmark(document!.path, output, {title,pageIndex}), output, "Marcador criado.");
+
+  const runRenameBookmark = (output: string, objectId: string, title: string) =>
+    reopenAdvancedOutput(() => renamePdfBookmark(document!.path, output, objectId, title), output, "Marcador renomeado.");
+
+  const runAddAttachment = (output: string, filePath: string, displayName: string, description: string) =>
+    reopenAdvancedOutput(() => addPdfAttachment(document!.path, output, filePath, displayName, description), output, "Arquivo incorporado ao PDF.");
+
+  const runExtractAttachment = async (objectId: string, destination: string) => {
+    if (!document) return;
+    try {
+      await extractPdfAttachment(document.path, objectId, destination);
+      setNotice("Anexo extraído.");
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runLayerVisibility = (output: string, objectId: string, visible: boolean) =>
+    reopenAdvancedOutput(() => setPdfLayerVisibility(document!.path, output, objectId, visible), output, visible ? "Layer marcada como visível." : "Layer marcada como oculta.");
 
   const searchRedactions = async (query: string, matchCase: boolean, wholeWord: boolean) => {
     if (!document) return;
@@ -886,6 +953,22 @@ export default function App() {
         <button className="global-notice" onClick={() => setNotice(null)} aria-label="Fechar aviso">
           {notice}
         </button>
+      )}
+      {advancedTab && document && (
+        <AdvancedPdfDialog
+          documentPath={document.path}
+          pageIndex={page}
+          report={advancedReport}
+          loading={advancedLoading}
+          initialTab={advancedTab}
+          onClose={() => setAdvancedTab(null)}
+          onReload={() => void reloadAdvanced()}
+          onAddBookmark={(output,title,pageIndex)=>void runAddBookmark(output,title,pageIndex)}
+          onRenameBookmark={(output,objectId,title)=>void runRenameBookmark(output,objectId,title)}
+          onAddAttachment={(output,filePath,displayName,description)=>void runAddAttachment(output,filePath,displayName,description)}
+          onExtractAttachment={(objectId,destination)=>void runExtractAttachment(objectId,destination)}
+          onLayerVisibility={(output,objectId,visible)=>void runLayerVisibility(output,objectId,visible)}
+        />
       )}
       {redactionOpen && document && (
         <RedactionDialog

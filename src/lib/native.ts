@@ -3,12 +3,14 @@ import type {
   Capabilities,
   DocumentSummary,
   AccessibilityReport,
+  AdvancedPdfReport,
   AnnotationInfo,
   AnnotationInput,
   CompareReport,
   DocumentMetadata,
   JobStart,
   BackgroundOptions,
+  BookmarkInput,
   FormFieldInfo,
   FormValue,
   ImagePlacement,
@@ -228,6 +230,54 @@ export async function editSetBackground(
   options: BackgroundOptions,
 ): Promise<void> {
   await invoke("edit_set_background", { input, output, options });
+}
+
+export async function inspectAdvancedPdf(path: string): Promise<AdvancedPdfReport> {
+  return invoke<AdvancedPdfReport>("inspect_advanced_pdf", { path });
+}
+
+export async function addPdfAttachment(
+  input: string,
+  output: string,
+  filePath: string,
+  displayName: string,
+  description: string,
+): Promise<void> {
+  await invoke("add_pdf_attachment", { input, output, filePath, displayName, description });
+}
+
+export async function extractPdfAttachment(
+  input: string,
+  objectId: string,
+  destination: string,
+): Promise<void> {
+  await invoke("extract_pdf_attachment", { input, objectId, destination });
+}
+
+export async function addPdfBookmark(
+  input: string,
+  output: string,
+  bookmark: BookmarkInput,
+): Promise<void> {
+  await invoke("add_pdf_bookmark", { input, output, bookmark });
+}
+
+export async function renamePdfBookmark(
+  input: string,
+  output: string,
+  objectId: string,
+  title: string,
+): Promise<void> {
+  await invoke("rename_pdf_bookmark", { input, output, objectId, title });
+}
+
+export async function setPdfLayerVisibility(
+  input: string,
+  output: string,
+  objectId: string,
+  visible: boolean,
+): Promise<void> {
+  await invoke("set_pdf_layer_visibility", { input, output, objectId, visible });
 }
 
 export async function listAnnotations(path: string): Promise<AnnotationInfo[]> {

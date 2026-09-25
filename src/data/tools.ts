@@ -19,6 +19,9 @@ export const tools: ToolDefinition[] = [
   { id: "organize", label: "Organizar páginas", description: "Reordene, extraia, gire ou divida páginas com processamento local.", icon: "pages", group: "Documento", capability: "qpdf", implemented: true },
   { id: "combine", label: "Combinar arquivos", description: "Mescle PDFs usando processamento local.", icon: "merge", group: "Documento", capability: "qpdf", implemented: true },
   { id: "properties", label: "Propriedades", description: "Inspecione e altere metadados documentais em uma cópia.", icon: "form", group: "Documento", implemented: true },
+  { id: "bookmarks", label: "Marcadores", description: "Inspecione e crie destinos de navegação no outline do PDF.", icon: "bookmark", group: "Documento", implemented: true },
+  { id: "attachments", label: "Anexos", description: "Incorpore e extraia arquivos do name tree EmbeddedFiles.", icon: "attachment", group: "Documento", implemented: true },
+
   { id: "comment", label: "Comentar", description: "Notas, marcações de texto, carimbos e texto livre persistidos como anotações PDF.", icon: "comment", group: "Revisão", implemented: true },
   { id: "fill-sign", label: "Preencher e assinar", description: "Assinatura eletrônica visual ou assinatura digital PAdES com certificado PKCS#12.", icon: "sign", group: "Revisão", implemented: true },
   { id: "certificates", label: "Certificados", description: "PAdES, certificação, timestamp e validação criptográfica de assinaturas.", icon: "certificate", group: "Segurança", capability: "certificates", implemented: true },
@@ -33,14 +36,14 @@ export const tools: ToolDefinition[] = [
   { id: "print-production", label: "Produção de impressão", description: "Preflight, cores, sangria e separações.", icon: "print", group: "Profissional", capability: "printing", implemented: false },
   { id: "automation", label: "Ações guiadas", description: "Fluxos repetíveis e processamento em lote.", icon: "automation", group: "Profissional", implemented: false },
   { id: "javascript", label: "JavaScript e ações PDF", description: "Inspeção controlada; execução automática desativada.", icon: "lock", group: "Avançado", capability: "pdf_engine", implemented: false },
-  { id: "portfolio", label: "Portfólios PDF", description: "Coleções e anexos preservados.", icon: "attachment", group: "Avançado", capability: "pdf_engine", implemented: false },
-  { id: "layers", label: "Camadas", description: "OCG, visibilidade e propriedades.", icon: "layers", group: "Avançado", capability: "pdf_engine", implemented: false },
-  { id: "articles", label: "Artigos PDF", description: "Threads de leitura e navegação.", icon: "bookmark", group: "Avançado", capability: "pdf_engine", implemented: false },
+  { id: "portfolio", label: "Portfólios PDF", description: "Inspecione Collection/Portfólio e componentes incorporados sem executar conteúdo.", icon: "attachment", group: "Avançado", capability: "pdf_engine", implemented: true },
+  { id: "layers", label: "Camadas", description: "OCGs, intenção e visibilidade inicial; edição segura do estado padrão.", icon: "layers", group: "Avançado", capability: "pdf_engine", implemented: true },
+  { id: "articles", label: "Artigos PDF", description: "Inspecione threads Articles preservando sua estrutura.", icon: "bookmark", group: "Avançado", capability: "pdf_engine", implemented: true },
   { id: "catalog", label: "Índices e catálogo", description: "Índice local e pesquisa em coleções.", icon: "search", group: "Avançado", implemented: false },
-  { id: "rich-media", label: "Rich Media", description: "Inspeção e preservação com execução segura.", icon: "attachment", group: "Avançado", capability: "pdf_engine", implemented: false },
-  { id: "three-d", label: "3D", description: "Conteúdo U3D/PRC quando suportado.", icon: "layers", group: "Avançado", capability: "pdf_engine", implemented: false },
+  { id: "rich-media", label: "Rich Media", description: "Detecte Rich Media/áudio/vídeo e mantenha execução automática bloqueada.", icon: "attachment", group: "Avançado", capability: "pdf_engine", implemented: true },
+  { id: "three-d", label: "3D", description: "Detecte anotações/streams 3D U3D/PRC sem ativação automática.", icon: "layers", group: "Avançado", capability: "pdf_engine", implemented: true },
   { id: "shared-review", label: "Revisão compartilhada", description: "Importação e exportação de comentários.", icon: "comment", group: "Avançado", capability: "pdf_engine", implemented: false },
-  { id: "geospatial", label: "Geoespacial", description: "Medição e dados geoespaciais do documento.", icon: "pages", group: "Avançado", capability: "pdf_engine", implemented: false },
+  { id: "geospatial", label: "Geoespacial", description: "Detecte Measure/VP/GPTS/LPTS e metadados espaciais preservados.", icon: "pages", group: "Avançado", capability: "pdf_engine", implemented: true },
 ];
 
 export function canRunTool(

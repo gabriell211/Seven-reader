@@ -16,6 +16,8 @@ import type {
   JobStart,
   BackgroundOptions,
   BookmarkInput,
+  BookmarkUpdate,
+  GeneratedBookmarksResult,
   FormFieldInfo,
   FieldActionInfo,
   FieldActionInput,
@@ -420,6 +422,26 @@ export async function sessionDeleteFormField(
   objectId: string,
 ): Promise<DocumentSummary> {
   return invoke<DocumentSummary>("session_delete_form_field", { documentId, objectId });
+}
+
+export async function sessionUpdatePdfBookmark(
+  documentId: string,
+  update: BookmarkUpdate,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_update_pdf_bookmark", { documentId, update });
+}
+
+export async function sessionSetAllPdfBookmarksOpen(
+  documentId: string,
+  open: boolean,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_set_all_pdf_bookmarks_open", { documentId, open });
+}
+
+export async function sessionGeneratePdfBookmarksFromStructure(
+  documentId: string,
+): Promise<GeneratedBookmarksResult> {
+  return invoke<GeneratedBookmarksResult>("session_generate_pdf_bookmarks_from_structure", { documentId });
 }
 
 export async function sessionAddPdfBookmark(

@@ -9,6 +9,7 @@ mod error;
 mod forms;
 mod jobs;
 mod ocr;
+mod optimizer;
 mod pdf;
 mod print_production;
 mod redaction;
@@ -106,6 +107,8 @@ pub fn run() {
             commands::start_insert_pages,
             commands::start_replace_pages,
             commands::start_ocr,
+            commands::get_optimization_audit,
+            commands::start_optimize_pdf_advanced,
             commands::start_optimize_pdf,
             commands::start_batch_optimize_pdf,
             commands::find_redaction_matches,

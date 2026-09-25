@@ -83,6 +83,9 @@ import {
   sessionEditSetBackground,
   sessionFillFormFields,
   sessionCreateFormField,
+  listFormFieldActions,
+  sessionSetFormFieldAction,
+  sessionDeleteFormFieldAction,
   sessionDuplicateFormField,
   sessionSetPageTabOrder,
   exportFormData,
@@ -137,6 +140,8 @@ import type {
   DuplicateFieldRequest,
   DocumentSummary,
   FormFieldInfo,
+  FieldActionInfo,
+  FieldActionInput,
   FormFieldUpdate,
   FormValue,
   ImagePlacement,
@@ -271,6 +276,7 @@ export default function App() {
   const [annotationsLoading, setAnnotationsLoading] = useState(false);
   const [formsOpen, setFormsOpen] = useState(false);
   const [formFields, setFormFields] = useState<FormFieldInfo[]>([]);
+  const [fieldActions, setFieldActions] = useState<FieldActionInfo[]>([]);
   const [formsLoading, setFormsLoading] = useState(false);
   const [signatureTab, setSignatureTab] = useState<"electronic" | "digital" | "validate" | null>(null);
   const [signatureValidation, setSignatureValidation] = useState<SignatureValidationReport | null>(null);
@@ -1165,6 +1171,7 @@ export default function App() {
           return;
         }
         setFormFields([]);
+        setFieldActions([]);
         setFormsOpen(true);
         return;
       }
@@ -1669,6 +1676,37 @@ export default function App() {
       setCatalogs(await listCatalogs());
       setNotice("Índice local excluído.");
     } catch (error) { setNotice(errorMessage(error)); }
+  };
+
+  const reloadFieldActions = async () => {
+    if (!document) return;
+    try {
+      setFieldActions(await listFormFieldActions(document.id));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runSetFieldAction = async (request: FieldActionInput) => {
+    if (!document) return;
+    try {
+      const summary = await sessionSetFormFieldAction(document.id, request);
+      await acceptDocumentRevision(summary, "Ação de campo atualizada.");
+      setFieldActions(await listFormFieldActions(document.id));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runDeleteFieldAction = async (objectId: string, trigger: string) => {
+    if (!document) return;
+    try {
+      const summary = await sessionDeleteFormFieldAction(document.id, objectId, trigger);
+      await acceptDocumentRevision(summary, "Ação de campo removida.");
+      setFieldActions(await listFormFieldActions(document.id));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
   };
 
   const runDuplicateFormField = async (request: DuplicateFieldRequest) => {
@@ -2235,9 +2273,11 @@ export default function App() {
         <FormsDialog
           pageIndex={page}
           fields={formFields}
+          actions={fieldActions}
           loading={formsLoading}
           onClose={() => setFormsOpen(false)}
           onReload={() => void reloadFormFields()}
+          onReloadActions={() => void reloadFieldActions()}
           onFill={(values) => void runFillForm(values)}
           onCreate={(field) => void runCreateFormField(field)}
           onUpdate={(update) => void runUpdateFormField(update)}
@@ -2247,6 +2287,8 @@ export default function App() {
           onReset={(useDefaults) => void runResetForm(useDefaults)}
           onDuplicate={(request) => void runDuplicateFormField(request)}
           onSetTabOrder={(order) => void runSetTabOrder(order)}
+          onSetAction={(request) => void runSetFieldAction(request)}
+          onDeleteAction={(objectId, trigger) => void runDeleteFieldAction(objectId, trigger)}
         />
       )}
       {ocrOpen && (

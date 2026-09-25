@@ -219,6 +219,10 @@ export async function sessionEditReplaceText(
   });
 }
 
+export async function getImageDimensions(path: string): Promise<[number, number]> {
+  return invoke<[number, number]>("get_image_dimensions", { path });
+}
+
 export async function listPageImageObjects(
   documentId: string,
   pageIndex: number,

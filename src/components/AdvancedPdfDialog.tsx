@@ -15,6 +15,8 @@ interface AdvancedPdfDialogProps {
   onAddBookmark: (title: string, pageIndex: number) => void;
   onRenameBookmark: (objectId: string, title: string) => void;
   onAddAttachment: (filePath: string, displayName: string, description: string) => void;
+  onUpdateAttachment: (objectId: string, name: string, description: string) => void;
+  onRemoveAttachment: (objectId: string) => void;
   onExtractAttachment: (objectId: string, destination: string) => void;
   onLayerVisibility: (objectId: string, visible: boolean) => void;
 }
@@ -36,6 +38,8 @@ export function AdvancedPdfDialog({
   onAddBookmark,
   onRenameBookmark,
   onAddAttachment,
+  onUpdateAttachment,
+  onRemoveAttachment,
   onExtractAttachment,
   onLayerVisibility,
 }: AdvancedPdfDialogProps) {
@@ -45,6 +49,7 @@ export function AdvancedPdfDialog({
   const [attachmentName, setAttachmentName] = useState("");
   const [attachmentDescription, setAttachmentDescription] = useState("");
   const [attachmentPath, setAttachmentPath] = useState("");
+  const [attachmentEdits, setAttachmentEdits] = useState<Record<string,{name:string;description:string}>>({});
 
   useEffect(() => { onReload(); }, [onReload]);
 
@@ -135,9 +140,29 @@ export function AdvancedPdfDialog({
               <div className="two-column-fields"><label className="workflow-field"><span>Nome</span><input value={attachmentName} onChange={(e)=>setAttachmentName(e.target.value)}/></label><label className="workflow-field"><span>Descrição</span><input value={attachmentDescription} onChange={(e)=>setAttachmentDescription(e.target.value)}/></label></div>
               <button className="primary-button workflow-submit" disabled={!attachmentPath} onClick={addAttachment}><SevenIcon name="attachment"/> Incorporar arquivo</button>
             </div>
-            <div className="structure-list">{report.attachments.map((attachment)=>(
-              <div className="structure-row" key={attachment.objectId}><SevenIcon name="attachment"/><div><strong>{attachment.name}</strong><small>{attachment.description||"Sem descrição"} · {fileSize(attachment.size)}</small></div><button onClick={async()=>{const dest=await save({title:"Extrair anexo",defaultPath:attachment.name});if(dest)onExtractAttachment(attachment.objectId,dest)}}>Extrair</button></div>
-            ))}{report.attachments.length===0&&<div className="empty-panel">Nenhum EmbeddedFile encontrado.</div>}</div>
+            <div className="organizer-note"><SevenIcon name="shield"/><span>Extensões executáveis e scripts perigosos são bloqueados ao incorporar. Extração é manual; o Seven nunca executa anexos automaticamente.</span></div>
+            <div className="attachment-list">
+              {report.attachments.map((attachment)=>{
+                const edit=attachmentEdits[attachment.objectId]??{name:attachment.name,description:attachment.description};
+                return (
+                  <article className="attachment-row" key={attachment.objectId}>
+                    <span className="attachment-glyph"><SevenIcon name="attachment"/></span>
+                    <div className="attachment-edit-fields">
+                      <input value={edit.name} onChange={(e)=>setAttachmentEdits(current=>({...current,[attachment.objectId]:{...edit,name:e.target.value}}))}/>
+                      <input value={edit.description} onChange={(e)=>setAttachmentEdits(current=>({...current,[attachment.objectId]:{...edit,description:e.target.value}}))} placeholder="Descrição"/>
+                      <small>{attachment.mime} · {fileSize(attachment.size)}</small>
+                      <code title={attachment.sha256}>SHA‑256 {attachment.sha256.slice(0,16)}…</code>
+                    </div>
+                    <div className="attachment-row-actions">
+                      <button onClick={()=>onUpdateAttachment(attachment.objectId,edit.name,edit.description)}>Salvar</button>
+                      <button onClick={async()=>{const dest=await save({title:"Extrair anexo",defaultPath:edit.name||attachment.name});if(dest)onExtractAttachment(attachment.objectId,dest)}}>Extrair</button>
+                      <button className="danger-quiet" onClick={()=>onRemoveAttachment(attachment.objectId)}>Remover</button>
+                    </div>
+                  </article>
+                );
+              })}
+              {report.attachments.length===0&&<div className="empty-panel">Nenhum EmbeddedFile encontrado.</div>}
+            </div>
           </>}
 
           {!loading && report && tab==="layers" && <>

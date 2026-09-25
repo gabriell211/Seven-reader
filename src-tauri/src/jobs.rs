@@ -19,23 +19,48 @@ pub struct JobStart {
     pub job_id: String,
 }
 
+struct JobUpdate {
+    state: &'static str,
+    stage: &'static str,
+    progress: Option<f64>,
+    output: Option<String>,
+    error: Option<String>,
+}
+
+impl JobUpdate {
+    fn new(state: &'static str, stage: &'static str) -> Self {
+        Self { state, stage, progress: None, output: None, error: None }
+    }
+
+    fn progress(mut self, progress: f64) -> Self {
+        self.progress = Some(progress);
+        self
+    }
+
+    fn output(mut self, output: Option<String>) -> Self {
+        self.output = output;
+        self
+    }
+
+    fn error(mut self, error: String) -> Self {
+        self.error = Some(error);
+        self
+    }
+}
+
 fn update_job(
     jobs: &Arc<parking_lot::Mutex<std::collections::HashMap<String, JobRuntime>>>,
     app: &AppHandle,
     id: &str,
-    state: &str,
-    stage: &str,
-    progress: Option<f64>,
-    output: Option<String>,
-    error: Option<String>,
+    update: JobUpdate,
 ) {
     let mut guard = jobs.lock();
     if let Some(runtime) = guard.get_mut(id) {
-        runtime.status.state = state.to_owned();
-        runtime.status.stage = stage.to_owned();
-        runtime.status.progress = progress;
-        runtime.status.output = output;
-        runtime.status.error = error;
+        runtime.status.state = update.state.to_owned();
+        runtime.status.stage = update.stage.to_owned();
+        runtime.status.progress = update.progress;
+        runtime.status.output = update.output;
+        runtime.status.error = update.error;
         let _ = app.emit("seven://job", runtime.status.clone());
     }
 }
@@ -65,18 +90,18 @@ pub fn start_process_job(
     let id_for_thread = id.clone();
 
     thread::spawn(move || {
-        update_job(&jobs, &app, &id_for_thread, "running", "Iniciando", None, None, None);
+        update_job(&jobs, &app, &id_for_thread, JobUpdate::new("running", "Iniciando"));
 
         let mut child = match Command::new(&program)
             .args(&args)
             .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .spawn()
         {
             Ok(child) => child,
             Err(error) => {
-                update_job(&jobs, &app, &id_for_thread, "failed", "Falha ao iniciar", None, None, Some(error.to_string()));
+                update_job(&jobs, &app, &id_for_thread, JobUpdate::new("failed", "Falha ao iniciar").error(error.to_string()));
                 return;
             }
         };
@@ -85,7 +110,7 @@ pub fn start_process_job(
             if cancel.load(Ordering::Relaxed) {
                 let _ = child.kill();
                 let _ = child.wait();
-                update_job(&jobs, &app, &id_for_thread, "cancelled", "Cancelado", None, None, None);
+                update_job(&jobs, &app, &id_for_thread, JobUpdate::new("cancelled", "Cancelado"));
                 return;
             }
 
@@ -93,20 +118,20 @@ pub fn start_process_job(
                 Ok(Some(status)) => {
                     if status.success() {
                         let output = output_path.as_ref().map(|path| path.to_string_lossy().into_owned());
-                        update_job(&jobs, &app, &id_for_thread, "completed", "Concluído", Some(1.0), output, None);
+                        update_job(&jobs, &app, &id_for_thread, JobUpdate::new("completed", "Concluído").progress(1.0).output(output));
                     } else {
                         let message = format!("Processo encerrou com código {:?}", status.code());
-                        update_job(&jobs, &app, &id_for_thread, "failed", "Falha", None, None, Some(message));
+                        update_job(&jobs, &app, &id_for_thread, JobUpdate::new("failed", "Falha").error(message));
                     }
                     return;
                 }
                 Ok(None) => {
-                    update_job(&jobs, &app, &id_for_thread, "running", "Processando", None, None, None);
+                    update_job(&jobs, &app, &id_for_thread, JobUpdate::new("running", "Processando"));
                     thread::sleep(Duration::from_millis(250));
                 }
                 Err(error) => {
                     let _ = child.kill();
-                    update_job(&jobs, &app, &id_for_thread, "failed", "Falha ao acompanhar processo", None, None, Some(error.to_string()));
+                    update_job(&jobs, &app, &id_for_thread, JobUpdate::new("failed", "Falha ao acompanhar processo").error(error.to_string()));
                     return;
                 }
             }

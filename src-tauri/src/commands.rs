@@ -266,6 +266,186 @@ pub fn start_rotate_pages(
 }
 
 #[tauri::command]
+pub fn start_delete_pages(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: String,
+    output: String,
+    page_range: String,
+) -> CommandResult<JobStart> {
+    let executable = jobs::require_executable(&["qpdf"], "qpdf").map_err(ErrorPayload::from)?;
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    let page_range = jobs::validated_page_range(&page_range).map_err(ErrorPayload::from)?;
+
+    let exclusions = page_range
+        .split(',')
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .map(|part| format!("x{}", part.trim_start_matches('x')))
+        .collect::<Vec<_>>();
+
+    if exclusions.is_empty() {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "Informe ao menos uma página para excluir".into(),
+        )));
+    }
+
+    let selection = format!("1-z,{}", exclusions.join(","));
+    let args = vec![
+        input.to_string_lossy().into_owned(),
+        "--pages".into(),
+        ".".into(),
+        selection,
+        "--".into(),
+        output.to_string_lossy().into_owned(),
+    ];
+
+    Ok(jobs::start_process_job(
+        app,
+        &state,
+        "delete-pages",
+        executable,
+        args,
+        Some(output),
+    ))
+}
+
+#[tauri::command]
+pub fn start_insert_pages(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: String,
+    output: String,
+    source: String,
+    source_range: String,
+    insert_after: usize,
+) -> CommandResult<JobStart> {
+    let executable = jobs::require_executable(&["qpdf"], "qpdf").map_err(ErrorPayload::from)?;
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let source = pdf::validate_pdf_path(&source).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    let source_range = jobs::validated_page_range(&source_range).map_err(ErrorPayload::from)?;
+
+    let page_count = lopdf::Document::load(&input)
+        .map_err(|error| ErrorPayload::from(SevenError::PdfOpen(error.to_string())))?
+        .get_pages()
+        .len();
+
+    if insert_after > page_count {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(format!(
+            "A posição de inserção deve ficar entre 0 e {page_count}"
+        ))));
+    }
+
+    let mut args = vec![
+        input.to_string_lossy().into_owned(),
+        "--pages".into(),
+    ];
+
+    if insert_after > 0 {
+        args.push(".".into());
+        args.push(format!("1-{insert_after}"));
+    }
+
+    args.push(source.to_string_lossy().into_owned());
+    args.push(source_range);
+
+    if insert_after < page_count {
+        args.push(".".into());
+        args.push(format!("{}-z", insert_after + 1));
+    }
+
+    args.push("--".into());
+    args.push(output.to_string_lossy().into_owned());
+
+    Ok(jobs::start_process_job(
+        app,
+        &state,
+        "insert-pages",
+        executable,
+        args,
+        Some(output),
+    ))
+}
+
+#[tauri::command]
+pub fn start_replace_pages(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: String,
+    output: String,
+    source: String,
+    target_start: usize,
+    source_start: usize,
+    count: usize,
+) -> CommandResult<JobStart> {
+    if target_start == 0 || source_start == 0 || count == 0 || count > 5000 {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "Página inicial e quantidade devem ser maiores que zero".into(),
+        )));
+    }
+
+    let executable = jobs::require_executable(&["qpdf"], "qpdf").map_err(ErrorPayload::from)?;
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let source = pdf::validate_pdf_path(&source).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+
+    let target_count = lopdf::Document::load(&input)
+        .map_err(|error| ErrorPayload::from(SevenError::PdfOpen(error.to_string())))?
+        .get_pages()
+        .len();
+    let source_count = lopdf::Document::load(&source)
+        .map_err(|error| ErrorPayload::from(SevenError::PdfOpen(error.to_string())))?
+        .get_pages()
+        .len();
+
+    let target_end = target_start.saturating_add(count - 1);
+    let source_end = source_start.saturating_add(count - 1);
+
+    if target_end > target_count {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(format!(
+            "O intervalo de destino ultrapassa as {target_count} páginas do documento"
+        ))));
+    }
+    if source_end > source_count {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(format!(
+            "O intervalo de substituição ultrapassa as {source_count} páginas do arquivo de origem"
+        ))));
+    }
+
+    let mut args = vec![
+        input.to_string_lossy().into_owned(),
+        "--pages".into(),
+    ];
+
+    if target_start > 1 {
+        args.push(".".into());
+        args.push(format!("1-{}", target_start - 1));
+    }
+
+    args.push(source.to_string_lossy().into_owned());
+    args.push(format!("{source_start}-{source_end}"));
+
+    if target_end < target_count {
+        args.push(".".into());
+        args.push(format!("{}-z", target_end + 1));
+    }
+
+    args.push("--".into());
+    args.push(output.to_string_lossy().into_owned());
+
+    Ok(jobs::start_process_job(
+        app,
+        &state,
+        "replace-pages",
+        executable,
+        args,
+        Some(output),
+    ))
+}
+
+#[tauri::command]
 pub fn create_pdf_from_images(
     inputs: Vec<String>,
     destination: String,

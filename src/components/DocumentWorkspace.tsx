@@ -17,6 +17,7 @@ interface WorkspaceProps {
   onClose: () => void;
   onOpen: () => void;
   onSaveAs: () => void;
+  onPrint: () => void;
   onRender: (page: number, zoom: number) => void;
   onSearch: (query: string) => void;
   onTool: (tool: ToolId) => void;
@@ -46,6 +47,7 @@ export function DocumentWorkspace({
   onClose,
   onOpen,
   onSaveAs,
+  onPrint,
   onRender,
   onSearch,
   onTool,
@@ -58,6 +60,7 @@ export function DocumentWorkspace({
   const [toolsOpen, setToolsOpen] = useState(false);
   const [leftPanel, setLeftPanel] = useState<"thumbs" | "search" | null>("thumbs");
   const [search, setSearch] = useState("");
+  const [toolSearch, setToolSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -68,6 +71,15 @@ export function DocumentWorkspace({
   const [viewerTool, setViewerTool] = useState<"select" | "hand">("select");
 
   const pageLabel = useMemo(() => `${page + 1} / ${document.pageCount}`, [page, document.pageCount]);
+  const filteredTools = useMemo(() => {
+    const query = toolSearch.trim().toLocaleLowerCase("pt-BR");
+    if (!query) return tools;
+    return tools.filter((tool) =>
+      [tool.label, tool.description, tool.group].some((value) =>
+        value.toLocaleLowerCase("pt-BR").includes(query),
+      ),
+    );
+  }, [toolSearch]);
 
   const changeZoom = (delta: number) => {
     const next = Math.min(400, Math.max(25, zoom + delta));
@@ -117,7 +129,12 @@ export function DocumentWorkspace({
         <div className="global-divider" />
         <button className="global-action compact" onClick={onOpen}><SevenIcon name="open" /><span>Abrir</span></button>
         <button className="global-action compact" onClick={onSaveAs}><SevenIcon name="save" /><span>Salvar como</span></button>
-        <button className="global-action compact" disabled title="Pipeline de impressão ainda não implementado"><SevenIcon name="print" /><span>Imprimir</span></button>
+        <button
+          className="global-action compact"
+          disabled={!capabilities?.printing?.available}
+          title={capabilities?.printing?.available ? "Imprimir com o sistema operacional" : "Serviço de impressão não disponível"}
+          onClick={onPrint}
+        ><SevenIcon name="print" /><span>Imprimir</span></button>
       </nav>
 
       <div className="workspace-body">
@@ -212,9 +229,17 @@ export function DocumentWorkspace({
               <div><span className="eyebrow">WORKSPACE</span><h2>Todas as ferramentas</h2></div>
               <button className="icon-button" onClick={() => setToolsOpen(false)}><SevenIcon name="close" /></button>
             </div>
-            <div className="drawer-search"><SevenIcon name="search" /><input placeholder="Encontrar ferramenta" /></div>
+            <div className="drawer-search">
+              <SevenIcon name="search" />
+              <input
+                value={toolSearch}
+                onChange={(event) => setToolSearch(event.target.value)}
+                placeholder="Encontrar ferramenta"
+                aria-label="Encontrar ferramenta"
+              />
+            </div>
             <div className="drawer-tools">
-              {tools.map((tool) => {
+              {filteredTools.map((tool) => {
                 const enabled = canRunTool(tool.id, capabilities);
                 const capabilityAvailable = !tool.capability || capabilities?.[tool.capability]?.available;
                 const status = !tool.implemented
@@ -230,6 +255,7 @@ export function DocumentWorkspace({
                   </button>
                 );
               })}
+              {!filteredTools.length && <div className="empty-panel">Nenhuma ferramenta encontrada.</div>}
             </div>
           </aside>
         )}

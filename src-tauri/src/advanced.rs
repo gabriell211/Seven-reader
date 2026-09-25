@@ -38,6 +38,16 @@ pub struct LayerInfo {
     pub intent: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PdfActionInfo {
+    pub object_id: String,
+    pub action_type: String,
+    pub target: String,
+    pub blocked: bool,
+    pub automatic: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct AdvancedPdfReport {
@@ -289,6 +299,97 @@ fn scan_active_content(document: &Document) -> (bool, bool, bool, bool, bool, us
     }
     let articles = document.catalog().ok().is_some_and(|c| c.get(b"Threads").is_ok());
     (rich, three_d, geo, js, launch, suspicious + usize::from(articles && false))
+}
+
+fn resolved_text(document: &Document, object: &Object, max_chars: usize) -> String {
+    let value = match object {
+        Object::String(bytes, _) | Object::Name(bytes) => String::from_utf8_lossy(bytes).into_owned(),
+        Object::Reference(id) => match document.get_object(*id) {
+            Ok(Object::String(bytes, _)) | Ok(Object::Name(bytes)) => String::from_utf8_lossy(bytes).into_owned(),
+            Ok(Object::Stream(stream)) => String::from_utf8_lossy(
+                &stream.decompressed_content().unwrap_or_else(|_| stream.content.clone()),
+            ).into_owned(),
+            _ => String::new(),
+        },
+        _ => String::new(),
+    };
+    value.chars().take(max_chars).collect()
+}
+
+pub fn list_actions(path: &Path) -> Result<Vec<PdfActionInfo>, SevenError> {
+    let document = Document::load(path).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let open_action = document
+        .catalog()
+        .ok()
+        .and_then(|catalog| catalog.get(b"OpenAction").ok())
+        .and_then(|object| object.as_reference().ok());
+
+    let mut actions = Vec::new();
+    for (id, object) in &document.objects {
+        let Ok(dictionary) = object.as_dict() else { continue };
+        let action_type = dictionary
+            .get(b"S")
+            .ok()
+            .and_then(|value| value.as_name().ok())
+            .map(|value| String::from_utf8_lossy(value).into_owned());
+        let Some(action_type) = action_type else { continue };
+        if !matches!(
+            action_type.as_str(),
+            "JavaScript" | "Launch" | "URI" | "GoTo" | "GoToR" | "Named"
+                | "SubmitForm" | "ResetForm" | "ImportData" | "Hide" | "SetOCGState"
+        ) {
+            continue;
+        }
+
+        let target = match action_type.as_str() {
+            "JavaScript" => dictionary
+                .get(b"JS")
+                .ok()
+                .map(|value| resolved_text(&document, value, 320))
+                .filter(|value| !value.is_empty())
+                .unwrap_or_else(|| "JavaScript sem conteúdo textual inspecionável".into()),
+            "URI" => dictionary
+                .get(b"URI")
+                .ok()
+                .map(|value| resolved_text(&document, value, 1024))
+                .unwrap_or_default(),
+            "Launch" | "GoToR" | "SubmitForm" | "ImportData" => dictionary
+                .get(b"F")
+                .ok()
+                .map(|value| resolved_text(&document, value, 1024))
+                .unwrap_or_default(),
+            "Named" => dictionary
+                .get(b"N")
+                .ok()
+                .map(|value| resolved_text(&document, value, 200))
+                .unwrap_or_default(),
+            _ => dictionary
+                .get(b"D")
+                .ok()
+                .map(|value| format!("{value:?}"))
+                .unwrap_or_default()
+                .chars()
+                .take(320)
+                .collect(),
+        };
+
+        actions.push(PdfActionInfo {
+            object_id: id_string(*id),
+            blocked: matches!(action_type.as_str(), "JavaScript" | "Launch" | "ImportData"),
+            automatic: open_action == Some(*id),
+            action_type,
+            target,
+        });
+    }
+
+    actions.sort_by(|left, right| {
+        right
+            .automatic
+            .cmp(&left.automatic)
+            .then_with(|| left.action_type.cmp(&right.action_type))
+            .then_with(|| left.object_id.cmp(&right.object_id))
+    });
+    Ok(actions)
 }
 
 pub fn inspect(path: &Path) -> Result<AdvancedPdfReport, SevenError> {

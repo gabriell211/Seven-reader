@@ -83,6 +83,8 @@ import {
   sessionEditSetBackground,
   sessionFillFormFields,
   sessionCreateFormField,
+  sessionDuplicateFormField,
+  sessionSetPageTabOrder,
   exportFormData,
   sessionImportFormData,
   sessionResetForm,
@@ -132,6 +134,7 @@ import type {
   CatalogSummary,
   CompareReport,
   DocumentMetadata,
+  DuplicateFieldRequest,
   DocumentSummary,
   FormFieldInfo,
   FormFieldUpdate,
@@ -1668,6 +1671,27 @@ export default function App() {
     } catch (error) { setNotice(errorMessage(error)); }
   };
 
+  const runDuplicateFormField = async (request: DuplicateFieldRequest) => {
+    if (!document) return;
+    try {
+      const result = await sessionDuplicateFormField(document.id, request);
+      await acceptDocumentRevision(result.document, `${result.changed} cópia(s) de campo criada(s).`);
+      setFormFields(await listFormFields(result.document.activePath));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runSetTabOrder = async (order: "row" | "column" | "structure") => {
+    if (!document) return;
+    try {
+      const summary = await sessionSetPageTabOrder(document.id, page, order);
+      await acceptDocumentRevision(summary, `Ordem de tabulação da página definida por ${order}.`);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
   const runExportFormData = async (destination: string) => {
     if (!document) return;
     try {
@@ -2221,6 +2245,8 @@ export default function App() {
           onExportData={(destination) => void runExportFormData(destination)}
           onImportData={(path) => void runImportFormData(path)}
           onReset={(useDefaults) => void runResetForm(useDefaults)}
+          onDuplicate={(request) => void runDuplicateFormField(request)}
+          onSetTabOrder={(order) => void runSetTabOrder(order)}
         />
       )}
       {ocrOpen && (

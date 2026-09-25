@@ -17,6 +17,8 @@ import type {
   BackgroundOptions,
   BookmarkInput,
   FormFieldInfo,
+  FieldActionInfo,
+  FieldActionInput,
   FormFieldUpdate,
   FormValue,
   ImagePlacement,
@@ -293,6 +295,29 @@ export async function sessionCreateFormField(
   field: NewFormField,
 ): Promise<DocumentSummary> {
   return invoke<DocumentSummary>("session_create_form_field", { documentId, field });
+}
+
+export async function listFormFieldActions(
+  documentId: string,
+): Promise<FieldActionInfo[]> {
+  return invoke<FieldActionInfo[]>("list_form_field_actions", { documentId });
+}
+
+export async function sessionSetFormFieldAction(
+  documentId: string,
+  request: FieldActionInput,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_set_form_field_action", { documentId, request });
+}
+
+export async function sessionDeleteFormFieldAction(
+  documentId: string,
+  objectId: string,
+  trigger: string,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_delete_form_field_action", {
+    documentId, objectId, trigger,
+  });
 }
 
 export async function sessionDuplicateFormField(

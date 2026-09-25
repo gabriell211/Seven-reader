@@ -78,6 +78,14 @@ export async function revealInFileManager(path: string): Promise<void> {
   await invoke("reveal_in_file_manager", { path });
 }
 
+export async function listPdfFilesInFolder(
+  path: string,
+  recursive = false,
+  limit = 500,
+): Promise<string[]> {
+  return invoke<string[]>("list_pdf_files_in_folder", { path, recursive, limit });
+}
+
 export async function createBlankDocument(
   destination: string,
   pageSize: "a4" | "letter" | "legal",

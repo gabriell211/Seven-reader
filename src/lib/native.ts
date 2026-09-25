@@ -29,6 +29,8 @@ import type {
   LinkPlacement,
   LinkInfo,
   LinkUpdate,
+  ManagedElementInfo,
+  PageLabelOptions,
   MetadataUpdate,
   NamedDestinationInfo,
   NewFormField,
@@ -321,6 +323,42 @@ export async function sessionEditAddLink(
   link: LinkPlacement,
 ): Promise<DocumentSummary> {
   return invoke<DocumentSummary>("session_edit_add_link", { documentId, link });
+}
+
+export async function listManagedPdfElements(
+  documentId: string,
+): Promise<ManagedElementInfo[]> {
+  return invoke<ManagedElementInfo[]>("list_managed_pdf_elements", { documentId });
+}
+
+export async function sessionEditUpdateOverlayText(
+  documentId: string,
+  elementId: string,
+  options: OverlayTextOptions,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_edit_update_overlay_text", { documentId, elementId, options });
+}
+
+export async function sessionEditUpdateBackground(
+  documentId: string,
+  elementId: string,
+  options: BackgroundOptions,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_edit_update_background", { documentId, elementId, options });
+}
+
+export async function sessionEditRemoveManagedElement(
+  documentId: string,
+  elementId: string,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_edit_remove_managed_element", { documentId, elementId });
+}
+
+export async function sessionSetPageLabels(
+  documentId: string,
+  options: PageLabelOptions,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_set_page_labels", { documentId, options });
 }
 
 export async function sessionEditOverlayText(

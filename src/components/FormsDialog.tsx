@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type { DuplicateFieldRequest, FormFieldInfo, FormFieldUpdate, FormValue, NewFormField, NewFormFieldType } from "../types";
+import type { DuplicateFieldRequest, FieldActionInfo, FieldActionInput, FormFieldInfo, FormFieldUpdate, FormValue, NewFormField, NewFormFieldType } from "../types";
 import { SevenIcon } from "./SevenIcon";
 
 interface FormsDialogProps {
   pageIndex: number;
   fields: FormFieldInfo[];
+  actions: FieldActionInfo[];
   loading: boolean;
   onClose: () => void;
   onReload: () => void;
+  onReloadActions: () => void;
   onFill: (values: FormValue[]) => void;
   onCreate: (field: NewFormField) => void;
   onUpdate: (update: FormFieldUpdate) => void;
@@ -18,6 +20,8 @@ interface FormsDialogProps {
   onReset: (useDefaults: boolean) => void;
   onDuplicate: (request: DuplicateFieldRequest) => void;
   onSetTabOrder: (order: "row" | "column" | "structure") => void;
+  onSetAction: (request: FieldActionInput) => void;
+  onDeleteAction: (objectId: string, trigger: string) => void;
 }
 
 const fieldTypes: Array<{ id: NewFormFieldType; label: string }> = [
@@ -30,8 +34,8 @@ const fieldTypes: Array<{ id: NewFormFieldType; label: string }> = [
   { id: "signature", label: "Assinatura" },
 ];
 
-export function FormsDialog({ pageIndex, fields, loading, onClose, onReload, onFill, onCreate, onUpdate, onDelete, onExportData, onImportData, onReset, onDuplicate, onSetTabOrder }: FormsDialogProps) {
-  const [tab, setTab] = useState<"fill" | "create" | "edit" | "data">("fill");
+export function FormsDialog({ pageIndex, fields, actions, loading, onClose, onReload, onReloadActions, onFill, onCreate, onUpdate, onDelete, onExportData, onImportData, onReset, onDuplicate, onSetTabOrder, onSetAction, onDeleteAction }: FormsDialogProps) {
+  const [tab, setTab] = useState<"fill" | "create" | "edit" | "data" | "actions">("fill");
   const [values, setValues] = useState<Record<string, string>>({});
   const [name, setName] = useState("campo_1");
   const [fieldType, setFieldType] = useState<NewFormFieldType>("text");
@@ -65,6 +69,12 @@ export function FormsDialog({ pageIndex, fields, loading, onClose, onReload, onF
   const [duplicateGapY, setDuplicateGapY] = useState(8);
   const [duplicateOffsetX, setDuplicateOffsetX] = useState(12);
   const [duplicateOffsetY, setDuplicateOffsetY] = useState(0);
+  const [actionFieldId, setActionFieldId] = useState("");
+  const [actionTrigger, setActionTrigger] = useState<FieldActionInput["trigger"]>("mouse-up");
+  const [actionType, setActionType] = useState<FieldActionInput["actionType"]>("uri");
+  const [actionTarget, setActionTarget] = useState("");
+  const [actionTargetPage, setActionTargetPage] = useState(1);
+  const [actionHide, setActionHide] = useState(true);
 
   useEffect(() => { onReload(); }, [onReload]);
   useEffect(() => {
@@ -178,6 +188,18 @@ export function FormsDialog({ pageIndex, fields, loading, onClose, onReload, onF
     setTab("edit");
   };
 
+  const submitAction = () => {
+    if (!actionFieldId) return;
+    onSetAction({
+      fieldObjectId: actionFieldId,
+      trigger: actionTrigger,
+      actionType,
+      target: actionTarget,
+      targetPage: actionType === "goto" ? Math.max(0, actionTargetPage - 1) : undefined,
+      hide: actionHide,
+    });
+  };
+
   const submitDuplicate = () => {
     if (!editingId) return;
     onDuplicate({
@@ -222,6 +244,7 @@ export function FormsDialog({ pageIndex, fields, loading, onClose, onReload, onF
           <button className={tab === "create" ? "active" : ""} onClick={() => setTab("create")}>Criar campo</button>
           <button className={tab === "edit" ? "active" : ""} onClick={() => setTab("edit")}>Editar campos</button>
           <button className={tab === "data" ? "active" : ""} onClick={() => setTab("data")}>Dados</button>
+          <button className={tab === "actions" ? "active" : ""} onClick={() => { setTab("actions"); onReloadActions(); }}>Ações</button>
         </div>
         <div className="workflow-body">
           {tab === "fill" ? (
@@ -379,7 +402,7 @@ export function FormsDialog({ pageIndex, fields, loading, onClose, onReload, onF
                 </>
               )}
             </>
-          ) : (
+          ) : tab === "data" ? (
             <>
               <div className="form-data-grid">
                 <button onClick={() => void importData()}>
@@ -407,6 +430,86 @@ export function FormsDialog({ pageIndex, fields, loading, onClose, onReload, onF
                 <SevenIcon name="shield" />
                 <span>Importação de dados não executa JavaScript, SubmitForm ou outras ações embutidas. Somente os valores dos campos são alterados.</span>
               </div>
+            </>
+          ) : (
+            <>
+              <div className="two-column-fields">
+                <label className="workflow-field">
+                  <span>Campo</span>
+                  <select value={actionFieldId} onChange={(event) => setActionFieldId(event.target.value)}>
+                    <option value="">Selecione…</option>
+                    {fields.map((field) => <option key={field.objectId} value={field.objectId}>{field.name}</option>)}
+                  </select>
+                </label>
+                <label className="workflow-field">
+                  <span>Gatilho</span>
+                  <select value={actionTrigger} onChange={(event) => setActionTrigger(event.target.value as FieldActionInput["trigger"])}>
+                    <option value="mouse-up">Mouse Up</option>
+                    <option value="mouse-down">Mouse Down</option>
+                    <option value="mouse-enter">Mouse Enter</option>
+                    <option value="mouse-exit">Mouse Exit</option>
+                    <option value="focus">On Focus</option>
+                    <option value="blur">On Blur</option>
+                  </select>
+                </label>
+              </div>
+
+              <label className="workflow-field">
+                <span>Ação</span>
+                <select value={actionType} onChange={(event) => setActionType(event.target.value as FieldActionInput["actionType"])}>
+                  <option value="uri">Abrir link web</option>
+                  <option value="goto">Ir para página</option>
+                  <option value="reset">Resetar formulário</option>
+                  <option value="hide">Mostrar/ocultar campo</option>
+                  <option value="submit">Enviar formulário</option>
+                  <option value="javascript">JavaScript (armazenar, execução bloqueada)</option>
+                  <option value="launch">Abrir arquivo / Launch (armazenar, execução bloqueada)</option>
+                </select>
+              </label>
+
+              {actionType === "goto" ? (
+                <label className="workflow-field"><span>Página de destino</span><input type="number" min={1} value={actionTargetPage} onChange={(event) => setActionTargetPage(Math.max(1, Number(event.target.value) || 1))} /></label>
+              ) : actionType === "reset" ? (
+                <div className="organizer-note"><SevenIcon name="history" /><span>ResetForm restaurará os campos quando um leitor compatível executar a ação.</span></div>
+              ) : (
+                <label className="workflow-field">
+                  <span>{actionType === "javascript" ? "Código JavaScript" : actionType === "hide" ? "Nome do campo alvo" : actionType === "launch" ? "Caminho/arquivo" : "Destino"}</span>
+                  {actionType === "javascript"
+                    ? <textarea rows={7} value={actionTarget} onChange={(event) => setActionTarget(event.target.value)} spellCheck={false} />
+                    : <input value={actionTarget} onChange={(event) => setActionTarget(event.target.value)} placeholder={actionType === "uri" || actionType === "submit" ? "https://..." : ""} />}
+                </label>
+              )}
+
+              {actionType === "hide" && (
+                <label className="toggle-row"><input type="checkbox" checked={actionHide} onChange={(event) => setActionHide(event.target.checked)} /><span><strong>Ocultar</strong><small>Desmarque para mostrar o campo alvo.</small></span></label>
+              )}
+
+              {(actionType === "javascript" || actionType === "launch") && (
+                <div className="organizer-note organizer-note--warning">
+                  <SevenIcon name="lock" />
+                  <span>O Seven preserva esta action dictionary para compatibilidade, mas não executa automaticamente conteúdo JavaScript ou Launch.</span>
+                </div>
+              )}
+
+              <button className="primary-button workflow-submit" disabled={!actionFieldId || (actionType !== "goto" && actionType !== "reset" && !actionTarget.trim())} onClick={submitAction}>
+                <SevenIcon name="automation" /> Gravar ação no campo
+              </button>
+
+              <div className="section-mini-title">Ações existentes ({actions.length})</div>
+              {actions.length === 0 ? <div className="empty-panel">Nenhuma ação adicional de campo encontrada.</div> : (
+                <div className="field-action-list">
+                  {actions.map((action, index) => (
+                    <article className={action.blocked ? "field-action-row blocked" : "field-action-row"} key={`${action.fieldObjectId}-${action.trigger}-${index}`}>
+                      <span><SevenIcon name={action.blocked ? "lock" : "automation"} /></span>
+                      <div>
+                        <strong>{action.fieldName} · {action.trigger}</strong>
+                        <small>{action.actionType}{action.target ? ` · ${action.target}` : ""}</small>
+                      </div>
+                      <button className="danger-quiet" onClick={() => onDeleteAction(action.fieldObjectId, action.trigger)}>Remover</button>
+                    </article>
+                  ))}
+                </div>
+              )}
             </>
           )}
         </div>

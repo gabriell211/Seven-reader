@@ -752,9 +752,10 @@ export default function App() {
 
   const saveCurrent = async () => {
     if (!document) return;
+    const wasDirty = document.dirty;
     try {
       const summary = await saveDocument(document.id);
-      await acceptDocumentRevision(summary, summary.dirty ? "Documento salvo." : "Documento já estava salvo.");
+      await acceptDocumentRevision(summary, wasDirty ? "Documento salvo no arquivo original." : "Documento já estava salvo.");
     } catch (error) {
       setNotice(errorMessage(error));
     }
@@ -765,7 +766,7 @@ export default function App() {
     try {
       const summary = await undoDocument(document.id);
       await acceptDocumentRevision(summary, "Alteração desfeita.");
-      await reloadAnnotations();
+      setAnnotations(await listAnnotations(summary.activePath));
     } catch (error) {
       setNotice(errorMessage(error));
     }
@@ -776,7 +777,7 @@ export default function App() {
     try {
       const summary = await redoDocument(document.id);
       await acceptDocumentRevision(summary, "Alteração refeita.");
-      await reloadAnnotations();
+      setAnnotations(await listAnnotations(summary.activePath));
     } catch (error) {
       setNotice(errorMessage(error));
     }
@@ -799,7 +800,7 @@ export default function App() {
   };
 
   const pickInputPdf = async (): Promise<string | null> => {
-    if (document) return document.path;
+    if (document) return document.activePath;
     const selected = await open({
       title: "Selecionar PDF",
       multiple: false,
@@ -1024,7 +1025,7 @@ export default function App() {
     if (!document) return;
     try {
       setAdvancedLoading(true);
-      setAdvancedReport(await inspectAdvancedPdf(document.path));
+      setAdvancedReport(await inspectAdvancedPdf(document.activePath));
     } catch (error) {
       setNotice(errorMessage(error));
     } finally {
@@ -1055,7 +1056,7 @@ export default function App() {
   const runExtractAttachment = async (objectId: string, destination: string) => {
     if (!document) return;
     try {
-      await extractPdfAttachment(document.path, objectId, destination);
+      await extractPdfAttachment(document.activePath, objectId, destination);
       setNotice("Anexo extraído.");
     } catch (error) {
       setNotice(errorMessage(error));
@@ -1069,7 +1070,7 @@ export default function App() {
     if (!document) return;
     try {
       setRedactionLoading(true);
-      setRedactionMatches(await findRedactionMatches(document.path, query, matchCase, wholeWord));
+      setRedactionMatches(await findRedactionMatches(document.activePath, query, matchCase, wholeWord));
     } catch (error) {
       setNotice(errorMessage(error));
     } finally {
@@ -1081,7 +1082,7 @@ export default function App() {
     if (!document) return;
     try {
       setRedactionLoading(true);
-      const report = await applyRedactions(document.path, output, areas);
+      const report = await applyRedactions(document.activePath, output, areas);
       setRedactionOpen(false);
       setNotice(`${report.areasApplied} área(s) redigida(s); ${report.objectsRemoved} objeto(s) removido(s).`);
       await openPath(output);
@@ -1104,12 +1105,12 @@ export default function App() {
   };
 
   const runEditAddText = (output: string, placement: TextPlacement) =>
-    saveEditedAndOpen(() => editAddText(document!.path, output, placement), output, "Texto inserido no PDF.");
+    saveEditedAndOpen(() => editAddText(document!.activePath, output, placement), output, "Texto inserido no PDF.");
 
   const runEditReplaceText = async (output: string, find: string, replacement: string, allPages: boolean) => {
     if (!document) return;
     try {
-      const report = await editReplaceText(document.path, output, find, replacement, allPages, page);
+      const report = await editReplaceText(document.activePath, output, find, replacement, allPages, page);
       setEditingOpen(false);
       setNotice(`${report.replacements} substituição(ões) em ${report.pagesChanged} página(s).`);
       await openPath(output);
@@ -1119,21 +1120,21 @@ export default function App() {
   };
 
   const runEditAddImage = (output: string, placement: ImagePlacement) =>
-    saveEditedAndOpen(() => editAddImage(document!.path, output, placement), output, "Imagem inserida no PDF.");
+    saveEditedAndOpen(() => editAddImage(document!.activePath, output, placement), output, "Imagem inserida no PDF.");
 
   const runEditAddLink = (output: string, link: LinkPlacement) =>
-    saveEditedAndOpen(() => editAddLink(document!.path, output, link), output, "Link inserido no PDF.");
+    saveEditedAndOpen(() => editAddLink(document!.activePath, output, link), output, "Link inserido no PDF.");
 
   const runEditOverlay = (output: string, options: OverlayTextOptions) =>
-    saveEditedAndOpen(() => editOverlayText(document!.path, output, options), output, "Conteúdo aplicado às páginas.");
+    saveEditedAndOpen(() => editOverlayText(document!.activePath, output, options), output, "Conteúdo aplicado às páginas.");
 
   const runEditBackground = (output: string, options: BackgroundOptions) =>
-    saveEditedAndOpen(() => editSetBackground(document!.path, output, options), output, "Fundo aplicado às páginas.");
+    saveEditedAndOpen(() => editSetBackground(document!.activePath, output, options), output, "Fundo aplicado às páginas.");
 
   const runElectronicSignature = async (output: string, annotation: AnnotationInput) => {
     if (!document) return;
     try {
-      await addAnnotation(document.path, output, annotation);
+      await addAnnotation(document.activePath, output, annotation);
       setSignatureTab(null);
       setNotice("Assinatura eletrônica visual aplicada. Ela não possui certificado digital.");
       await openPath(output);
@@ -1146,7 +1147,7 @@ export default function App() {
     if (!document) return;
     try {
       setSignatureLoading(true);
-      await signDocument(document.path, output, request);
+      await signDocument(document.activePath, output, request);
       setSignatureTab(null);
       setNotice(request.certify ? "PDF certificado digitalmente." : "Assinatura digital PAdES aplicada.");
       await openPath(output);
@@ -1161,7 +1162,7 @@ export default function App() {
     if (!document) return;
     try {
       setSignatureLoading(true);
-      setSignatureValidation(await validateSignatures(document.path, trustDirectory, allowOnline));
+      setSignatureValidation(await validateSignatures(document.activePath, trustDirectory, allowOnline));
     } catch (error) {
       setNotice(errorMessage(error));
     } finally {
@@ -1173,7 +1174,7 @@ export default function App() {
     if (!document) return;
     try {
       setAnnotationsLoading(true);
-      setAnnotations(await listAnnotations(document.path));
+      setAnnotations(await listAnnotations(document.activePath));
     } catch (error) {
       setNotice(errorMessage(error));
     } finally {
@@ -1186,7 +1187,7 @@ export default function App() {
     try {
       const summary = await sessionAddAnnotation(document.id, annotation);
       await acceptDocumentRevision(summary, "Comentário adicionado à sessão.");
-      await reloadAnnotations();
+      setAnnotations(await listAnnotations(summary.activePath));
     } catch (error) {
       setNotice(errorMessage(error));
     }
@@ -1197,7 +1198,7 @@ export default function App() {
     try {
       const summary = await sessionDeleteAnnotation(document.id, objectId);
       await acceptDocumentRevision(summary, "Comentário removido da sessão.");
-      await reloadAnnotations();
+      setAnnotations(await listAnnotations(summary.activePath));
     } catch (error) {
       setNotice(errorMessage(error));
     }
@@ -1207,7 +1208,7 @@ export default function App() {
     if (!document) return;
     try {
       setFormsLoading(true);
-      setFormFields(await listFormFields(document.path));
+      setFormFields(await listFormFields(document.activePath));
     } catch (error) {
       setNotice(errorMessage(error));
     } finally {
@@ -1218,7 +1219,7 @@ export default function App() {
   const runFillForm = async (output: string, values: FormValue[]) => {
     if (!document) return;
     try {
-      const changed = await fillFormFields(document.path, output, values);
+      const changed = await fillFormFields(document.activePath, output, values);
       setFormsOpen(false);
       setNotice(`${changed} campo(s) preenchido(s).`);
       await openPath(output);
@@ -1230,7 +1231,7 @@ export default function App() {
   const runCreateFormField = async (output: string, field: NewFormField) => {
     if (!document) return;
     try {
-      await createFormField(document.path, output, field);
+      await createFormField(document.activePath, output, field);
       setFormsOpen(false);
       setNotice(`Campo "${field.name}" criado no AcroForm.`);
       await openPath(output);
@@ -1324,7 +1325,7 @@ export default function App() {
   const runAdvancedOcr = async (output: string, options: OcrOptions) => {
     if (!document) return;
     try {
-      const started = await startOcrAdvanced(document.path, output, options);
+      const started = await startOcrAdvanced(document.activePath, output, options);
       setOcrOpen(false);
       setNotice(`OCR iniciado · job ${started.jobId.slice(0, 8)}`);
     } catch (error) {
@@ -1489,7 +1490,7 @@ export default function App() {
   const runEncrypt = async (output: string, userPassword: string, ownerPassword: string) => {
     if (!document) return;
     try {
-      const started = await startEncryptPdf(document.path, output, userPassword, ownerPassword);
+      const started = await startEncryptPdf(document.activePath, output, userPassword, ownerPassword);
       setSecurityMode(null);
       setNotice(`Criptografia iniciada · job ${started.jobId.slice(0, 8)}`);
     } catch (error) {
@@ -1500,7 +1501,7 @@ export default function App() {
   const runDecrypt = async (output: string, password: string) => {
     if (!document) return;
     try {
-      const started = await startDecryptPdf(document.path, output, password);
+      const started = await startDecryptPdf(document.activePath, output, password);
       setSecurityMode(null);
       setNotice(`Descriptografia iniciada · job ${started.jobId.slice(0, 8)}`);
     } catch (error) {
@@ -1511,7 +1512,7 @@ export default function App() {
   const runSanitize = async (output: string, options: SanitizeOptions) => {
     if (!document) return;
     try {
-      const report = await sanitizeDocument(document.path, output, options);
+      const report = await sanitizeDocument(document.activePath, output, options);
       setSecurityMode(null);
       setNotice(`Sanitização concluída · ${report.removedEntries} entrada(s) removida(s).`);
     } catch (error) {
@@ -1523,7 +1524,7 @@ export default function App() {
     if (!document || metadata) return;
     try {
       setReportLoading(true);
-      setMetadata(await getDocumentMetadata(document.path));
+      setMetadata(await getDocumentMetadata(document.activePath));
     } catch (error) {
       setNotice(errorMessage(error));
     } finally {
@@ -1534,7 +1535,7 @@ export default function App() {
   const saveMetadata = async (output: string, update: { title: string; author: string; subject: string; keywords: string }) => {
     if (!document) return;
     try {
-      await updateDocumentMetadata(document.path, output, update);
+      await updateDocumentMetadata(document.activePath, output, update);
       setPropertiesOpen(false);
       setNotice("Metadados salvos em uma nova cópia.");
     } catch (error) {
@@ -1546,7 +1547,7 @@ export default function App() {
     if (!document) return;
     try {
       setReportLoading(true);
-      setAccessibilityReport(await getAccessibilityReport(document.path));
+      setAccessibilityReport(await getAccessibilityReport(document.activePath));
     } catch (error) {
       setNotice(errorMessage(error));
     } finally {
@@ -1558,7 +1559,7 @@ export default function App() {
     if (!document) return;
     try {
       setReportLoading(true);
-      setCompareReport(await compareDocuments(document.path, other));
+      setCompareReport(await compareDocuments(document.activePath, other));
     } catch (error) {
       setNotice(errorMessage(error));
     } finally {
@@ -1602,7 +1603,7 @@ export default function App() {
   const runPrint = async () => {
     if (!document) return;
     try {
-      const started = await printDocument(document.path);
+      const started = await printDocument(document.activePath);
       setNotice(`Impressão enviada ao sistema · job ${started.jobId.slice(0, 8)}`);
     } catch (error) {
       setNotice(errorMessage(error));
@@ -1713,7 +1714,7 @@ export default function App() {
       {conversionOpen && (
         <ConversionDialog
           capabilities={capabilities}
-          currentPdf={document?.path}
+          currentPdf={document?.activePath}
           onClose={() => setConversionOpen(false)}
           onConvertToPdf={(input, outputDirectory) => void runConvertToPdf(input, outputDirectory)}
           onBatchConvertToPdf={(inputs, outputDirectory) => void runBatchConvertToPdf(inputs, outputDirectory)}
@@ -1723,7 +1724,7 @@ export default function App() {
       {securityMode && document && (
         <SecurityDialog
           mode={securityMode}
-          currentPdf={document.path}
+          currentPdf={document.activePath}
           onClose={() => setSecurityMode(null)}
           onEncrypt={(output, userPassword, ownerPassword) => void runEncrypt(output, userPassword, ownerPassword)}
           onDecrypt={(output, password) => void runDecrypt(output, password)}

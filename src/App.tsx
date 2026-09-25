@@ -21,6 +21,7 @@ import { AdvancedPdfDialog } from "./components/AdvancedPdfDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { UnsavedChangesDialog } from "./components/UnsavedChangesDialog";
 import { ActionsDialog } from "./components/ActionsDialog";
+import { PrintProductionDialog } from "./components/PrintProductionDialog";
 import { applyAppearance, isTrustedPath, loadSettings, saveSettings, type SevenSettings } from "./lib/settings";
 import {
   addAnnotation,
@@ -35,6 +36,7 @@ import {
   getAccessibilityReport,
   getCapabilities,
   getDocumentMetadata,
+  getPrintPreflight,
   inspectAdvancedPdf,
   isNativeDesktop,
   listPdfFilesInFolder,
@@ -74,6 +76,7 @@ import {
   sessionAddPdfAttachment,
   sessionSetPdfLayerVisibility,
   sessionUpdateDocumentMetadata,
+  sessionSetPageBoxes,
   searchDocument,
   searchDocumentAdvanced,
   startCombine,
@@ -121,6 +124,8 @@ import type {
   OcrWord,
   OverlayTextOptions,
   PdfActionInfo,
+  PrintPreflightReport,
+  PageBoxUpdate,
   RecentDocument,
   RedactionArea,
   RenderResult,
@@ -247,6 +252,9 @@ export default function App() {
   const [actionsOpen, setActionsOpen] = useState(false);
   const [pdfActions, setPdfActions] = useState<PdfActionInfo[]>([]);
   const [actionsLoading, setActionsLoading] = useState(false);
+  const [printProductionOpen, setPrintProductionOpen] = useState(false);
+  const [printPreflight, setPrintPreflight] = useState<PrintPreflightReport | null>(null);
+  const [printPreflightLoading, setPrintPreflightLoading] = useState(false);
   const [settings, setSettings] = useState<SevenSettings>(loadSettings);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [protectedView, setProtectedView] = useState(false);
@@ -991,6 +999,16 @@ export default function App() {
         return;
       }
 
+      if (tool === "print-production") {
+        if (!document) {
+          setNotice("Abra um PDF para executar o preflight.");
+          return;
+        }
+        setPrintPreflight(null);
+        setPrintProductionOpen(true);
+        return;
+      }
+
       if (tool === "javascript") {
         if (!document) {
           setNotice("Abra um PDF para inspecionar JavaScript e ações.");
@@ -1159,6 +1177,29 @@ export default function App() {
 
 
 
+
+  const reloadPrintPreflight = async (path = document?.activePath) => {
+    if (!path) return;
+    try {
+      setPrintPreflightLoading(true);
+      setPrintPreflight(await getPrintPreflight(path));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    } finally {
+      setPrintPreflightLoading(false);
+    }
+  };
+
+  const runSetPageBoxes = async (update: PageBoxUpdate) => {
+    if (!document) return;
+    try {
+      const summary = await sessionSetPageBoxes(document.id, update);
+      await acceptDocumentRevision(summary, "TrimBox/BleedBox atualizados na sessão.");
+      await reloadPrintPreflight(summary.activePath);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
 
   const reloadPdfActions = async () => {
     if (!document) return;
@@ -1853,6 +1894,16 @@ export default function App() {
         />
       )}
       {settingsOpen && <SettingsDialog settings={settings} onClose={() => setSettingsOpen(false)} onChange={setSettings} />}
+      {printProductionOpen && document && (
+        <PrintProductionDialog
+          report={printPreflight}
+          loading={printPreflightLoading}
+          pageCount={document.pageCount}
+          onClose={() => setPrintProductionOpen(false)}
+          onReload={() => void reloadPrintPreflight()}
+          onSetBoxes={(update) => void runSetPageBoxes(update)}
+        />
+      )}
       {actionsOpen && document && (
         <ActionsDialog
           actions={pdfActions}

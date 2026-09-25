@@ -60,6 +60,7 @@ import {
   scanPageToPdf,
   saveCopy,
   searchDocument,
+  searchDocumentAdvanced,
   startCombine,
   startConvertToPdf,
   startBatchConvertToPdf,
@@ -86,6 +87,8 @@ import { canRunTool } from "./data/tools";
 import type {
   AccessibilityReport,
   AdvancedPdfReport,
+  AdvancedSearchHit,
+  AdvancedSearchOptions,
   AnnotationInfo,
   BackgroundOptions,
   AnnotationInput,
@@ -163,6 +166,7 @@ export default function App() {
   const [zoom, setZoom] = useState(100);
   const [recents, setRecents] = useState<RecentDocument[]>(loadRecents);
   const [searchHits, setSearchHits] = useState<SearchHit[]>([]);
+  const [advancedSearchHits, setAdvancedSearchHits] = useState<AdvancedSearchHit[]>([]);
   const [jobs, setJobs] = useState<Record<string, JobStatus>>({});
   const [notice, setNotice] = useState<string | null>(null);
   const [organizerOpen, setOrganizerOpen] = useState(false);
@@ -336,6 +340,7 @@ export default function App() {
       ? current
       : { ...current, [summary.id]: { entries: [nextPage], index: 0 } });
     setSearchHits([]);
+    setAdvancedSearchHits([]);
     setRendered(null);
 
     try {
@@ -490,6 +495,7 @@ export default function App() {
       setDocument(null);
       setRendered(null);
       setSearchHits([]);
+      setAdvancedSearchHits([]);
       setProtectedView(false);
       setProtectedReasons([]);
     }
@@ -594,6 +600,17 @@ export default function App() {
       const hits = await searchDocument(document.id, query);
       setSearchHits(hits);
       setNotice(hits.length ? `${hits.length} página(s) com resultado.` : "Nenhum resultado encontrado.");
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runAdvancedSearch = async (options: AdvancedSearchOptions) => {
+    if (!document) return;
+    try {
+      const hits = await searchDocumentAdvanced(document.id, options);
+      setAdvancedSearchHits(hits);
+      setNotice(hits.length ? `${hits.length} resultado(s) na busca avançada.` : "Nenhum resultado na busca avançada.");
     } catch (error) {
       setNotice(errorMessage(error));
     }
@@ -1590,6 +1607,7 @@ export default function App() {
           canNavigateForward={canNavigateForward}
           capabilities={capabilities}
           searchHits={searchHits}
+          advancedSearchHits={advancedSearchHits}
           page={page}
           zoom={zoom}
           onHome={() => void closeCurrent()}
@@ -1605,6 +1623,7 @@ export default function App() {
           onPrint={() => void runPrint()}
           onRender={(nextPage, nextZoom) => void render(nextPage, nextZoom)}
           onSearch={(query) => void runSearch(query)}
+          onAdvancedSearch={(options) => void runAdvancedSearch(options)}
           onTool={(tool) => void selectTool(tool)}
           onSettings={() => setSettingsOpen(true)}
           protectedView={protectedView}

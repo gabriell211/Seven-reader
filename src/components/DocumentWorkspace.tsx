@@ -445,7 +445,7 @@ export function DocumentWorkspace({
           {sidePanels.map((panel) => (
             <button
               key={panel}
-              className={(panel === "thumbs" || panel === "search") && leftPanel === panel ? "rail-button active" : "rail-button"}
+              className={(panel === "thumbs" || panel === "search" || panel === "tasks") && leftPanel === panel ? "rail-button active" : "rail-button"}
               onClick={() => panelAction(panel)}
               aria-label={panel}
               title={panel}

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { open, save } from "@tauri-apps/plugin-dialog";
+import { open } from "@tauri-apps/plugin-dialog";
 import type {
   BackgroundOptions,
   ImagePlacement,
@@ -12,20 +12,18 @@ import { SevenIcon } from "./SevenIcon";
 type EditMode = "add-text" | "replace-text" | "image" | "link" | "overlay" | "background";
 
 interface EditingDialogProps {
-  documentPath: string;
   pageIndex: number;
   pageCount: number;
   onClose: () => void;
-  onAddText: (output: string, placement: TextPlacement) => void;
-  onReplaceText: (output: string, find: string, replacement: string, allPages: boolean) => void;
-  onAddImage: (output: string, placement: ImagePlacement) => void;
-  onAddLink: (output: string, link: LinkPlacement) => void;
-  onOverlay: (output: string, options: OverlayTextOptions) => void;
-  onBackground: (output: string, options: BackgroundOptions) => void;
+  onAddText: (placement: TextPlacement) => void;
+  onReplaceText: (find: string, replacement: string, allPages: boolean) => void;
+  onAddImage: (placement: ImagePlacement) => void;
+  onAddLink: (link: LinkPlacement) => void;
+  onOverlay: (options: OverlayTextOptions) => void;
+  onBackground: (options: BackgroundOptions) => void;
 }
 
 export function EditingDialog({
-  documentPath,
   pageIndex,
   pageCount,
   onClose,
@@ -60,12 +58,6 @@ export function EditingDialog({
   const [pageEnd, setPageEnd] = useState(pageCount);
   const [background, setBackground] = useState("#ffffff");
 
-  const chooseOutput = async (suffix: string) => save({
-    title: "Salvar PDF editado",
-    defaultPath: documentPath.replace(/\.pdf$/i, `-${suffix}.pdf`),
-    filters: [{ name: "Documento PDF", extensions: ["pdf"] }],
-  });
-
   const chooseImage = async () => {
     const selected = await open({
       title: "Selecionar imagem",
@@ -85,25 +77,21 @@ export function EditingDialog({
     </div>
   );
 
-  const apply = async () => {
+  const apply = () => {
     if (mode === "add-text") {
-      const output = await chooseOutput("texto");
-      if (output) onAddText(output, { pageIndex, text, x, y, fontSize, rotation, gray });
+      onAddText({ pageIndex, text, x, y, fontSize, rotation, gray });
       return;
     }
     if (mode === "replace-text") {
-      const output = await chooseOutput("texto-substituido");
-      if (output) onReplaceText(output, find, replacement, allPages);
+      onReplaceText(find, replacement, allPages);
       return;
     }
     if (mode === "image") {
-      const output = await chooseOutput("imagem");
-      if (output) onAddImage(output, { pageIndex, imagePath, x, y, width, height });
+      onAddImage({ pageIndex, imagePath, x, y, width, height });
       return;
     }
     if (mode === "link") {
-      const output = await chooseOutput("link");
-      if (output) onAddLink(output, {
+      onAddLink({
         pageIndex, x, y, width, height,
         target: internalLink ? "" : target,
         targetPage: internalLink ? Math.max(0, targetPage - 1) : undefined,
@@ -111,8 +99,7 @@ export function EditingDialog({
       return;
     }
     if (mode === "overlay") {
-      const output = await chooseOutput(overlayKind);
-      if (output) onOverlay(output, {
+      onOverlay({
         kind: overlayKind,
         text,
         prefix,
@@ -124,10 +111,8 @@ export function EditingDialog({
       });
       return;
     }
-    const output = await chooseOutput("fundo");
-    if (!output) return;
     const value = background.replace("#", "");
-    onBackground(output, {
+    onBackground({
       pageStart: Math.max(0, pageStart - 1),
       pageEnd: Math.max(0, pageEnd - 1),
       red: parseInt(value.slice(0, 2), 16) / 255,
@@ -147,7 +132,7 @@ export function EditingDialog({
     <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section className="workflow-dialog editing-dialog" role="dialog" aria-modal="true">
         <header className="organizer-head">
-          <div><span className="eyebrow">EDITAR PDF</span><h2>Edição estrutural</h2><p>Insere ou altera objetos/streams do PDF e salva em uma nova cópia.</p></div>
+          <div><span className="eyebrow">EDITAR PDF</span><h2>Edição estrutural</h2><p>As alterações entram na sessão atual, com Desfazer/Refazer, e só substituem o original ao clicar em Salvar.</p></div>
           <button className="icon-button" onClick={onClose} aria-label="Fechar"><SevenIcon name="close" /></button>
         </header>
 
@@ -211,7 +196,7 @@ export function EditingDialog({
             <div className="two-column-fields"><label className="workflow-field"><span>Da página</span><input type="number" min={1} max={pageCount} value={pageStart} onChange={(e) => setPageStart(Number(e.target.value))} /></label><label className="workflow-field"><span>Até</span><input type="number" min={1} max={pageCount} value={pageEnd} onChange={(e) => setPageEnd(Number(e.target.value))} /></label></div>
           </>}
 
-          <button className="primary-button workflow-submit" disabled={!canApply} onClick={() => void apply()}><SevenIcon name="save" /> Aplicar em nova cópia</button>
+          <button className="primary-button workflow-submit" disabled={!canApply} onClick={apply}><SevenIcon name="edit" /> Aplicar à sessão</button>
         </div>
       </section>
     </div>

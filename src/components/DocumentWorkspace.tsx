@@ -105,7 +105,6 @@ export function DocumentWorkspace({
   }, [tabMenu]);
   const [viewerTool, setViewerTool] = useState<"select" | "hand">("select");
 
-  const pageLabel = useMemo(() => `${page + 1} / ${document.pageCount}`, [page, document.pageCount]);
   const filteredTools = useMemo(() => {
     const query = toolSearch.trim().toLocaleLowerCase("pt-BR");
     if (!query) return tools;

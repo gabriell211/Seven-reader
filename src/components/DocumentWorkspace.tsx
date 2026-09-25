@@ -14,6 +14,7 @@ import type {
 } from "../types";
 import { nativeAssetUrl } from "../lib/native";
 import { ProtectedViewBanner } from "./ProtectedViewBanner";
+import type { QuickToolId, SidePanelId } from "../lib/settings";
 
 interface WorkspaceProps {
   document: DocumentSummary;
@@ -23,6 +24,9 @@ interface WorkspaceProps {
   canNavigateBack: boolean;
   canNavigateForward: boolean;
   capabilities: Capabilities | null;
+  quickTools: QuickToolId[];
+  quickToolsPosition: { x: number; y: number } | null;
+  sidePanels: SidePanelId[];
   searchHits: SearchHit[];
   advancedSearchHits: AdvancedSearchHit[];
   page: number;
@@ -35,6 +39,7 @@ interface WorkspaceProps {
   onReorderTabs: (sourceId: string, targetId: string) => void;
   onNavigateBack: () => void;
   onNavigateForward: () => void;
+  onQuickToolsPositionChange: (position: { x: number; y: number } | null) => void;
   onOpen: () => void;
   onSaveAs: () => void;
   onPrint: () => void;
@@ -66,6 +71,9 @@ export function DocumentWorkspace({
   canNavigateBack,
   canNavigateForward,
   capabilities,
+  quickTools,
+  quickToolsPosition,
+  sidePanels,
   searchHits,
   advancedSearchHits,
   page,
@@ -78,6 +86,7 @@ export function DocumentWorkspace({
   onReorderTabs,
   onNavigateBack,
   onNavigateForward,
+  onQuickToolsPositionChange,
   onOpen,
   onSaveAs,
   onPrint,
@@ -117,6 +126,8 @@ export function DocumentWorkspace({
   const pageRef = useRef<HTMLDivElement>(null);
   const [inkPoints, setInkPoints] = useState<Array<[number, number]>>([]);
   const [inkWidth, setInkWidth] = useState(2.5);
+  const [toolbarPosition, setToolbarPosition] = useState(quickToolsPosition);
+  const toolbarDragRef = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null);
   const drawingRef = useRef(false);
 
   useEffect(() => {
@@ -125,6 +136,7 @@ export function DocumentWorkspace({
     return () => window.removeEventListener("seven:focus-search", focus);
   }, []);
   useEffect(() => setPageInput(String(page + 1)), [page]);
+  useEffect(() => setToolbarPosition(quickToolsPosition), [quickToolsPosition]);
   useEffect(() => {
     if (!tabMenu) return;
     const close = () => setTabMenu(null);
@@ -177,6 +189,110 @@ export function DocumentWorkspace({
     const pageZoom = Math.min(widthZoom, (availableHeight / baseHeight) * 100);
     onRender(page, Math.max(25, Math.min(400, mode === "width" ? widthZoom : pageZoom)));
   };
+
+  const beginToolbarDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const stage = stageRef.current?.getBoundingClientRect();
+    const toolbar = event.currentTarget.parentElement?.getBoundingClientRect();
+    if (!stage || !toolbar) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    toolbarDragRef.current = {
+      pointerId: event.pointerId,
+      offsetX: event.clientX - toolbar.left,
+      offsetY: event.clientY - toolbar.top,
+    };
+  };
+
+  const moveToolbarDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = toolbarDragRef.current;
+    const stage = stageRef.current?.getBoundingClientRect();
+    const toolbar = event.currentTarget.parentElement?.getBoundingClientRect();
+    if (!drag || !stage || !toolbar || drag.pointerId !== event.pointerId) return;
+    const x = Math.max(8, Math.min(stage.width - toolbar.width - 8, event.clientX - stage.left - drag.offsetX));
+    const y = Math.max(8, Math.min(stage.height - toolbar.height - 8, event.clientY - stage.top - drag.offsetY));
+    setToolbarPosition({ x, y });
+  };
+
+  const finishToolbarDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (!toolbarDragRef.current || toolbarDragRef.current.pointerId !== event.pointerId) return;
+    toolbarDragRef.current = null;
+    try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* already released */ }
+    if (toolbarPosition) onQuickToolsPositionChange(toolbarPosition);
+  };
+
+  const runQuickTool = (id: QuickToolId) => {
+    if (id === "select") return setViewerTool("select");
+    if (id === "hand") return setViewerTool("hand");
+    if (id === "draw") return setViewerTool(viewerTool === "draw" ? "select" : "draw");
+    if (id === "text") return onTool("edit");
+    if (id === "fill") return onTool("forms");
+    if (id === "sign") return onTool("fill-sign");
+    if (id === "comment" || id === "highlight" || id === "underline" || id === "strikeout" || id === "eraser") {
+      return onTool("comment");
+    }
+  };
+
+  const quickToolIcon = (id: QuickToolId): IconName => {
+    const map: Record<QuickToolId, IconName> = {
+      select: "text",
+      hand: "hand",
+      comment: "comment",
+      highlight: "highlight",
+      underline: "highlight",
+      strikeout: "redact",
+      draw: "draw",
+      text: "edit",
+      fill: "form",
+      sign: "sign",
+      eraser: "close",
+    };
+    return map[id];
+  };
+
+  const quickToolLabel = (id: QuickToolId): string => {
+    const map: Record<QuickToolId, string> = {
+      select: "Seleção",
+      hand: "Mão",
+      comment: "Comentário",
+      highlight: "Destaque",
+      underline: "Sublinhado",
+      strikeout: "Tachado",
+      draw: "Desenho à mão livre",
+      text: "Editar texto",
+      fill: "Preencher formulário",
+      sign: "Assinatura",
+      eraser: "Remover comentário",
+    };
+    return map[id];
+  };
+
+  const panelAction = (id: SidePanelId) => {
+    if (id === "thumbs" || id === "search") {
+      setLeftPanel((current) => current === id ? null : id);
+      return;
+    }
+    if (id === "bookmarks") return onTool("bookmarks");
+    if (id === "comments") return onTool("comment");
+    if (id === "attachments") return onTool("attachments");
+    if (id === "layers") return onTool("layers");
+    if (id === "signatures") return onTool("certificates");
+    if (id === "fields") return onTool("forms");
+    if (id === "tasks") {
+      setToolsOpen(false);
+      return;
+    }
+  };
+
+  const panelIcon = (id: SidePanelId): IconName => ({
+    thumbs: "pages",
+    search: "search",
+    bookmarks: "bookmark",
+    comments: "comment",
+    attachments: "attachment",
+    layers: "layers",
+    signatures: "certificate",
+    fields: "form",
+    tasks: "automation",
+  })[id];
 
   const normalizedPoint = (clientX: number, clientY: number): [number, number] | null => {
     const rect = pageRef.current?.getBoundingClientRect();
@@ -328,23 +444,17 @@ export function DocumentWorkspace({
       <div className="workspace-body">
         {protectedView && <ProtectedViewBanner reasons={protectedReasons} onTrustOnce={onTrustOnce} onTrustLocation={onTrustLocation} />}
         <aside className="side-rail">
-          <button
-            className={leftPanel === "thumbs" ? "rail-button active" : "rail-button"}
-            onClick={() => setLeftPanel(leftPanel === "thumbs" ? null : "thumbs")}
-            aria-label="Miniaturas"
-          >
-            <SevenIcon name="pages" />
-          </button>
-          <button
-            className={leftPanel === "search" ? "rail-button active" : "rail-button"}
-            onClick={() => setLeftPanel(leftPanel === "search" ? null : "search")}
-            aria-label="Resultados de busca"
-          >
-            <SevenIcon name="search" />
-          </button>
-          <button className="rail-button" aria-label="Comentários" onClick={() => onTool("comment")}><SevenIcon name="comment" /></button>
-          <button className="rail-button" aria-label="Anexos" onClick={() => onTool("attachments")}><SevenIcon name="attachment" /></button>
-          <button className="rail-button" aria-label="Camadas" onClick={() => onTool("layers")}><SevenIcon name="layers" /></button>
+          {sidePanels.map((panel) => (
+            <button
+              key={panel}
+              className={(panel === "thumbs" || panel === "search") && leftPanel === panel ? "rail-button active" : "rail-button"}
+              onClick={() => panelAction(panel)}
+              aria-label={panel}
+              title={panel}
+            >
+              <SevenIcon name={panelIcon(panel)} />
+            </button>
+          ))}
         </aside>
 
         {leftPanel && (
@@ -467,15 +577,33 @@ export function DocumentWorkspace({
             )}
           </div>
 
-          <div className="quick-tools" role="toolbar" aria-label="Ferramentas rápidas">
-            <button className={viewerTool === "select" ? "active" : ""} aria-label="Seleção" onClick={() => setViewerTool("select")}><SevenIcon name="text" /></button>
-            <button className={viewerTool === "hand" ? "active" : ""} aria-label="Mão" onClick={() => setViewerTool("hand")}><SevenIcon name="hand" /></button>
-            <span />
-            <button aria-label="Comentário" onClick={() => onTool("comment")}><SevenIcon name="comment" /></button>
-            <button aria-label="Destaque" onClick={() => onTool("comment")} title="Abrir comentários e marcações"><SevenIcon name="highlight" /></button>
-            <button className={viewerTool === "draw" ? "active" : ""} aria-label="Desenho à mão livre" onClick={() => setViewerTool(viewerTool === "draw" ? "select" : "draw")}><SevenIcon name="draw" /></button>
-            <button aria-label="Assinatura" onClick={() => onTool("fill-sign")}><SevenIcon name="sign" /></button>
-            {viewerTool === "draw" && (
+          <div
+            className={toolbarPosition ? "quick-tools quick-tools--free" : "quick-tools"}
+            role="toolbar"
+            aria-label="Ferramentas rápidas"
+            style={toolbarPosition ? { left: toolbarPosition.x, top: toolbarPosition.y, bottom: "auto", transform: "none" } : undefined}
+          >
+            <button
+              className="quick-tools-drag"
+              aria-label="Mover barra de ferramentas"
+              title="Arrastar barra"
+              onPointerDown={beginToolbarDrag}
+              onPointerMove={moveToolbarDrag}
+              onPointerUp={finishToolbarDrag}
+              onPointerCancel={finishToolbarDrag}
+            ><SevenIcon name="more" /></button>
+            {quickTools.map((id) => (
+              <button
+                key={id}
+                className={(id === "select" && viewerTool === "select") || (id === "hand" && viewerTool === "hand") || (id === "draw" && viewerTool === "draw") ? "active" : ""}
+                aria-label={quickToolLabel(id)}
+                title={quickToolLabel(id)}
+                onClick={() => runQuickTool(id)}
+              >
+                <SevenIcon name={quickToolIcon(id)} />
+              </button>
+            ))}
+            {viewerTool === "draw" && quickTools.includes("draw") && (
               <label className="ink-width-control" title="Espessura do desenho">
                 <input type="range" min={0.5} max={12} step={0.5} value={inkWidth} onChange={(event) => setInkWidth(Number(event.target.value))} />
                 <small>{inkWidth.toFixed(1)} pt</small>

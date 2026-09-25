@@ -155,6 +155,9 @@ export default function App() {
   const [capabilities, setCapabilities] = useState<Capabilities | null>(native ? emptyCapabilities : null);
   const [document, setDocument] = useState<DocumentSummary | null>(null);
   const [openTabs, setOpenTabs] = useState<DocumentSummary[]>([]);
+  const [tabViews, setTabViews] = useState<Record<string, { page: number; zoom: number }>>({});
+  const [closedTabs, setClosedTabs] = useState<Array<{ path: string; page: number; zoom: number }>>([]);
+  const [navHistories, setNavHistories] = useState<Record<string, { entries: number[]; index: number }>>({});
   const [rendered, setRendered] = useState<RenderResult | null>(null);
   const [page, setPage] = useState(0);
   const [zoom, setZoom] = useState(100);
@@ -297,12 +300,23 @@ export default function App() {
     });
   };
 
-  const activateDocument = async (summary: DocumentSummary) => {
+  const activateDocument = async (
+    summary: DocumentSummary,
+    preferredView?: { page: number; zoom: number },
+  ) => {
+    const saved = preferredView ?? tabViews[summary.id] ?? { page: 0, zoom: settings.defaultZoom };
+    const nextPage = Math.max(0, Math.min(summary.pageCount - 1, saved.page));
+    const nextZoom = Math.max(25, Math.min(400, saved.zoom));
     setDocument(summary);
-    setPage(0);
-    setZoom(settings.defaultZoom);
+    setPage(nextPage);
+    setZoom(nextZoom);
+    setTabViews((current) => ({ ...current, [summary.id]: { page: nextPage, zoom: nextZoom } }));
+    setNavHistories((current) => current[summary.id]
+      ? current
+      : { ...current, [summary.id]: { entries: [nextPage], index: 0 } });
     setSearchHits([]);
     setRendered(null);
+
     try {
       const security = await inspectAdvancedPdf(summary.path);
       const reasons = [
@@ -319,25 +333,30 @@ export default function App() {
       setProtectedReasons(["estrutura não pôde ser totalmente inspecionada"]);
       setProtectedView(settings.protectedView && !isTrustedPath(summary.path, settings.trustedLocations));
     }
-    const first = await renderPage(summary.id, 0, 1400);
+
+    const targetWidth = Math.max(900, Math.min(6000, Math.round(1400 * (nextZoom / 100))));
+    const first = await renderPage(summary.id, nextPage, targetWidth);
     setRendered(first);
   };
 
-  const openPath = async (path: string) => {
+  const openPath = async (path: string, preferredView?: { page: number; zoom: number }) => {
     try {
       const existing = openTabs.find((tab) => tab.path === path);
       if (existing) {
         rememberRecent(existing);
         localStorage.setItem("seven-reader:last-document", existing.path);
-        await activateDocument(existing);
+        await activateDocument(existing, preferredView ?? tabViews[existing.id]);
         return;
       }
 
       const summary = await openDocument(path);
       setOpenTabs((current) => [...current, summary]);
+      if (preferredView) {
+        setTabViews((current) => ({ ...current, [summary.id]: preferredView }));
+      }
       rememberRecent(summary);
       localStorage.setItem("seven-reader:last-document", summary.path);
-      await activateDocument(summary);
+      await activateDocument(summary, preferredView);
     } catch (error) {
       const text = errorMessage(error);
       setNotice(text);
@@ -402,7 +421,7 @@ export default function App() {
     if (summary.id === document?.id) return;
     try {
       localStorage.setItem("seven-reader:last-document", summary.path);
-      await activateDocument(summary);
+      await activateDocument(summary, tabViews[summary.id]);
     } catch (error) {
       setNotice(errorMessage(error));
     }
@@ -413,17 +432,36 @@ export default function App() {
     const closing = openTabs[closingIndex];
     if (!closing) return;
 
+    const closingView = tabViews[documentId] ?? {
+      page: document?.id === documentId ? page : 0,
+      zoom: document?.id === documentId ? zoom : settings.defaultZoom,
+    };
+    setClosedTabs((current) => [
+      ...current.slice(-19),
+      { path: closing.path, page: closingView.page, zoom: closingView.zoom },
+    ]);
+
     try { await closeDocument(documentId); } catch { /* local tab cleanup still proceeds */ }
 
     const remaining = openTabs.filter((tab) => tab.id !== documentId);
     setOpenTabs(remaining);
+    setTabViews((current) => {
+      const next = { ...current };
+      delete next[documentId];
+      return next;
+    });
+    setNavHistories((current) => {
+      const next = { ...current };
+      delete next[documentId];
+      return next;
+    });
 
     if (document?.id !== documentId) return;
     const fallback = remaining[Math.min(Math.max(closingIndex - 1, 0), Math.max(remaining.length - 1, 0))];
     if (fallback) {
       try {
         localStorage.setItem("seven-reader:last-document", fallback.path);
-        await activateDocument(fallback);
+        await activateDocument(fallback, tabViews[fallback.id]);
       } catch (error) {
         setNotice(errorMessage(error));
       }
@@ -436,16 +474,73 @@ export default function App() {
     }
   };
 
+  const closeOtherTabs = async (keepId: string) => {
+    const keep = openTabs.find((tab) => tab.id === keepId);
+    if (!keep) return;
+    const closing = openTabs.filter((tab) => tab.id !== keepId);
+    const recovered = closing.map((tab) => {
+      const view = tabViews[tab.id] ?? { page: 0, zoom: settings.defaultZoom };
+      return { path: tab.path, page: view.page, zoom: view.zoom };
+    });
+    await Promise.all(closing.map(async (tab) => {
+      try { await closeDocument(tab.id); } catch { /* continue */ }
+    }));
+    setClosedTabs((current) => [...current, ...recovered].slice(-20));
+    setOpenTabs([keep]);
+    setTabViews((current) => current[keepId] ? { [keepId]: current[keepId] } : {});
+    setNavHistories((current) => current[keepId] ? { [keepId]: current[keepId] } : {});
+    if (document?.id !== keepId) await selectTab(keep);
+  };
+
+  const reopenClosedTab = async () => {
+    const closed = closedTabs.at(-1);
+    if (!closed) return;
+    setClosedTabs((current) => current.slice(0, -1));
+    await openPath(closed.path, { page: closed.page, zoom: closed.zoom });
+  };
+
+  const reorderTabs = (sourceId: string, targetId: string) => {
+    if (sourceId === targetId) return;
+    setOpenTabs((current) => {
+      const from = current.findIndex((tab) => tab.id === sourceId);
+      const to = current.findIndex((tab) => tab.id === targetId);
+      if (from < 0 || to < 0) return current;
+      const next = [...current];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  };
+
   const closeCurrent = async () => {
     if (document) await closeTab(document.id);
   };
 
-  const render = async (nextPage: number, nextZoom: number) => {
+  const render = async (nextPage: number, nextZoom: number, recordHistory = true) => {
     if (!document) return;
     const boundedPage = Math.max(0, Math.min(document.pageCount - 1, nextPage));
     const boundedZoom = Math.max(25, Math.min(400, nextZoom));
+    const previousPage = page;
     setPage(boundedPage);
     setZoom(boundedZoom);
+    setTabViews((current) => ({
+      ...current,
+      [document.id]: { page: boundedPage, zoom: boundedZoom },
+    }));
+
+    if (recordHistory && boundedPage !== previousPage) {
+      setNavHistories((current) => {
+        const history = current[document.id] ?? { entries: [previousPage], index: 0 };
+        const base = history.entries.slice(0, history.index + 1);
+        if (base.at(-1) === boundedPage) return current;
+        const entries = [...base, boundedPage].slice(-100);
+        return {
+          ...current,
+          [document.id]: { entries, index: entries.length - 1 },
+        };
+      });
+    }
+
     const targetWidth = Math.max(900, Math.min(6000, Math.round(1400 * (boundedZoom / 100))));
     try {
       const next = await renderPage(document.id, boundedPage, targetWidth);
@@ -453,6 +548,20 @@ export default function App() {
     } catch (error) {
       setNotice(errorMessage(error));
     }
+  };
+
+  const navigateHistory = async (direction: -1 | 1) => {
+    if (!document) return;
+    const history = navHistories[document.id];
+    if (!history) return;
+    const nextIndex = history.index + direction;
+    if (nextIndex < 0 || nextIndex >= history.entries.length) return;
+    const nextPage = history.entries[nextIndex];
+    setNavHistories((current) => ({
+      ...current,
+      [document.id]: { ...history, index: nextIndex },
+    }));
+    await render(nextPage, zoom, false);
   };
 
   const runSearch = async (query: string) => {

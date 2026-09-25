@@ -294,6 +294,27 @@ export async function sessionCreateFormField(
   return invoke<DocumentSummary>("session_create_form_field", { documentId, field });
 }
 
+export async function exportFormData(
+  input: string,
+  destination: string,
+): Promise<number> {
+  return invoke<number>("export_form_data", { input, destination });
+}
+
+export async function sessionImportFormData(
+  documentId: string,
+  dataPath: string,
+): Promise<SessionFormFillResult> {
+  return invoke<SessionFormFillResult>("session_import_form_data", { documentId, dataPath });
+}
+
+export async function sessionResetForm(
+  documentId: string,
+  useDefaults: boolean,
+): Promise<SessionFormFillResult> {
+  return invoke<SessionFormFillResult>("session_reset_form", { documentId, useDefaults });
+}
+
 export async function sessionUpdateFormField(
   documentId: string,
   update: FormFieldUpdate,

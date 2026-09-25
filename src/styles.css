@@ -844,3 +844,10 @@ svg { width: 20px; height: 20px; }
 .optimizer-save-preset { padding-top:12px; border-top:1px solid #ecebf0; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; }
 .optimizer-save-preset input { min-width:0; height:40px; padding:0 10px; border:1px solid #d9d8df; border-radius:9px; background:white; }
 @media (max-width:800px) { .optimizer-layout { grid-template-columns:1fr; } .optimizer-audit { border-right:0; border-bottom:1px solid #e5e4e9; } }
+
+.audit-estimate { margin-top:8px; padding:12px 14px; border:1px solid #d7ccef; border-radius:12px; display:grid; gap:3px; background:#f5f1ff; }
+.audit-estimate span { color:#756a92; font-size:8.5px; text-transform:uppercase; letter-spacing:.05em; }
+.audit-estimate strong { color:#5536b5; font-size:18px; }
+.audit-estimate small { color:#8d879d; font-size:8px; line-height:1.4; }
+.optimizer-discard-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; }
+@media (max-width:680px) { .optimizer-discard-grid { grid-template-columns:1fr; } }

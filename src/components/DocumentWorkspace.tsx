@@ -8,13 +8,15 @@ import { ProtectedViewBanner } from "./ProtectedViewBanner";
 
 interface WorkspaceProps {
   document: DocumentSummary;
+  tabs: DocumentSummary[];
   rendered: RenderResult | null;
   capabilities: Capabilities | null;
   searchHits: SearchHit[];
   page: number;
   zoom: number;
   onHome: () => void;
-  onClose: () => void;
+  onSelectTab: (document: DocumentSummary) => void;
+  onCloseTab: (documentId: string) => void;
   onOpen: () => void;
   onSaveAs: () => void;
   onPrint: () => void;
@@ -38,13 +40,15 @@ const primaryTools: Array<{ id: ToolId; icon: IconName; label: string }> = [
 
 export function DocumentWorkspace({
   document,
+  tabs,
   rendered,
   capabilities,
   searchHits,
   page,
   zoom,
   onHome,
-  onClose,
+  onSelectTab,
+  onCloseTab,
   onOpen,
   onSaveAs,
   onPrint,
@@ -95,10 +99,23 @@ export function DocumentWorkspace({
     <div className={`workspace viewer-${viewerTool}`}>
       <header className="workspace-topbar">
         <button className="workspace-brand" onClick={onHome} aria-label="Início"><BrandMark size={30} /></button>
-        <div className="document-tab">
-          <span className="tab-file-icon">PDF</span>
-          <span className="tab-title">{document.name}</span>
-          <button aria-label="Fechar documento" onClick={onClose}><SevenIcon name="close" /></button>
+        <div className="document-tabs" role="tablist" aria-label="Documentos abertos">
+          {tabs.map((tab) => (
+            <div
+              key={tab.id}
+              className={tab.id === document.id ? "document-tab active" : "document-tab"}
+              role="tab"
+              aria-selected={tab.id === document.id}
+            >
+              <button className="tab-select" onClick={() => onSelectTab(tab)} title={tab.path}>
+                <span className="tab-file-icon">PDF</span>
+                <span className="tab-title">{tab.name}</span>
+              </button>
+              <button className="tab-close" aria-label={`Fechar ${tab.name}`} onClick={() => onCloseTab(tab.id)}>
+                <SevenIcon name="close" />
+              </button>
+            </div>
+          ))}
         </div>
         <div className="topbar-spacer" />
         <label className="workspace-search">

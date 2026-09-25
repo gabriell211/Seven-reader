@@ -521,6 +521,8 @@ export interface AttachmentInfo {
   name: string;
   description: string;
   size?: number;
+  mime: string;
+  sha256: string;
   objectId: string;
 }
 

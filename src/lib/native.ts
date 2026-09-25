@@ -16,6 +16,8 @@ import type {
   OcrWord,
   RenderResult,
   SanitizeOptions,
+  SignRequest,
+  SignatureValidationReport,
   SanitizeReport,
   SearchHit,
 } from "../types";
@@ -186,6 +188,26 @@ export async function createFormField(
   field: NewFormField,
 ): Promise<void> {
   await invoke("create_form_field", { input, output, field });
+}
+
+export async function signDocument(
+  input: string,
+  output: string,
+  request: SignRequest,
+): Promise<void> {
+  await invoke("sign_document", { input, output, request });
+}
+
+export async function validateSignatures(
+  input: string,
+  trustDirectory?: string,
+  allowOnline = false,
+): Promise<SignatureValidationReport> {
+  return invoke<SignatureValidationReport>("validate_signatures", {
+    input,
+    trustDirectory: trustDirectory ?? null,
+    allowOnline,
+  });
 }
 
 export async function getDocumentMetadata(path: string): Promise<DocumentMetadata> {

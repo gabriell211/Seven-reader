@@ -197,6 +197,56 @@ export interface NewFormField {
   options: string[];
 }
 
+export type PadesLevelId = "bb" | "bt" | "blt" | "blta";
+
+export interface SignRequest {
+  pkcs12Path: string;
+  password: string;
+  level: PadesLevelId;
+  fieldName: string;
+  pageIndex: number;
+  reason?: string;
+  location?: string;
+  contactInfo?: string;
+  tsaUrl?: string;
+  certify: boolean;
+  visible: boolean;
+  appearanceText: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface SignatureValidationItem {
+  fieldName: string;
+  status: string;
+  signerName?: string;
+  signatureType: string;
+  padesLevel: string;
+  integrityOk: boolean;
+  coversWholeDocument: boolean;
+  digestMatches: boolean;
+  cryptographicValidity: string;
+  certificateValidity: string;
+  chainTrusted: boolean;
+  trustAnchor?: string;
+  modificationsAfterSigning: boolean;
+  signingTime?: string;
+  cmsSigningTime?: string;
+  timestampTime?: string;
+  summary: string;
+  integrityIssues: string[];
+}
+
+export interface SignatureValidationReport {
+  signatures: SignatureValidationItem[];
+  documentModified: boolean;
+  validCount: number;
+  invalidCount: number;
+  summary: string;
+}
+
 export type ToolId =
   | "edit" | "convert" | "create" | "organize" | "combine" | "comment"
   | "fill-sign" | "certificates" | "scan-ocr" | "forms" | "protect"

@@ -13,6 +13,7 @@ import { ReportDialog } from "./components/ReportDialog";
 import { OcrDialog } from "./components/OcrDialog";
 import { CommentsDialog } from "./components/CommentsDialog";
 import { FormsDialog } from "./components/FormsDialog";
+import { SignatureDialog } from "./components/SignatureDialog";
 import {
   addAnnotation,
   cancelJob,
@@ -45,6 +46,8 @@ import {
   startReorderPages,
   startRotatePages,
   startSplitPages,
+  signDocument,
+  validateSignatures,
   startOcr,
   startOcrAdvanced,
   startOptimize,
@@ -69,6 +72,8 @@ import type {
   RenderResult,
   SanitizeOptions,
   SearchHit,
+  SignRequest,
+  SignatureValidationReport,
   ToolId,
 } from "./types";
 
@@ -138,6 +143,9 @@ export default function App() {
   const [formsOpen, setFormsOpen] = useState(false);
   const [formFields, setFormFields] = useState<FormFieldInfo[]>([]);
   const [formsLoading, setFormsLoading] = useState(false);
+  const [signatureTab, setSignatureTab] = useState<"electronic" | "digital" | "validate" | null>(null);
+  const [signatureValidation, setSignatureValidation] = useState<SignatureValidationReport | null>(null);
+  const [signatureLoading, setSignatureLoading] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -343,6 +351,16 @@ export default function App() {
         return;
       }
 
+      if (tool === "fill-sign" || tool === "certificates") {
+        if (!document) {
+          setNotice("Abra um PDF para assinar ou validar.");
+          return;
+        }
+        setSignatureValidation(null);
+        setSignatureTab(tool === "certificates" ? "digital" : "electronic");
+        return;
+      }
+
       if (tool === "comment") {
         if (!document) {
           setNotice("Abra um PDF para comentar.");
@@ -423,6 +441,46 @@ export default function App() {
 
 
 
+
+
+  const runElectronicSignature = async (output: string, annotation: AnnotationInput) => {
+    if (!document) return;
+    try {
+      await addAnnotation(document.path, output, annotation);
+      setSignatureTab(null);
+      setNotice("Assinatura eletrônica visual aplicada. Ela não possui certificado digital.");
+      await openPath(output);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runDigitalSignature = async (output: string, request: SignRequest) => {
+    if (!document) return;
+    try {
+      setSignatureLoading(true);
+      await signDocument(document.path, output, request);
+      setSignatureTab(null);
+      setNotice(request.certify ? "PDF certificado digitalmente." : "Assinatura digital PAdES aplicada.");
+      await openPath(output);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    } finally {
+      setSignatureLoading(false);
+    }
+  };
+
+  const runSignatureValidation = async (trustDirectory?: string, allowOnline = false) => {
+    if (!document) return;
+    try {
+      setSignatureLoading(true);
+      setSignatureValidation(await validateSignatures(document.path, trustDirectory, allowOnline));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    } finally {
+      setSignatureLoading(false);
+    }
+  };
 
   const reloadAnnotations = async () => {
     if (!document) return;
@@ -722,6 +780,19 @@ export default function App() {
         <button className="global-notice" onClick={() => setNotice(null)} aria-label="Fechar aviso">
           {notice}
         </button>
+      )}
+      {signatureTab && document && (
+        <SignatureDialog
+          documentPath={document.path}
+          pageIndex={page}
+          initialTab={signatureTab}
+          validation={signatureValidation}
+          loading={signatureLoading}
+          onClose={() => setSignatureTab(null)}
+          onElectronic={(output, annotation) => void runElectronicSignature(output, annotation)}
+          onDigital={(output, request) => void runDigitalSignature(output, request)}
+          onValidate={(trustDirectory, allowOnline) => void runSignatureValidation(trustDirectory, allowOnline)}
+        />
       )}
       {commentsOpen && document && (
         <CommentsDialog

@@ -2,7 +2,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { BrandMark } from "./BrandMark";
 import { SevenIcon, type IconName } from "./SevenIcon";
 import { canRunTool, tools } from "../data/tools";
-import type { Capabilities, DocumentSummary, RenderResult, SearchHit, ToolId } from "../types";
+import type {
+  AdvancedSearchHit,
+  AdvancedSearchOptions,
+  Capabilities,
+  DocumentSummary,
+  RenderResult,
+  SearchHit,
+  ToolId,
+} from "../types";
 import { nativeAssetUrl } from "../lib/native";
 import { ProtectedViewBanner } from "./ProtectedViewBanner";
 
@@ -15,6 +23,7 @@ interface WorkspaceProps {
   canNavigateForward: boolean;
   capabilities: Capabilities | null;
   searchHits: SearchHit[];
+  advancedSearchHits: AdvancedSearchHit[];
   page: number;
   zoom: number;
   onHome: () => void;
@@ -30,6 +39,7 @@ interface WorkspaceProps {
   onPrint: () => void;
   onRender: (page: number, zoom: number) => void;
   onSearch: (query: string) => void;
+  onAdvancedSearch: (options: AdvancedSearchOptions) => void;
   onTool: (tool: ToolId) => void;
   onSettings: () => void;
   protectedView: boolean;
@@ -55,6 +65,7 @@ export function DocumentWorkspace({
   canNavigateForward,
   capabilities,
   searchHits,
+  advancedSearchHits,
   page,
   zoom,
   onHome,
@@ -70,6 +81,7 @@ export function DocumentWorkspace({
   onPrint,
   onRender,
   onSearch,
+  onAdvancedSearch,
   onTool,
   onSettings,
   protectedView,
@@ -80,6 +92,19 @@ export function DocumentWorkspace({
   const [toolsOpen, setToolsOpen] = useState(false);
   const [leftPanel, setLeftPanel] = useState<"thumbs" | "search" | null>("thumbs");
   const [search, setSearch] = useState("");
+  const [advancedSearch, setAdvancedSearch] = useState(false);
+  const [searchMatchCase, setSearchMatchCase] = useState(false);
+  const [searchWholeWord, setSearchWholeWord] = useState(false);
+  const [searchRegex, setSearchRegex] = useState(false);
+  const [searchPageStart, setSearchPageStart] = useState("");
+  const [searchPageEnd, setSearchPageEnd] = useState("");
+  const [searchScopes, setSearchScopes] = useState({
+    text: true,
+    comments: true,
+    bookmarks: true,
+    forms: true,
+    metadata: true,
+  });
   const [toolSearch, setToolSearch] = useState("");
   const [pageInput, setPageInput] = useState(String(page + 1));
   const [draggedTab, setDraggedTab] = useState<string | null>(null);
@@ -148,6 +173,27 @@ export function DocumentWorkspace({
 
   const submitSearch = () => {
     onSearch(search);
+    setLeftPanel("search");
+  };
+
+  const submitAdvancedSearch = () => {
+    const numberOrUndefined = (value: string) => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : undefined;
+    };
+    onAdvancedSearch({
+      query: search,
+      matchCase: searchMatchCase,
+      wholeWord: searchWholeWord,
+      regex: searchRegex,
+      pageStart: numberOrUndefined(searchPageStart),
+      pageEnd: numberOrUndefined(searchPageEnd),
+      includeText: searchScopes.text,
+      includeComments: searchScopes.comments,
+      includeBookmarks: searchScopes.bookmarks,
+      includeForms: searchScopes.forms,
+      includeMetadata: searchScopes.metadata,
+    });
     setLeftPanel("search");
   };
 
@@ -266,15 +312,71 @@ export function DocumentWorkspace({
                 ))}
               </div>
             ) : (
-              <div className="search-results">
-                {!searchHits.length && <div className="empty-panel">Pesquise um termo para ver ocorrências.</div>}
-                {searchHits.map((hit) => (
-                  <button key={hit.pageIndex} className="search-hit" onClick={() => onRender(hit.pageIndex, zoom)}>
-                    <strong>Página {hit.pageIndex + 1}</strong>
-                    <span>{hit.excerpt || "Texto encontrado nesta página."}</span>
-                    <small>{hit.occurrences} ocorrência(s)</small>
-                  </button>
-                ))}
+              <div className="search-panel-content">
+                <div className="search-mode-toggle">
+                  <button className={!advancedSearch ? "active" : ""} onClick={() => setAdvancedSearch(false)}>Simples</button>
+                  <button className={advancedSearch ? "active" : ""} onClick={() => setAdvancedSearch(true)}>Avançada</button>
+                </div>
+
+                {advancedSearch && (
+                  <div className="advanced-search-options">
+                    <div className="search-option-grid">
+                      <label><input type="checkbox" checked={searchMatchCase} onChange={(event) => setSearchMatchCase(event.target.checked)} /> Maiúsculas/minúsculas</label>
+                      <label><input type="checkbox" checked={searchWholeWord} onChange={(event) => setSearchWholeWord(event.target.checked)} /> Palavra inteira</label>
+                      <label><input type="checkbox" checked={searchRegex} onChange={(event) => setSearchRegex(event.target.checked)} /> Regex</label>
+                    </div>
+                    <div className="search-page-range">
+                      <input value={searchPageStart} onChange={(event) => setSearchPageStart(event.target.value.replace(/[^0-9]/g, ""))} placeholder="Página inicial" />
+                      <span>até</span>
+                      <input value={searchPageEnd} onChange={(event) => setSearchPageEnd(event.target.value.replace(/[^0-9]/g, ""))} placeholder="Página final" />
+                    </div>
+                    <div className="search-scopes">
+                      {([
+                        ["text", "Texto"],
+                        ["comments", "Comentários"],
+                        ["bookmarks", "Marcadores"],
+                        ["forms", "Campos"],
+                        ["metadata", "Metadados"],
+                      ] as const).map(([key, label]) => (
+                        <label key={key}>
+                          <input
+                            type="checkbox"
+                            checked={searchScopes[key]}
+                            onChange={(event) => setSearchScopes((current) => ({ ...current, [key]: event.target.checked }))}
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                    <button className="search-run-button" disabled={!search.trim()} onClick={submitAdvancedSearch}>
+                      <SevenIcon name="search" /> Pesquisar
+                    </button>
+                  </div>
+                )}
+
+                <div className="search-results">
+                  {!advancedSearch && !searchHits.length && <div className="empty-panel">Pesquise um termo para ver ocorrências.</div>}
+                  {!advancedSearch && searchHits.map((hit) => (
+                    <button key={hit.pageIndex} className="search-hit" onClick={() => onRender(hit.pageIndex, zoom)}>
+                      <strong>Página {hit.pageIndex + 1}</strong>
+                      <span>{hit.excerpt || "Texto encontrado nesta página."}</span>
+                      <small>{hit.occurrences} ocorrência(s)</small>
+                    </button>
+                  ))}
+                  {advancedSearch && !advancedSearchHits.length && <div className="empty-panel">Configure os filtros e execute a busca.</div>}
+                  {advancedSearch && advancedSearchHits.map((hit, index) => (
+                    <button
+                      key={`${hit.kind}-${hit.pageIndex ?? "none"}-${index}`}
+                      className="search-hit"
+                      disabled={hit.pageIndex === undefined}
+                      onClick={() => hit.pageIndex !== undefined && onRender(hit.pageIndex, zoom)}
+                    >
+                      <strong>{hit.title}</strong>
+                      <span>{hit.excerpt || "Correspondência encontrada."}</span>
+                      <small>{hit.kind} · {hit.occurrences} ocorrência(s){hit.pageIndex !== undefined ? ` · pág. ${hit.pageIndex + 1}` : ""}</small>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </aside>

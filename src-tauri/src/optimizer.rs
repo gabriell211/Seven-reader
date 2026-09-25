@@ -1,7 +1,90 @@
 use crate::error::SevenError;
 use lopdf::{Document, Object};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OptimizeOptions {
+    pub compatibility: String,
+    pub color_dpi: u16,
+    pub grayscale_dpi: u16,
+    pub monochrome_dpi: u16,
+    pub downsample: String,
+    pub color_compression: String,
+    pub grayscale_compression: String,
+    pub jpeg_quality: u8,
+    pub embed_fonts: bool,
+    pub subset_fonts: bool,
+    pub linearize: bool,
+}
+
+impl OptimizeOptions {
+    pub fn validate(&self) -> Result<(), SevenError> {
+        if !matches!(self.compatibility.as_str(), "1.4" | "1.5" | "1.6" | "1.7" | "2.0") {
+            return Err(SevenError::OperationRejected("Compatibilidade PDF inválida".into()));
+        }
+        for dpi in [self.color_dpi, self.grayscale_dpi, self.monochrome_dpi] {
+            if !(36..=2400).contains(&dpi) {
+                return Err(SevenError::OperationRejected("DPI deve ficar entre 36 e 2400".into()));
+            }
+        }
+        if !matches!(self.downsample.as_str(), "bicubic" | "average" | "subsample") {
+            return Err(SevenError::OperationRejected("Método de downsample inválido".into()));
+        }
+        if !matches!(self.color_compression.as_str(), "jpeg" | "flate")
+            || !matches!(self.grayscale_compression.as_str(), "jpeg" | "flate")
+        {
+            return Err(SevenError::OperationRejected("Compressão de imagem inválida".into()));
+        }
+        if !(1..=100).contains(&self.jpeg_quality) {
+            return Err(SevenError::OperationRejected("Qualidade JPEG deve ficar entre 1 e 100".into()));
+        }
+        Ok(())
+    }
+
+    pub fn ghostscript_args(&self, input: &Path, output: &Path) -> Result<Vec<String>, SevenError> {
+        self.validate()?;
+        let downsample = match self.downsample.as_str() {
+            "bicubic" => "/Bicubic",
+            "average" => "/Average",
+            "subsample" => "/Subsample",
+            _ => unreachable!(),
+        };
+        let color_filter = if self.color_compression == "jpeg" { "/DCTEncode" } else { "/FlateEncode" };
+        let gray_filter = if self.grayscale_compression == "jpeg" { "/DCTEncode" } else { "/FlateEncode" };
+
+        Ok(vec![
+            "-sDEVICE=pdfwrite".into(),
+            format!("-dCompatibilityLevel={}", self.compatibility),
+            "-dNOPAUSE".into(),
+            "-dBATCH".into(),
+            "-dQUIET".into(),
+            "-dDetectDuplicateImages=true".into(),
+            "-dCompressFonts=true".into(),
+            format!("-dEmbedAllFonts={}", if self.embed_fonts { "true" } else { "false" }),
+            format!("-dSubsetFonts={}", if self.subset_fonts { "true" } else { "false" }),
+            "-dDownsampleColorImages=true".into(),
+            format!("-dColorImageResolution={}", self.color_dpi),
+            format!("-dColorImageDownsampleType={downsample}"),
+            "-dAutoFilterColorImages=false".into(),
+            format!("-dColorImageFilter={color_filter}"),
+            "-dDownsampleGrayImages=true".into(),
+            format!("-dGrayImageResolution={}", self.grayscale_dpi),
+            format!("-dGrayImageDownsampleType={downsample}"),
+            "-dAutoFilterGrayImages=false".into(),
+            format!("-dGrayImageFilter={gray_filter}"),
+            "-dDownsampleMonoImages=true".into(),
+            format!("-dMonoImageResolution={}", self.monochrome_dpi),
+            format!("-dMonoImageDownsampleType={downsample}"),
+            "-dMonoImageFilter=/CCITTFaxEncode".into(),
+            format!("-dJPEGQ={}", self.jpeg_quality),
+            "-dPreserveMarkedContent=true".into(),
+            format!("-sOutputFile={}", output.to_string_lossy()),
+            input.to_string_lossy().into_owned(),
+        ])
+    }
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

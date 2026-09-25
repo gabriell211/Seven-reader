@@ -103,6 +103,28 @@ pub struct DuplicateFieldRequest {
     pub offset_y: f64,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FieldActionInfo {
+    pub field_object_id: String,
+    pub field_name: String,
+    pub trigger: String,
+    pub action_type: String,
+    pub target: String,
+    pub blocked: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FieldActionInput {
+    pub field_object_id: String,
+    pub trigger: String,
+    pub action_type: String,
+    pub target: String,
+    pub target_page: Option<usize>,
+    pub hide: bool,
+}
+
 fn object_text(object: &Object) -> String {
     match object {
         Object::String(bytes, _) | Object::Name(bytes) => String::from_utf8_lossy(bytes).into_owned(),
@@ -939,6 +961,225 @@ pub fn set_page_tab_order(
         .as_dict_mut()
         .map_err(|error| SevenError::Operation(error.to_string()))?
         .set("Tabs", value);
+    atomic_save(document, output)
+}
+
+fn trigger_key(trigger: &str) -> Result<&'static str, SevenError> {
+    match trigger {
+        "mouse-up" => Ok("U"),
+        "mouse-down" => Ok("D"),
+        "mouse-enter" => Ok("E"),
+        "mouse-exit" => Ok("X"),
+        "focus" => Ok("Fo"),
+        "blur" => Ok("Bl"),
+        _ => Err(SevenError::OperationRejected("Gatilho de campo inválido".into())),
+    }
+}
+
+fn action_summary(action: &Dictionary) -> (String, String, bool) {
+    let action_type = action
+        .get(b"S")
+        .ok()
+        .and_then(|value| value.as_name().ok())
+        .map(|value| String::from_utf8_lossy(value).into_owned())
+        .unwrap_or_else(|| "Unknown".into());
+
+    let target = match action_type.as_str() {
+        "URI" => action.get(b"URI").ok().map(object_text).unwrap_or_default(),
+        "JavaScript" => action.get(b"JS").ok().map(object_text).unwrap_or_default(),
+        "Launch" => action.get(b"F").ok().map(object_text).unwrap_or_default(),
+        "SubmitForm" => action.get(b"F").ok().map(object_text).unwrap_or_default(),
+        "GoTo" => action
+            .get(b"D")
+            .ok()
+            .and_then(|value| value.as_array().ok())
+            .and_then(|values| values.first())
+            .map(object_text)
+            .unwrap_or_else(|| "Destino de página".into()),
+        "Hide" => action.get(b"T").ok().map(object_text).unwrap_or_default(),
+        "ResetForm" => "Resetar formulário".into(),
+        _ => String::new(),
+    };
+    let blocked = matches!(action_type.as_str(), "JavaScript" | "Launch");
+    (action_type, target, blocked)
+}
+
+pub fn list_field_actions(path: &Path) -> Result<Vec<FieldActionInfo>, SevenError> {
+    let document = Document::load(path).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let Some(acroform_id) = form_id(&document) else { return Ok(Vec::new()) };
+    let acroform = document
+        .get_object(acroform_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    let Ok(fields_object) = acroform.get(b"Fields") else { return Ok(Vec::new()) };
+    let mut ids = Vec::new();
+    collect_field_ids(&document, fields_object, &mut ids);
+    ids.sort_unstable();
+    ids.dedup();
+
+    let mut output = Vec::new();
+    for id in ids {
+        let Ok(field) = document.get_object(id).and_then(Object::as_dict) else { continue };
+        let name = field.get(b"T").ok().map(object_text).unwrap_or_default();
+        let Some(aa) = field
+            .get(b"AA")
+            .ok()
+            .and_then(|value| match value {
+                Object::Dictionary(dictionary) => Some(dictionary),
+                Object::Reference(reference) => document.get_object(*reference).ok()?.as_dict().ok(),
+                _ => None,
+            })
+        else { continue };
+
+        for (key, trigger) in [
+            (b"U".as_slice(), "mouse-up"),
+            (b"D".as_slice(), "mouse-down"),
+            (b"E".as_slice(), "mouse-enter"),
+            (b"X".as_slice(), "mouse-exit"),
+            (b"Fo".as_slice(), "focus"),
+            (b"Bl".as_slice(), "blur"),
+        ] {
+            let Ok(action_object) = aa.get(key) else { continue };
+            let action = match action_object {
+                Object::Dictionary(dictionary) => Some(dictionary),
+                Object::Reference(reference) => document.get_object(*reference).ok().and_then(|object| object.as_dict().ok()),
+                _ => None,
+            };
+            let Some(action) = action else { continue };
+            let (action_type, target, blocked) = action_summary(action);
+            output.push(FieldActionInfo {
+                field_object_id: format!("{}:{}", id.0, id.1),
+                field_name: name.clone(),
+                trigger: trigger.into(),
+                action_type,
+                target,
+                blocked,
+            });
+        }
+    }
+    Ok(output)
+}
+
+pub fn set_field_action(
+    input: &Path,
+    output: &Path,
+    request: FieldActionInput,
+) -> Result<(), SevenError> {
+    let id = parse_object_id(&request.field_object_id)?;
+    let trigger = trigger_key(&request.trigger)?;
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+
+    let action = match request.action_type.as_str() {
+        "uri" => {
+            let target = request.target.trim();
+            if !(target.starts_with("https://") || target.starts_with("http://")) || target.len() > 4096 {
+                return Err(SevenError::OperationRejected("URL deve usar HTTP ou HTTPS".into()));
+            }
+            dictionary! {
+                "S" => "URI",
+                "URI" => Object::string_literal(target),
+            }
+        }
+        "goto" => {
+            let page_index = request.target_page.ok_or_else(|| SevenError::OperationRejected("Página de destino ausente".into()))?;
+            let target_page = document
+                .get_pages()
+                .get(&((page_index + 1) as u32))
+                .copied()
+                .ok_or_else(|| SevenError::OperationRejected("Página de destino não existe".into()))?;
+            dictionary! {
+                "S" => "GoTo",
+                "D" => vec![target_page.into(), Object::Name(b"Fit".to_vec())],
+            }
+        }
+        "reset" => dictionary! { "S" => "ResetForm" },
+        "hide" => {
+            if request.target.trim().is_empty() {
+                return Err(SevenError::OperationRejected("Informe o nome do campo alvo".into()));
+            }
+            dictionary! {
+                "S" => "Hide",
+                "T" => Object::string_literal(request.target.trim()),
+                "H" => request.hide,
+            }
+        }
+        "submit" => {
+            let target = request.target.trim();
+            if !(target.starts_with("https://") || target.starts_with("http://")) || target.len() > 4096 {
+                return Err(SevenError::OperationRejected("Destino de envio deve usar HTTP ou HTTPS".into()));
+            }
+            dictionary! {
+                "S" => "SubmitForm",
+                "F" => Object::string_literal(target),
+                "Flags" => 4i64,
+            }
+        }
+        "javascript" => {
+            if request.target.chars().count() > 100_000 {
+                return Err(SevenError::OperationRejected("JavaScript excede 100.000 caracteres".into()));
+            }
+            dictionary! {
+                "S" => "JavaScript",
+                "JS" => Object::string_literal(&request.target),
+            }
+        }
+        "launch" => {
+            if request.target.trim().is_empty() || request.target.chars().count() > 4096 {
+                return Err(SevenError::OperationRejected("Caminho Launch inválido".into()));
+            }
+            dictionary! {
+                "S" => "Launch",
+                "F" => Object::string_literal(request.target.trim()),
+            }
+        }
+        _ => return Err(SevenError::OperationRejected("Tipo de ação não suportado".into())),
+    };
+
+    let field = document
+        .get_object_mut(id)
+        .map_err(|_| SevenError::OperationRejected("Campo não encontrado".into()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    let mut aa = match field.get(b"AA") {
+        Ok(Object::Dictionary(dictionary)) => dictionary.clone(),
+        Ok(Object::Reference(reference)) => document
+            .get_object(*reference)
+            .ok()
+            .and_then(|object| object.as_dict().ok())
+            .cloned()
+            .unwrap_or_default(),
+        _ => Dictionary::new(),
+    };
+    aa.set(trigger, Object::Dictionary(action));
+    field.set("AA", aa);
+    atomic_save(document, output)
+}
+
+pub fn delete_field_action(
+    input: &Path,
+    output: &Path,
+    object_id: &str,
+    trigger: &str,
+) -> Result<(), SevenError> {
+    let id = parse_object_id(object_id)?;
+    let trigger = trigger_key(trigger)?;
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let field = document
+        .get_object_mut(id)
+        .map_err(|_| SevenError::OperationRejected("Campo não encontrado".into()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    let mut aa = match field.get(b"AA") {
+        Ok(Object::Dictionary(dictionary)) => dictionary.clone(),
+        _ => return Err(SevenError::OperationRejected("Campo não possui ações adicionais editáveis".into())),
+    };
+    aa.remove(trigger.as_bytes());
+    if aa.is_empty() {
+        field.remove(b"AA");
+    } else {
+        field.set("AA", aa);
+    }
     atomic_save(document, output)
 }
 

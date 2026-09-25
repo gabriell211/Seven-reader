@@ -62,6 +62,8 @@ import {
   searchDocument,
   startCombine,
   startConvertToPdf,
+  startBatchConvertToPdf,
+  startBatchOcr,
   startDecryptPdf,
   startEncryptPdf,
   startExportPdf,
@@ -991,6 +993,16 @@ export default function App() {
     }
   };
 
+  const runBatchOcr = async (inputs: string[], outputDirectory: string, options: OcrOptions) => {
+    try {
+      const started = await startBatchOcr(inputs, outputDirectory, options);
+      setOcrOpen(false);
+      setNotice(`OCR em lote iniciado · ${inputs.length} arquivo(s) · job ${started.jobId.slice(0, 8)}`);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
   const reviewCurrentOcrPage = async (language: string, threshold: number) => {
     if (!document) return;
     try {
@@ -1105,6 +1117,16 @@ export default function App() {
       const started = await startConvertToPdf(input, outputDirectory);
       setConversionOpen(false);
       setNotice(`Conversão iniciada · job ${started.jobId.slice(0, 8)}`);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runBatchConvertToPdf = async (inputs: string[], outputDirectory: string) => {
+    try {
+      const started = await startBatchConvertToPdf(inputs, outputDirectory);
+      setConversionOpen(false);
+      setNotice(`Conversão em lote iniciada · ${inputs.length} arquivo(s) · job ${started.jobId.slice(0, 8)}`);
     } catch (error) {
       setNotice(errorMessage(error));
     }
@@ -1344,6 +1366,7 @@ export default function App() {
           loadingReview={ocrReviewLoading}
           onClose={() => setOcrOpen(false)}
           onRunOcr={(output, options) => void runAdvancedOcr(output, options)}
+          onRunBatchOcr={(inputs, outputDirectory, options) => void runBatchOcr(inputs, outputDirectory, options)}
           onReview={(language, threshold) => void reviewCurrentOcrPage(language, threshold)}
           onScan={(output, dpi) => void runScan(output, dpi)}
         />
@@ -1354,6 +1377,7 @@ export default function App() {
           currentPdf={document?.path}
           onClose={() => setConversionOpen(false)}
           onConvertToPdf={(input, outputDirectory) => void runConvertToPdf(input, outputDirectory)}
+          onBatchConvertToPdf={(inputs, outputDirectory) => void runBatchConvertToPdf(inputs, outputDirectory)}
           onExport={(input, output, format, dpi) => void runExport(input, output, format, dpi)}
         />
       )}

@@ -97,6 +97,9 @@ import {
   sessionDeleteFormField,
   sessionAddPdfBookmark,
   sessionRenamePdfBookmark,
+  sessionDeletePdfBookmark,
+  sessionMovePdfBookmark,
+  sessionSetPdfBookmarkOpen,
   sessionAddPdfAttachment,
   sessionUpdatePdfAttachment,
   sessionRemovePdfAttachment,
@@ -1362,6 +1365,42 @@ export default function App() {
     }
   };
 
+  const runDeleteBookmark = async (objectId: string) => {
+    if (!document) return;
+    try {
+      const summary = await sessionDeletePdfBookmark(document.id, objectId);
+      await acceptDocumentRevision(summary, "Marcador e sua subárvore removidos.");
+      await refreshAdvancedFrom(summary);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runMoveBookmark = async (
+    objectId: string,
+    direction: "up" | "down" | "indent" | "outdent",
+  ) => {
+    if (!document) return;
+    try {
+      const summary = await sessionMovePdfBookmark(document.id, objectId, direction);
+      await acceptDocumentRevision(summary, "Hierarquia de marcadores atualizada.");
+      await refreshAdvancedFrom(summary);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runSetBookmarkOpen = async (objectId: string, open: boolean) => {
+    if (!document) return;
+    try {
+      const summary = await sessionSetPdfBookmarkOpen(document.id, objectId, open);
+      await acceptDocumentRevision(summary, open ? "Marcador expandido." : "Marcador recolhido.");
+      await refreshAdvancedFrom(summary);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
   const runAddAttachment = async (filePath: string, displayName: string, description: string) => {
     if (!document) return;
     try {
@@ -2263,6 +2302,9 @@ export default function App() {
           onReload={() => void reloadAdvanced()}
           onAddBookmark={(title,pageIndex)=>void runAddBookmark(title,pageIndex)}
           onRenameBookmark={(objectId,title)=>void runRenameBookmark(objectId,title)}
+          onDeleteBookmark={(objectId)=>void runDeleteBookmark(objectId)}
+          onMoveBookmark={(objectId,direction)=>void runMoveBookmark(objectId,direction)}
+          onSetBookmarkOpen={(objectId,open)=>void runSetBookmarkOpen(objectId,open)}
           onAddAttachment={(filePath,displayName,description)=>void runAddAttachment(filePath,displayName,description)}
           onUpdateAttachment={(objectId,name,description)=>void runUpdateAttachment(objectId,name,description)}
           onRemoveAttachment={(objectId)=>void runRemoveAttachment(objectId)}

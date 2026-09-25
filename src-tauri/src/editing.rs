@@ -1452,6 +1452,16 @@ fn apply_overlay_text_to_document(
     if options.digits == 0 || options.digits > 20 {
         return Err(SevenError::OperationRejected("Quantidade de dígitos inválida".into()));
     }
+    if !(0.0..=1.0).contains(&options.opacity) {
+        return Err(SevenError::OperationRejected("Opacidade inválida".into()));
+    }
+    if !(0.01..=10.0).contains(&options.image_scale) {
+        return Err(SevenError::OperationRejected("Escala da imagem inválida".into()));
+    }
+    if !matches!(options.parity.as_str(), "all" | "odd" | "even") {
+        return Err(SevenError::OperationRejected("Paridade inválida".into()));
+    }
+
     let total = document.get_pages().len();
     if total == 0 {
         return Err(SevenError::OperationRejected("Documento sem páginas".into()));
@@ -1461,51 +1471,147 @@ fn apply_overlay_text_to_document(
     if start > end {
         return Err(SevenError::OperationRejected("Intervalo de páginas inválido".into()));
     }
+
+    let image_object = if options.kind == "watermark" {
+        if let Some(path) = options.image_path.as_ref().filter(|value| !value.trim().is_empty()) {
+            let path = Path::new(path);
+            if !path.is_file() {
+                return Err(SevenError::NotFound(path.to_string_lossy().into_owned()));
+            }
+            let stream = lopdf::xobject::image(path)
+                .map_err(|error| SevenError::Operation(error.to_string()))?;
+            let dimensions = image::image_dimensions(path)
+                .map_err(|error| SevenError::Operation(error.to_string()))?;
+            Some((document.add_object(stream), dimensions))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     let options_json = serde_json::to_string(options)
         .map_err(|error| SevenError::Operation(error.to_string()))?;
 
     for index in start..=end {
+        let page_number = index + 1;
+        let should_apply = match options.parity.as_str() {
+            "all" => true,
+            "odd" => page_number % 2 == 1,
+            "even" => page_number % 2 == 0,
+            _ => false,
+        };
+        if !should_apply {
+            continue;
+        }
+
         let id = page_id(document, index)?;
         let (page_width, page_height) = page_dimensions(document, id);
-        let (text, x, y, rotation, gray) = match options.kind.as_str() {
-            "header" => (options.text.clone(), 36.0, page_height - 28.0, 0.0, 0.2),
-            "footer" => (options.text.clone(), 36.0, 20.0, 0.0, 0.2),
-            "page-number" => (format!("{}", index + 1), page_width / 2.0, 20.0, 0.0, 0.2),
-            "watermark" => (
-                options.text.clone(),
-                page_width * 0.20,
-                page_height * 0.45,
-                35.0,
-                0.72,
-            ),
+        let gs = ensure_ext_gstate(document, id, options.opacity)?;
+
+        if let Some((image_id, (pixel_width, pixel_height))) = image_object {
+            let name = format!("SRWM{}", image_id.0);
+            document
+                .add_xobject(id, name.as_bytes(), image_id)
+                .map_err(|error| SevenError::Operation(error.to_string()))?;
+
+            let aspect = if pixel_height == 0 { 1.0 } else { f64::from(pixel_width) / f64::from(pixel_height) };
+            let base_width = page_width * 0.35 * options.image_scale;
+            let width = base_width.min(page_width * 0.95);
+            let height = (width / aspect.max(0.001)).min(page_height * 0.95);
+            let x = match options.position.as_str() {
+                "left" => options.margin_x,
+                "center" => (page_width - width) / 2.0,
+                "right" => (page_width - options.margin_x - width).max(0.0),
+                _ => return Err(SevenError::OperationRejected("Posição inválida".into())),
+            };
+            let y = (page_height - height) / 2.0;
+            let radians = options.rotation.to_radians();
+            let cos = radians.cos();
+            let sin = radians.sin();
+
+            let bytes = Content {
+                operations: vec![
+                    Operation::new("q", vec![]),
+                    Operation::new("gs", vec![Object::Name(gs)]),
+                    Operation::new("cm", vec![
+                        (width * cos).into(),
+                        (width * sin).into(),
+                        (-height * sin).into(),
+                        (height * cos).into(),
+                        x.into(),
+                        y.into(),
+                    ]),
+                    Operation::new("Do", vec![Object::Name(name.into_bytes())]),
+                    Operation::new("Q", vec![]),
+                ],
+            }
+            .encode()
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+
+            add_managed_content_stream(
+                document,
+                id,
+                bytes,
+                element_id,
+                &options.kind,
+                &options_json,
+                false,
+            )?;
+            continue;
+        }
+
+        let template = match options.kind.as_str() {
+            "page-number" => {
+                let number = options.start_number + (index - start) as u64;
+                format!("{}{}{}", options.prefix, number, options.suffix)
+            }
             "bates" => {
                 let number = options.start_number + (index - start) as u64;
-                (
-                    format!(
-                        "{}{:0width$}",
-                        options.prefix,
-                        number,
-                        width = options.digits as usize
-                    ),
-                    page_width - 160.0,
-                    20.0,
-                    0.0,
-                    0.2,
+                format!(
+                    "{}{:0width$}{}",
+                    options.prefix,
+                    number,
+                    options.suffix,
+                    width = options.digits as usize
                 )
             }
+            _ => render_overlay_template(&options.text, index, total),
+        };
+
+        let x = align_x(
+            &options.position,
+            page_width,
+            options.margin_x,
+            &template,
+            options.font_size,
+        )?;
+        let y = match options.kind.as_str() {
+            "header" => (page_height - options.margin_y - options.font_size).max(0.0),
+            "footer" | "page-number" | "bates" => options.margin_y,
+            "watermark" => page_height * 0.5,
             _ => return Err(SevenError::OperationRejected("Tipo de overlay inválido".into())),
         };
         let font = ensure_helvetica(document, id)?;
-        let placement = TextPlacement {
-            page_index: index,
-            text,
-            x,
-            y,
-            font_size: options.font_size,
-            rotation,
-            gray,
-        };
-        let bytes = Content { operations: text_operations(font, &placement) }
+        let mut operations = vec![
+            Operation::new("q", vec![]),
+            Operation::new("gs", vec![Object::Name(gs)]),
+        ];
+        operations.extend(text_operations(
+            font,
+            &TextPlacement {
+                page_index: index,
+                text: template,
+                x,
+                y,
+                font_size: options.font_size,
+                rotation: options.rotation,
+                gray: if options.kind == "watermark" { 0.55 } else { 0.2 },
+            },
+        ));
+        operations.push(Operation::new("Q", vec![]));
+
+        let bytes = Content { operations }
             .encode()
             .map_err(|error| SevenError::Operation(error.to_string()))?;
         add_managed_content_stream(

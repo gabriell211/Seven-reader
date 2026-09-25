@@ -19,6 +19,7 @@ import { EditingDialog } from "./components/EditingDialog";
 import { RedactionDialog } from "./components/RedactionDialog";
 import { AdvancedPdfDialog } from "./components/AdvancedPdfDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
+import { UnsavedChangesDialog } from "./components/UnsavedChangesDialog";
 import { applyAppearance, isTrustedPath, loadSettings, saveSettings, type SevenSettings } from "./lib/settings";
 import {
   addAnnotation,
@@ -244,6 +245,13 @@ export default function App() {
   const [protectedView, setProtectedView] = useState(false);
   const [protectedReasons, setProtectedReasons] = useState<string[]>([]);
   const [trustedOnce, setTrustedOnce] = useState<Set<string>>(new Set());
+  const [closePrompt, setClosePrompt] = useState<{
+    scope: "tab" | "others" | "quit";
+    ids: string[];
+    dirtyIds: string[];
+    keepId?: string;
+  } | null>(null);
+  const [closeBusy, setCloseBusy] = useState(false);
   const sessionRestoredRef = useRef(false);
 
   useEffect(() => {
@@ -575,37 +583,42 @@ export default function App() {
     }
   };
 
-  const closeTab = async (documentId: string) => {
-    const closingIndex = openTabs.findIndex((tab) => tab.id === documentId);
-    const closing = openTabs[closingIndex];
-    if (!closing) return;
+  const finalizeCloseTabs = async (ids: string[], keepId?: string) => {
+    if (!ids.length) return;
+    const closing = openTabs.filter((tab) => ids.includes(tab.id));
+    if (!closing.length) return;
 
-    const closingView = tabViews[documentId] ?? {
-      page: document?.id === documentId ? page : 0,
-      zoom: document?.id === documentId ? zoom : settings.defaultZoom,
-    };
-    setClosedTabs((current) => [
-      ...current.slice(-19),
-      { path: closing.path, page: closingView.page, zoom: closingView.zoom },
-    ]);
+    const recovered = closing.map((tab) => {
+      const view = tabViews[tab.id] ?? {
+        page: document?.id === tab.id ? page : 0,
+        zoom: document?.id === tab.id ? zoom : settings.defaultZoom,
+      };
+      return { path: tab.path, page: view.page, zoom: view.zoom };
+    });
+    setClosedTabs((current) => [...current, ...recovered].slice(-20));
 
-    try { await closeDocument(documentId); } catch { /* local tab cleanup still proceeds */ }
+    await Promise.all(closing.map(async (tab) => {
+      try { await closeDocument(tab.id); } catch { /* local state cleanup still proceeds */ }
+    }));
 
-    const remaining = openTabs.filter((tab) => tab.id !== documentId);
+    const remaining = openTabs.filter((tab) => !ids.includes(tab.id));
     setOpenTabs(remaining);
     setTabViews((current) => {
       const next = { ...current };
-      delete next[documentId];
+      ids.forEach((id) => delete next[id]);
       return next;
     });
     setNavHistories((current) => {
       const next = { ...current };
-      delete next[documentId];
+      ids.forEach((id) => delete next[id]);
       return next;
     });
 
-    if (document?.id !== documentId) return;
-    const fallback = remaining[Math.min(Math.max(closingIndex - 1, 0), Math.max(remaining.length - 1, 0))];
+    if (!document || !ids.includes(document.id)) return;
+    const explicit = keepId ? remaining.find((tab) => tab.id === keepId) : undefined;
+    const firstIndex = Math.max(0, openTabs.findIndex((tab) => ids.includes(tab.id)));
+    const fallback = explicit ?? remaining[Math.min(firstIndex, Math.max(remaining.length - 1, 0))];
+
     if (fallback) {
       try {
         localStorage.setItem("seven-reader:last-document", fallback.path);
@@ -623,23 +636,86 @@ export default function App() {
     }
   };
 
-  const closeOtherTabs = async (keepId: string) => {
-    const keep = openTabs.find((tab) => tab.id === keepId);
-    if (!keep) return;
-    const closing = openTabs.filter((tab) => tab.id !== keepId);
-    const recovered = closing.map((tab) => {
-      const view = tabViews[tab.id] ?? { page: 0, zoom: settings.defaultZoom };
-      return { path: tab.path, page: view.page, zoom: view.zoom };
-    });
-    await Promise.all(closing.map(async (tab) => {
-      try { await closeDocument(tab.id); } catch { /* continue */ }
-    }));
-    setClosedTabs((current) => [...current, ...recovered].slice(-20));
-    setOpenTabs([keep]);
-    setTabViews((current) => current[keepId] ? { [keepId]: current[keepId] } : {});
-    setNavHistories((current) => current[keepId] ? { [keepId]: current[keepId] } : {});
-    if (document?.id !== keepId) await selectTab(keep);
+  const closeTab = async (documentId: string) => {
+    const closing = openTabs.find((tab) => tab.id === documentId);
+    if (!closing) return;
+    if (closing.dirty) {
+      setClosePrompt({
+        scope: "tab",
+        ids: [documentId],
+        dirtyIds: [documentId],
+      });
+      return;
+    }
+    await finalizeCloseTabs([documentId]);
   };
+
+  const closeOtherTabs = async (keepId: string) => {
+    const closing = openTabs.filter((tab) => tab.id !== keepId);
+    if (!closing.length) return;
+    const dirtyIds = closing.filter((tab) => tab.dirty).map((tab) => tab.id);
+    if (dirtyIds.length) {
+      setClosePrompt({
+        scope: "others",
+        ids: closing.map((tab) => tab.id),
+        dirtyIds,
+        keepId,
+      });
+      return;
+    }
+    await finalizeCloseTabs(closing.map((tab) => tab.id), keepId);
+  };
+
+  const resolveClosePrompt = async (saveChanges: boolean) => {
+    const prompt = closePrompt;
+    if (!prompt) return;
+    setCloseBusy(true);
+    try {
+      if (saveChanges) {
+        for (const id of prompt.dirtyIds) {
+          await saveDocument(id);
+        }
+      }
+
+      if (prompt.scope === "quit") {
+        for (const tab of openTabs) {
+          try { await closeDocument(tab.id); } catch { /* continue cleanup */ }
+        }
+        localStorage.removeItem(SESSION_KEY);
+        setClosePrompt(null);
+        await getCurrentWebviewWindow().destroy();
+        return;
+      }
+
+      await finalizeCloseTabs(prompt.ids, prompt.keepId);
+      setClosePrompt(null);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    } finally {
+      setCloseBusy(false);
+    }
+  };
+
+  const cancelClosePrompt = () => {
+    if (closeBusy) return;
+    setClosePrompt(null);
+  };
+
+  useEffect(() => {
+    if (!native) return;
+    let unlisten: (() => void) | undefined;
+    void getCurrentWebviewWindow().onCloseRequested((event) => {
+      const dirtyIds = openTabs.filter((tab) => tab.dirty).map((tab) => tab.id);
+      if (!dirtyIds.length) return;
+      event.preventDefault();
+      setClosePrompt({
+        scope: "quit",
+        ids: openTabs.map((tab) => tab.id),
+        dirtyIds,
+      });
+    }).then((dispose) => { unlisten = dispose; });
+    return () => unlisten?.();
+  }, [native, openTabs]);
 
   const reopenClosedTab = async () => {
     const closed = closedTabs.at(-1);
@@ -1639,6 +1715,21 @@ export default function App() {
         <button className="global-notice" onClick={() => setNotice(null)} aria-label="Fechar aviso">
           {notice}
         </button>
+      )}
+      {closePrompt && (
+        <UnsavedChangesDialog
+          scope={closePrompt.scope}
+          count={closePrompt.dirtyIds.length}
+          documentName={
+            closePrompt.dirtyIds.length === 1
+              ? openTabs.find((tab) => tab.id === closePrompt.dirtyIds[0])?.name
+              : undefined
+          }
+          busy={closeBusy}
+          onSave={() => void resolveClosePrompt(true)}
+          onDiscard={() => void resolveClosePrompt(false)}
+          onCancel={cancelClosePrompt}
+        />
       )}
       {settingsOpen && <SettingsDialog settings={settings} onClose={() => setSettingsOpen(false)} onChange={setSettings} />}
       {advancedTab && document && (

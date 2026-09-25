@@ -37,6 +37,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_capabilities,
             commands::open_document,
+            commands::restore_document_session,
             commands::close_document,
             commands::render_page,
             commands::search_document,

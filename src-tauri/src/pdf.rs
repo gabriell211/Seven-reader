@@ -369,3 +369,82 @@ pub fn compare_documents(
         pages,
     })
 }
+
+
+pub fn create_pdf_from_images(
+    inputs: &[PathBuf],
+    destination: &Path,
+    dpi: u16,
+) -> Result<(), SevenError> {
+    if inputs.is_empty() || inputs.len() > 500 {
+        return Err(SevenError::OperationRejected(
+            "Selecione entre 1 e 500 imagens".into(),
+        ));
+    }
+    let dpi = dpi.clamp(72, 1200);
+    let mut document = Document::with_version("1.7");
+    let pages_id = document.new_object_id();
+    let mut page_ids = Vec::with_capacity(inputs.len());
+
+    for input in inputs {
+        let canonical = fs::canonicalize(input)
+            .map_err(|error| SevenError::InvalidPath(error.to_string()))?;
+        let extension = canonical
+            .extension()
+            .and_then(|value| value.to_str())
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        if !matches!(extension.as_str(), "png" | "jpg" | "jpeg" | "tif" | "tiff" | "bmp" | "webp") {
+            return Err(SevenError::UnsupportedFormat(extension));
+        }
+
+        let decoded = image::open(&canonical)
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+        let width_points = ((decoded.width() as f64 * 72.0) / f64::from(dpi)).max(1.0);
+        let height_points = ((decoded.height() as f64 * 72.0) / f64::from(dpi)).max(1.0);
+
+        let image_stream = lopdf::xobject::image(&canonical)
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+        let image_id = document.add_object(image_stream);
+        let image_name = format!("Im{}", image_id.0);
+
+        let content = format!(
+            "q\n{width_points:.4} 0 0 {height_points:.4} 0 0 cm\n/{image_name} Do\nQ\n"
+        );
+        let content_id = document.add_object(Stream::new(dictionary! {}, content.into_bytes()));
+        let page_id = document.add_object(dictionary! {
+            "Type" => "Page",
+            "Parent" => pages_id,
+            "Contents" => content_id,
+            "MediaBox" => vec![0.into(), 0.into(), width_points.into(), height_points.into()],
+        });
+        document
+            .add_xobject(page_id, image_name.as_bytes(), image_id)
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+        page_ids.push(page_id);
+    }
+
+    document.objects.insert(
+        pages_id,
+        Object::Dictionary(dictionary! {
+            "Type" => "Pages",
+            "Kids" => page_ids.iter().copied().map(Object::Reference).collect::<Vec<_>>(),
+            "Count" => page_ids.len() as i64,
+        }),
+    );
+    let catalog_id = document.add_object(dictionary! {
+        "Type" => "Catalog",
+        "Pages" => pages_id,
+    });
+    document.trailer.set("Root", catalog_id);
+    document.compress();
+
+    let temp = destination.with_extension("seven-images.tmp.pdf");
+    document.save(&temp).map_err(|error| SevenError::Io(error.to_string()))?;
+    Document::load(&temp).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    if destination.exists() {
+        fs::remove_file(destination).map_err(|error| SevenError::Io(error.to_string()))?;
+    }
+    fs::rename(&temp, destination).map_err(|error| SevenError::Io(error.to_string()))?;
+    Ok(())
+}

@@ -2,6 +2,7 @@ use crate::{
     capabilities,
     error::{CommandResult, ErrorPayload, SevenError},
     jobs::{self, JobStart},
+    ocr,
     document_ops,
     pdf,
     state::{AppState, JobStatus},
@@ -256,6 +257,126 @@ pub fn start_rotate_pages(
         args,
         Some(output),
     ))
+}
+
+#[tauri::command]
+pub fn create_pdf_from_images(
+    inputs: Vec<String>,
+    destination: String,
+    dpi: u16,
+) -> CommandResult<()> {
+    let output = jobs::validated_output(&destination, "pdf").map_err(ErrorPayload::from)?;
+    let mut paths = Vec::with_capacity(inputs.len());
+    for input in inputs {
+        let path = std::path::Path::new(&input);
+        if !path.exists() || !path.is_file() {
+            return Err(ErrorPayload::from(SevenError::NotFound(input)));
+        }
+        paths.push(
+            fs::canonicalize(path)
+                .map_err(|error| ErrorPayload::from(SevenError::InvalidPath(error.to_string())))?,
+        );
+    }
+    pdf::create_pdf_from_images(&paths, &output, dpi).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn start_ocr_advanced(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: String,
+    output: String,
+    options: ocr::OcrOptions,
+) -> CommandResult<JobStart> {
+    let executable = jobs::require_executable(&["ocrmypdf"], "OCRmyPDF").map_err(ErrorPayload::from)?;
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    let args = options
+        .args(
+            input.to_string_lossy().as_ref(),
+            output.to_string_lossy().as_ref(),
+        )
+        .map_err(ErrorPayload::from)?;
+    Ok(jobs::start_process_job(
+        app,
+        &state,
+        "ocr",
+        executable,
+        args,
+        Some(output),
+    ))
+}
+
+#[tauri::command]
+pub async fn review_ocr_page(
+    state: State<'_, AppState>,
+    document_id: String,
+    page_index: usize,
+    language: String,
+    threshold: f32,
+) -> CommandResult<Vec<ocr::OcrWord>> {
+    let document = state
+        .documents
+        .lock()
+        .get(&document_id)
+        .cloned()
+        .ok_or_else(|| ErrorPayload::from(SevenError::DocumentNotOpen))?;
+    let state_snapshot = AppState {
+        documents: state.documents.clone(),
+        jobs: state.jobs.clone(),
+        cache_dir: state.cache_dir.clone(),
+        resource_dir: state.resource_dir.clone(),
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        ocr::review_page(&state_snapshot, &document, page_index, &language, threshold)
+    })
+    .await
+    .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
+    .map_err(ErrorPayload::from)
+}
+
+#[cfg(target_os = "linux")]
+#[tauri::command]
+pub async fn scan_page_to_pdf(
+    destination: String,
+    dpi: u16,
+) -> CommandResult<()> {
+    let output = jobs::validated_output(&destination, "pdf").map_err(ErrorPayload::from)?;
+    let dpi = dpi.clamp(75, 1200);
+    tauri::async_runtime::spawn_blocking(move || {
+        let scanner = jobs::require_executable(&["scanimage"], "SANE/scanimage")?;
+        let scan = std::process::Command::new(scanner)
+            .arg("--format=png")
+            .arg(format!("--resolution={dpi}"))
+            .stdin(std::process::Stdio::null())
+            .output()
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+        if !scan.status.success() {
+            return Err(SevenError::Operation(format!(
+                "Scanner encerrou com código {:?}",
+                scan.status.code()
+            )));
+        }
+        let temp = output.with_extension("seven-scan.png");
+        fs::write(&temp, scan.stdout).map_err(|error| SevenError::Io(error.to_string()))?;
+        let result = pdf::create_pdf_from_images(&[temp.clone()], &output, dpi);
+        let _ = fs::remove_file(temp);
+        result
+    })
+    .await
+    .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
+    .map_err(ErrorPayload::from)
+}
+
+#[cfg(not(target_os = "linux"))]
+#[tauri::command]
+pub async fn scan_page_to_pdf(
+    _destination: String,
+    _dpi: u16,
+) -> CommandResult<()> {
+    Err(ErrorPayload::from(SevenError::CapabilityUnavailable(
+        "Scanner nativo ainda não disponível neste sistema operacional".into(),
+    )))
 }
 
 #[tauri::command]

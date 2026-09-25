@@ -27,7 +27,7 @@ uuid = { version = "1", features = ["v4", "serde"] }
 parking_lot = "0.12"
 which = "8"
 pdfium-render = { version = "0.9.4", features = ["image_latest"] }
-lopdf = "0.38"
+lopdf = { version = "0.38", features = ["embed_image"] }
 sha2 = "0.10"
 hex = "0.4"
 image = "0.25"

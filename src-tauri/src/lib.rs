@@ -3,6 +3,7 @@ mod commands;
 mod document_ops;
 mod error;
 mod jobs;
+mod ocr;
 mod pdf;
 mod state;
 
@@ -32,6 +33,10 @@ pub fn run() {
             commands::search_document,
             commands::save_document_as,
             commands::create_blank_document,
+            commands::create_pdf_from_images,
+            commands::start_ocr_advanced,
+            commands::review_ocr_page,
+            commands::scan_page_to_pdf,
             commands::start_combine_documents,
             commands::start_split_pages,
             commands::start_extract_pages,

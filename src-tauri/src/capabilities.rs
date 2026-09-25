@@ -24,6 +24,7 @@ pub struct Capabilities {
     pub certificates: Capability,
     pub pdftotext: Capability,
     pub openssl: Capability,
+    pub tesseract: Capability,
 }
 
 fn command_version(candidates: &[&str], args: &[&str]) -> Capability {
@@ -89,6 +90,7 @@ pub fn detect(state: &AppState) -> Capabilities {
 
     let pdftotext = command_version(&["pdftotext"], &["-v"]);
     let openssl = command_version(&["openssl"], &["version"]);
+    let tesseract = command_version(&["tesseract"], &["--version"]);
 
     let certificates = Capability {
         available: false,
@@ -107,5 +109,6 @@ pub fn detect(state: &AppState) -> Capabilities {
         certificates,
         pdftotext,
         openssl,
+        tesseract,
     }
 }

@@ -4,7 +4,7 @@ use lopdf::{
     dictionary, Dictionary, Document, Object, ObjectId, Stream,
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fs, path::Path};
+use std::{collections::{HashMap, HashSet}, fs, path::Path};
 
 const MAX_PAGE_CONTENT: usize = 64 * 1024 * 1024;
 
@@ -1372,10 +1372,10 @@ pub fn add_link(input: &Path, output: &Path, link: LinkPlacement) -> Result<(), 
     atomic_save(document, output)
 }
 
-pub fn add_overlay_text(
-    input: &Path,
-    output: &Path,
-    options: OverlayTextOptions,
+fn apply_overlay_text_to_document(
+    document: &mut Document,
+    options: &OverlayTextOptions,
+    element_id: &str,
 ) -> Result<(), SevenError> {
     if options.font_size < 1.0 || options.font_size > 200.0 {
         return Err(SevenError::OperationRejected("Fonte inválida".into()));
@@ -1383,9 +1383,7 @@ pub fn add_overlay_text(
     if options.digits == 0 || options.digits > 20 {
         return Err(SevenError::OperationRejected("Quantidade de dígitos inválida".into()));
     }
-    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
-    let pages = document.get_pages();
-    let total = pages.len();
+    let total = document.get_pages().len();
     if total == 0 {
         return Err(SevenError::OperationRejected("Documento sem páginas".into()));
     }
@@ -1394,10 +1392,12 @@ pub fn add_overlay_text(
     if start > end {
         return Err(SevenError::OperationRejected("Intervalo de páginas inválido".into()));
     }
+    let options_json = serde_json::to_string(options)
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
 
     for index in start..=end {
-        let id = page_id(&document, index)?;
-        let (page_width, page_height) = page_dimensions(&document, id);
+        let id = page_id(document, index)?;
+        let (page_width, page_height) = page_dimensions(document, id);
         let (text, x, y, rotation, gray) = match options.kind.as_str() {
             "header" => (options.text.clone(), 36.0, page_height - 28.0, 0.0, 0.2),
             "footer" => (options.text.clone(), 36.0, 20.0, 0.0, 0.2),
@@ -1426,7 +1426,7 @@ pub fn add_overlay_text(
             }
             _ => return Err(SevenError::OperationRejected("Tipo de overlay inválido".into())),
         };
-        let font = ensure_helvetica(&mut document, id)?;
+        let font = ensure_helvetica(document, id)?;
         let placement = TextPlacement {
             page_index: index,
             text,
@@ -1436,34 +1436,74 @@ pub fn add_overlay_text(
             rotation,
             gray,
         };
-        append_content(&mut document, id, Content { operations: text_operations(font, &placement) })?;
+        let bytes = Content { operations: text_operations(font, &placement) }
+            .encode()
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+        add_managed_content_stream(
+            document,
+            id,
+            bytes,
+            element_id,
+            &options.kind,
+            &options_json,
+            false,
+        )?;
     }
+    Ok(())
+}
 
+pub fn add_overlay_text(
+    input: &Path,
+    output: &Path,
+    options: OverlayTextOptions,
+) -> Result<(), SevenError> {
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let element_id = uuid::Uuid::new_v4().to_string();
+    apply_overlay_text_to_document(&mut document, &options, &element_id)?;
     atomic_save(document, output)
 }
 
-pub fn set_background(
+pub fn update_overlay_text(
     input: &Path,
     output: &Path,
-    options: BackgroundOptions,
+    element_id: &str,
+    options: OverlayTextOptions,
+) -> Result<(), SevenError> {
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let removed = remove_managed_element_from_document(&mut document, element_id)?;
+    if removed == 0 {
+        return Err(SevenError::OperationRejected("Overlay gerenciado não encontrado".into()));
+    }
+    apply_overlay_text_to_document(&mut document, &options, element_id)?;
+    atomic_save(document, output)
+}
+
+fn apply_background_to_document(
+    document: &mut Document,
+    options: &BackgroundOptions,
+    element_id: &str,
 ) -> Result<(), SevenError> {
     for component in [options.red, options.green, options.blue] {
         if !(0.0..=1.0).contains(&component) {
             return Err(SevenError::OperationRejected("Cor de fundo inválida".into()));
         }
     }
-    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
     let total = document.get_pages().len();
     if total == 0 {
         return Err(SevenError::OperationRejected("Documento sem páginas".into()));
     }
     let start = options.page_start.min(total.saturating_sub(1));
     let end = options.page_end.unwrap_or(total.saturating_sub(1)).min(total.saturating_sub(1));
+    if start > end {
+        return Err(SevenError::OperationRejected("Intervalo de páginas inválido".into()));
+    }
+    let options_json = serde_json::to_string(options)
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
 
     for index in start..=end {
-        let id = page_id(&document, index)?;
-        let (width, height) = page_dimensions(&document, id);
-        let content = Content {
+        let id = page_id(document, index)?;
+        let (width, height) = page_dimensions(document, id);
+        let bytes = Content {
             operations: vec![
                 Operation::new("q", vec![]),
                 Operation::new("rg", vec![options.red.into(), options.green.into(), options.blue.into()]),
@@ -1474,9 +1514,42 @@ pub fn set_background(
         }
         .encode()
         .map_err(|error| SevenError::Operation(error.to_string()))?;
-        prepend_content(&mut document, id, content)?;
+        add_managed_content_stream(
+            document,
+            id,
+            bytes,
+            element_id,
+            "background",
+            &options_json,
+            true,
+        )?;
     }
+    Ok(())
+}
 
+pub fn set_background(
+    input: &Path,
+    output: &Path,
+    options: BackgroundOptions,
+) -> Result<(), SevenError> {
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let element_id = uuid::Uuid::new_v4().to_string();
+    apply_background_to_document(&mut document, &options, &element_id)?;
+    atomic_save(document, output)
+}
+
+pub fn update_background(
+    input: &Path,
+    output: &Path,
+    element_id: &str,
+    options: BackgroundOptions,
+) -> Result<(), SevenError> {
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let removed = remove_managed_element_from_document(&mut document, element_id)?;
+    if removed == 0 {
+        return Err(SevenError::OperationRejected("Plano de fundo gerenciado não encontrado".into()));
+    }
+    apply_background_to_document(&mut document, &options, element_id)?;
     atomic_save(document, output)
 }
 

@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { save } from "@tauri-apps/plugin-dialog";
 import type { AnnotationInfo, AnnotationInput, AnnotationKind } from "../types";
 import { SevenIcon } from "./SevenIcon";
 
@@ -10,8 +9,8 @@ interface CommentsDialogProps {
   loading: boolean;
   onClose: () => void;
   onReload: () => void;
-  onAdd: (output: string, annotation: AnnotationInput) => void;
-  onDelete: (output: string, objectId: string) => void;
+  onAdd: (annotation: AnnotationInput) => void;
+  onDelete: (objectId: string) => void;
 }
 
 const kinds: Array<{ id: AnnotationKind; label: string }> = [
@@ -47,28 +46,19 @@ export function CommentsDialog({
     [annotations, pageIndex],
   );
 
-  const outputPath = async (suffix: string) => save({
-    title: "Salvar PDF comentado",
-    defaultPath: documentPath.replace(/\.pdf$/i, `-${suffix}.pdf`),
-    filters: [{ name: "Documento PDF", extensions: ["pdf"] }],
-  });
-
-  const submit = async () => {
-    const output = await outputPath("comentado");
-    if (!output) return;
-    onAdd(output, { pageIndex, kind, text, author, x, y, width, height });
+  const submit = () => {
+    onAdd({ pageIndex, kind, text, author, x, y, width, height });
   };
 
-  const remove = async (annotation: AnnotationInfo) => {
-    const output = await outputPath("comentario-removido");
-    if (output) onDelete(output, annotation.objectId);
+  const remove = (annotation: AnnotationInfo) => {
+    onDelete(annotation.objectId);
   };
 
   return (
     <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section className="workflow-dialog comment-dialog" role="dialog" aria-modal="true">
         <header className="organizer-head">
-          <div><span className="eyebrow">COMENTÁRIOS</span><h2>Revisar documento</h2><p>Página {pageIndex + 1} · anotações gravadas na estrutura real do PDF.</p></div>
+          <div><span className="eyebrow">COMENTÁRIOS</span><h2>Revisar documento</h2><p>Página {pageIndex + 1} · alterações entram na sessão e só substituem o original ao salvar.</p></div>
           <button className="icon-button" onClick={onClose} aria-label="Fechar"><SevenIcon name="close" /></button>
         </header>
         <div className="workflow-tabs">
@@ -95,7 +85,7 @@ export function CommentsDialog({
                 <label className="workflow-field"><span>Altura</span><input type="number" min={1} value={height} onChange={(event) => setHeight(Number(event.target.value))} /></label>
               </div>
               <div className="organizer-note"><SevenIcon name="comment" /><span>As coordenadas usam pontos PDF. Para desenho livre com mouse ou caneta, use o ícone de lápis na barra flutuante do documento.</span></div>
-              <button className="primary-button workflow-submit" disabled={!text.trim() || width <= 0 || height <= 0} onClick={() => void submit()}><SevenIcon name="comment" /> Adicionar comentário</button>
+              <button className="primary-button workflow-submit" disabled={!text.trim() || width <= 0 || height <= 0} onClick={submit}><SevenIcon name="comment" /> Adicionar comentário</button>
             </>
           ) : (
             <>
@@ -109,7 +99,7 @@ export function CommentsDialog({
                       <article className={annotation.pageIndex === pageIndex ? "annotation-row current" : "annotation-row"} key={annotation.objectId}>
                         <span className="annotation-glyph"><SevenIcon name="comment" /></span>
                         <div><strong>{annotation.kind} · página {annotation.pageIndex + 1}</strong><p>{annotation.text || "Sem texto"}</p><small>{annotation.author || "Autor não informado"}</small></div>
-                        <button className="danger-quiet" onClick={() => void remove(annotation)}>Remover</button>
+                        <button className="danger-quiet" onClick={() => remove(annotation)}>Remover</button>
                       </article>
                     ))}
                   </div>

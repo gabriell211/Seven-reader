@@ -87,6 +87,11 @@ import {
   sessionEditUpdateLink,
   sessionEditRemoveLink,
   sessionEditAddLink,
+  listManagedPdfElements,
+  sessionEditUpdateOverlayText,
+  sessionEditUpdateBackground,
+  sessionEditRemoveManagedElement,
+  sessionSetPageLabels,
   sessionEditOverlayText,
   sessionEditSetBackground,
   sessionFillFormFields,
@@ -170,6 +175,8 @@ import type {
   LinkPlacement,
   LinkInfo,
   LinkUpdate,
+  ManagedElementInfo,
+  PageLabelOptions,
   NamedDestinationInfo,
   NewFormField,
   OcrOptions,
@@ -312,6 +319,7 @@ export default function App() {
   const [imageObjects, setImageObjects] = useState<ImageObjectInfo[]>([]);
   const [pdfLinks, setPdfLinks] = useState<LinkInfo[]>([]);
   const [namedDestinations, setNamedDestinations] = useState<NamedDestinationInfo[]>([]);
+  const [managedElements, setManagedElements] = useState<ManagedElementInfo[]>([]);
   const [pdfLinksLoading, setPdfLinksLoading] = useState(false);
   const [imageObjectsLoading, setImageObjectsLoading] = useState(false);
   const [redactionOpen, setRedactionOpen] = useState(false);
@@ -1718,6 +1726,58 @@ export default function App() {
     }
   };
 
+  const reloadManagedElements = async () => {
+    if (!document) return;
+    try {
+      setManagedElements(await listManagedPdfElements(document.id));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runUpdateManagedOverlay = async (elementId: string, options: OverlayTextOptions) => {
+    if (!document) return;
+    try {
+      const summary = await sessionEditUpdateOverlayText(document.id, elementId, options);
+      await acceptDocumentRevision(summary, "Elemento de texto atualizado.");
+      setManagedElements(await listManagedPdfElements(document.id));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runUpdateManagedBackground = async (elementId: string, options: BackgroundOptions) => {
+    if (!document) return;
+    try {
+      const summary = await sessionEditUpdateBackground(document.id, elementId, options);
+      await acceptDocumentRevision(summary, "Plano de fundo atualizado.");
+      setManagedElements(await listManagedPdfElements(document.id));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runRemoveManagedElement = async (elementId: string) => {
+    if (!document) return;
+    try {
+      const summary = await sessionEditRemoveManagedElement(document.id, elementId);
+      await acceptDocumentRevision(summary, "Elemento gerenciado removido.");
+      setManagedElements(await listManagedPdfElements(document.id));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runSetPageLabels = async (options: PageLabelOptions) => {
+    if (!document) return;
+    try {
+      const summary = await sessionSetPageLabels(document.id, options);
+      await acceptDocumentRevision(summary, "Rótulos de página atualizados.");
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
   const runEditOverlay = async (options: OverlayTextOptions) => {
     if (!document) return;
     try {
@@ -2494,6 +2554,7 @@ export default function App() {
           links={pdfLinks}
           linksLoading={pdfLinksLoading}
           namedDestinations={namedDestinations}
+          managedElements={managedElements}
           onClose={() => setEditingOpen(false)}
           onAddText={(placement) => void runEditAddText(placement)}
           onReplaceText={(find, replacement, allPages) => void runEditReplaceText(find, replacement, allPages)}
@@ -2508,6 +2569,11 @@ export default function App() {
           onUpdateLink={(update) => void runEditUpdateLink(update)}
           onRemoveLink={(pageIndex,objectId) => void runEditRemoveLink(pageIndex,objectId)}
           onAddLink={(link) => void runEditAddLink(link)}
+          onReloadManagedElements={() => void reloadManagedElements()}
+          onUpdateManagedOverlay={(elementId, options) => void runUpdateManagedOverlay(elementId, options)}
+          onUpdateManagedBackground={(elementId, options) => void runUpdateManagedBackground(elementId, options)}
+          onRemoveManagedElement={(elementId) => void runRemoveManagedElement(elementId)}
+          onSetPageLabels={(options) => void runSetPageLabels(options)}
           onOverlay={(options) => void runEditOverlay(options)}
           onBackground={(options) => void runEditBackground(options)}
         />

@@ -1,6 +1,7 @@
 use crate::error::SevenError;
 use lopdf::{dictionary, Dictionary, Document, Object, ObjectId, Stream};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::{collections::HashSet, fs, path::Path};
 
 #[derive(Debug, Clone, Serialize)]
@@ -26,6 +27,8 @@ pub struct AttachmentInfo {
     pub name: String,
     pub description: String,
     pub size: Option<usize>,
+    pub mime: String,
+    pub sha256: String,
     pub object_id: String,
 }
 
@@ -189,6 +192,112 @@ fn name_tree_pairs(document: &Document, root: &Object, output: &mut Vec<(String,
     }
 }
 
+fn attachment_mime_from_name(name: &str) -> String {
+    let extension = Path::new(name)
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    match extension.as_str() {
+        "pdf" => "application/pdf",
+        "txt" => "text/plain",
+        "csv" => "text/csv",
+        "json" => "application/json",
+        "xml" => "application/xml",
+        "html" | "htm" => "text/html",
+        "jpg" | "jpeg" => "image/jpeg",
+        "png" => "image/png",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "tif" | "tiff" => "image/tiff",
+        "doc" => "application/msword",
+        "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "xls" => "application/vnd.ms-excel",
+        "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "ppt" => "application/vnd.ms-powerpoint",
+        "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "zip" => "application/zip",
+        _ => "application/octet-stream",
+    }
+    .to_owned()
+}
+
+fn attachment_is_dangerous(name: &str) -> bool {
+    let extension = Path::new(name)
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    matches!(
+        extension.as_str(),
+        "exe" | "dll" | "com" | "bat" | "cmd" | "ps1" | "psm1" | "vbs" | "vbe"
+            | "js" | "jse" | "wsf" | "wsh" | "scr" | "msi" | "msp" | "reg" | "lnk"
+            | "hta" | "cpl" | "jar"
+    )
+}
+
+fn attachment_stream<'a>(document: &'a Document, spec: &'a Dictionary) -> Option<&'a Stream> {
+    let ef = spec.get(b"EF").ok()?.as_dict().ok()?;
+    let stream_id = ef
+        .get(b"UF")
+        .or_else(|_| ef.get(b"F"))
+        .ok()?
+        .as_reference()
+        .ok()?;
+    document.get_object(stream_id).ok()?.as_stream().ok()
+}
+
+fn embedded_files_root_id(document: &Document) -> Option<ObjectId> {
+    let names = document.catalog().ok()?.get(b"Names").ok()?;
+    let names = match names {
+        Object::Reference(id) => document.get_object(*id).ok()?.as_dict().ok()?,
+        Object::Dictionary(dictionary) => dictionary,
+        _ => return None,
+    };
+    let embedded = names.get(b"EmbeddedFiles").ok()?;
+    match embedded {
+        Object::Reference(id) => Some(*id),
+        _ => None,
+    }
+}
+
+fn collect_name_tree_node_ids(
+    document: &Document,
+    id: ObjectId,
+    output: &mut Vec<ObjectId>,
+    visited: &mut HashSet<ObjectId>,
+) {
+    if !visited.insert(id) {
+        return;
+    }
+    output.push(id);
+    let Ok(dictionary) = document.get_object(id).and_then(Object::as_dict) else { return };
+    if let Ok(Object::Array(kids)) = dictionary.get(b"Kids") {
+        for kid in kids {
+            if let Ok(kid_id) = kid.as_reference() {
+                collect_name_tree_node_ids(document, kid_id, output, visited);
+            }
+        }
+    }
+}
+
+fn find_attachment_name_entry(document: &Document, spec_id: ObjectId) -> Option<(ObjectId, usize)> {
+    let root = embedded_files_root_id(document)?;
+    let mut nodes = Vec::new();
+    collect_name_tree_node_ids(document, root, &mut nodes, &mut HashSet::new());
+    for node_id in nodes {
+        let dictionary = document.get_object(node_id).ok()?.as_dict().ok()?;
+        let Ok(Object::Array(names)) = dictionary.get(b"Names") else { continue };
+        for index in (0..names.len()).step_by(2) {
+            if index + 1 >= names.len() { break; }
+            if names[index + 1].as_reference().ok() == Some(spec_id) {
+                return Some((node_id, index));
+            }
+        }
+    }
+    None
+}
+
 fn attachment_list(document: &Document) -> Vec<AttachmentInfo> {
     let Some(names) = document.catalog().ok().and_then(|c| c.get(b"Names").ok()) else { return Vec::new() };
     let names_dict = match names {
@@ -204,14 +313,18 @@ fn attachment_list(document: &Document) -> Vec<AttachmentInfo> {
         .filter_map(|(name, id)| {
             let spec = document.get_object(id).ok()?.as_dict().ok()?;
             let description = spec.get(b"Desc").ok().map(object_text).unwrap_or_default();
-            let ef = spec.get(b"EF").ok()?.as_dict().ok()?;
-            let stream_id = ef.get(b"F").ok()?.as_reference().ok()?;
-            let size = document
-                .get_object(stream_id)
+            let stream = attachment_stream(document, spec)?;
+            let data = stream.decompressed_content().unwrap_or_else(|_| stream.content.clone());
+            let size = Some(data.len());
+            let mime = stream
+                .dict
+                .get(b"Subtype")
                 .ok()
-                .and_then(|o| o.as_stream().ok())
-                .map(|s| s.content.len());
-            Some(AttachmentInfo { name, description, size, object_id: id_string(id) })
+                .map(object_text)
+                .filter(|value| !value.is_empty())
+                .unwrap_or_else(|| attachment_mime_from_name(&name));
+            let sha256 = hex::encode(Sha256::digest(&data));
+            Some(AttachmentInfo { name, description, size, mime, sha256, object_id: id_string(id) })
         })
         .collect()
 }
@@ -439,12 +552,22 @@ pub fn add_attachment(
     } else {
         display_name.trim().to_owned()
     };
+    if attachment_is_dangerous(&name) || attachment_is_dangerous(file_path.to_string_lossy().as_ref()) {
+        return Err(SevenError::OperationRejected(
+            "Extensão de anexo bloqueada pela política de segurança".into(),
+        ));
+    }
+    let mime = attachment_mime_from_name(&name);
     let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
 
     let embedded_stream = Stream::new(
         dictionary! {
             "Type" => "EmbeddedFile",
-            "Params" => dictionary! { "Size" => data.len() as i64 },
+            "Subtype" => Object::Name(mime.as_bytes().to_vec()),
+            "Params" => dictionary! {
+                "Size" => data.len() as i64,
+                "CheckSum" => Object::string_literal(hex::encode(Sha256::digest(&data))),
+            },
         },
         data,
     );
@@ -511,6 +634,93 @@ pub fn add_attachment(
     };
     names.push(Object::string_literal(&name));
     names.push(Object::Reference(spec_id));
+    atomic_save(document, output)
+}
+
+pub fn update_attachment(
+    input: &Path,
+    output: &Path,
+    object_id: &str,
+    name: &str,
+    description: &str,
+) -> Result<(), SevenError> {
+    let name = name.trim();
+    if name.is_empty() || name.chars().count() > 500 {
+        return Err(SevenError::OperationRejected("Nome do anexo inválido".into()));
+    }
+    if attachment_is_dangerous(name) {
+        return Err(SevenError::OperationRejected(
+            "Extensão de anexo bloqueada pela política de segurança".into(),
+        ));
+    }
+
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let spec_id = parse_id(object_id)?;
+    let (node_id, key_index) = find_attachment_name_entry(&document, spec_id)
+        .ok_or_else(|| SevenError::OperationRejected("Anexo não encontrado na name tree".into()))?;
+
+    {
+        let spec = document
+            .get_object_mut(spec_id)
+            .map_err(|error| SevenError::Operation(error.to_string()))?
+            .as_dict_mut()
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+        spec.set("F", Object::string_literal(name));
+        spec.set("UF", Object::string_literal(name));
+        if description.trim().is_empty() {
+            spec.remove(b"Desc");
+        } else {
+            spec.set("Desc", Object::string_literal(description.trim()));
+        }
+    }
+
+    if let Ok(node) = document.get_object_mut(node_id).and_then(Object::as_dict_mut) {
+        if let Ok(Object::Array(names)) = node.get_mut(b"Names") {
+            if key_index < names.len() {
+                names[key_index] = Object::string_literal(name);
+            }
+        }
+    }
+
+    atomic_save(document, output)
+}
+
+pub fn remove_attachment(
+    input: &Path,
+    output: &Path,
+    object_id: &str,
+) -> Result<(), SevenError> {
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let spec_id = parse_id(object_id)?;
+    let (node_id, key_index) = find_attachment_name_entry(&document, spec_id)
+        .ok_or_else(|| SevenError::OperationRejected("Anexo não encontrado na name tree".into()))?;
+
+    let stream_ids = document
+        .get_object(spec_id)
+        .ok()
+        .and_then(|object| object.as_dict().ok())
+        .and_then(|spec| spec.get(b"EF").ok())
+        .and_then(|object| object.as_dict().ok())
+        .map(|ef| {
+            [b"F".as_slice(), b"UF".as_slice()]
+                .into_iter()
+                .filter_map(|key| ef.get(key).ok().and_then(|value| value.as_reference().ok()))
+                .collect::<HashSet<_>>()
+        })
+        .unwrap_or_default();
+
+    if let Ok(node) = document.get_object_mut(node_id).and_then(Object::as_dict_mut) {
+        if let Ok(Object::Array(names)) = node.get_mut(b"Names") {
+            if key_index + 1 < names.len() {
+                names.drain(key_index..=key_index + 1);
+            }
+        }
+    }
+    document.objects.remove(&spec_id);
+    for id in stream_ids {
+        document.objects.remove(&id);
+    }
+
     atomic_save(document, output)
 }
 

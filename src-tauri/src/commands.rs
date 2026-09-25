@@ -888,6 +888,31 @@ pub fn session_remove_pdf_attachment(
 }
 
 #[tauri::command]
+pub fn session_apply_pdf_layer_overrides(
+    state: State<'_, AppState>,
+    document_id: String,
+    context: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "layer-overrides", move |input, output| {
+        advanced::apply_layer_usage_overrides(input, output, &context)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_reset_pdf_layer_visibility(
+    state: State<'_, AppState>,
+    document_id: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "layer-reset", move |input, output| {
+        advanced::reset_layer_visibility_to_base(input, output)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn session_update_pdf_layer_properties(
     state: State<'_, AppState>,
     document_id: String,

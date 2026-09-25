@@ -3,7 +3,7 @@ use crate::{
     error::SevenError,
     state::{AppState, OpenDocument},
 };
-use lopdf::{Document, Object};
+use lopdf::{dictionary, Document, Object, Stream};
 use pdfium_render::prelude::*;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -220,4 +220,73 @@ pub fn search_document(
     }
 
     Ok(hits)
+}
+
+
+pub fn create_blank_pdf(
+    destination: &Path,
+    page_size: &str,
+    page_count: u16,
+) -> Result<(), SevenError> {
+    if !(1..=500).contains(&page_count) {
+        return Err(SevenError::OperationRejected(
+            "A quantidade de páginas deve ficar entre 1 e 500".into(),
+        ));
+    }
+
+    let (width, height) = match page_size {
+        "a4" => (595, 842),
+        "letter" => (612, 792),
+        "legal" => (612, 1008),
+        _ => {
+            return Err(SevenError::OperationRejected(
+                "Tamanho de página não suportado".into(),
+            ))
+        }
+    };
+
+    let mut document = Document::with_version("1.7");
+    let pages_id = document.new_object_id();
+    let mut kids = Vec::with_capacity(page_count as usize);
+
+    for _ in 0..page_count {
+        let content_id = document.add_object(Stream::new(dictionary! {}, Vec::new()));
+        let page_id = document.add_object(dictionary! {
+            "Type" => "Page",
+            "Parent" => pages_id,
+            "MediaBox" => vec![0.into(), 0.into(), width.into(), height.into()],
+            "Resources" => dictionary! {},
+            "Contents" => content_id,
+        });
+        kids.push(page_id.into());
+    }
+
+    document.objects.insert(
+        pages_id,
+        Object::Dictionary(dictionary! {
+            "Type" => "Pages",
+            "Kids" => kids,
+            "Count" => i64::from(page_count),
+        }),
+    );
+
+    let catalog_id = document.add_object(dictionary! {
+        "Type" => "Catalog",
+        "Pages" => pages_id,
+    });
+    document.trailer.set("Root", catalog_id);
+    document.compress();
+
+    let temp = destination.with_extension("seven-create.tmp.pdf");
+    document
+        .save(&temp)
+        .map_err(|error| SevenError::Io(error.to_string()))?;
+
+    Document::load(&temp).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    fs::rename(&temp, destination).map_err(|error| {
+        let _ = fs::remove_file(&temp);
+        SevenError::Io(error.to_string())
+    })?;
+
+    Ok(())
 }

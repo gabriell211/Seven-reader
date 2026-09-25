@@ -91,6 +91,16 @@ pub fn save_document_as(
 }
 
 #[tauri::command]
+pub fn create_blank_document(
+    destination: String,
+    page_size: String,
+    page_count: u16,
+) -> CommandResult<()> {
+    let output = jobs::validated_output(&destination, "pdf").map_err(ErrorPayload::from)?;
+    pdf::create_blank_pdf(&output, &page_size, page_count).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn start_combine_documents(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -114,6 +124,39 @@ pub fn start_combine_documents(
     args.push("--".into());
     args.push(output.to_string_lossy().into_owned());
     Ok(jobs::start_process_job(app, &state, "combine", executable, args, Some(output)))
+}
+
+#[tauri::command]
+pub fn start_split_pages(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: String,
+    output: String,
+    pages_per_file: u16,
+) -> CommandResult<JobStart> {
+    if !(1..=500).contains(&pages_per_file) {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "Páginas por arquivo deve ficar entre 1 e 500".into(),
+        )));
+    }
+
+    let executable = jobs::require_executable(&["qpdf"], "qpdf").map_err(ErrorPayload::from)?;
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    let args = vec![
+        format!("--split-pages={pages_per_file}"),
+        input.to_string_lossy().into_owned(),
+        output.to_string_lossy().into_owned(),
+    ];
+
+    Ok(jobs::start_process_job(
+        app,
+        &state,
+        "split-pages",
+        executable,
+        args,
+        Some(output),
+    ))
 }
 
 #[tauri::command]

@@ -5,9 +5,11 @@ import { SplashScreen } from "./components/SplashScreen";
 import { Home } from "./components/Home";
 import { DocumentWorkspace } from "./components/DocumentWorkspace";
 import { PageOrganizerDialog, type PageOperation } from "./components/PageOrganizerDialog";
+import { CreatePdfDialog, type BlankPageSize } from "./components/CreatePdfDialog";
 import {
   cancelJob,
   closeDocument,
+  createBlankDocument,
   getCapabilities,
   isNativeDesktop,
   openDocument,
@@ -18,6 +20,7 @@ import {
   startExtractPages,
   startReorderPages,
   startRotatePages,
+  startSplitPages,
   startOcr,
   startOptimize,
 } from "./lib/native";
@@ -77,6 +80,7 @@ export default function App() {
   const [jobs, setJobs] = useState<Record<string, JobStatus>>({});
   const [notice, setNotice] = useState<string | null>(null);
   const [organizerOpen, setOrganizerOpen] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -238,6 +242,11 @@ export default function App() {
     }
 
     try {
+      if (tool === "create") {
+        setCreateDialogOpen(true);
+        return;
+      }
+
       if (tool === "organize") {
         setOrganizerOpen(true);
         return;
@@ -299,17 +308,47 @@ export default function App() {
   };
 
 
+
+  const createBlankPdf = async (pageSize: BlankPageSize, pageCount: number) => {
+    const destination = await save({
+      title: "Criar novo PDF",
+      defaultPath: "Novo-documento.pdf",
+      filters: [{ name: "Documento PDF", extensions: ["pdf"] }],
+    });
+    if (!destination) return;
+
+    try {
+      await createBlankDocument(destination, pageSize, pageCount);
+      setCreateDialogOpen(false);
+      setNotice("PDF criado com sucesso.");
+      await openPath(destination);
+    } catch (error) {
+      const text = errorMessage(error);
+      setNotice(text);
+      await message(text, { title: "Seven Reader", kind: "error" });
+    }
+  };
+
   const runPageOperation = async (
     operation: PageOperation,
     pageExpression: string,
     angle: 90 | 180 | 270,
+    pagesPerFile: number,
   ) => {
     const input = await pickInputPdf();
     if (!input) return;
 
-    const suffix = operation === "extract" ? "extraido" : operation === "rotate" ? "girado" : "organizado";
+    const suffix =
+      operation === "extract" ? "extraido"
+        : operation === "rotate" ? "girado"
+          : operation === "split" ? "dividido"
+            : "organizado";
     const output = await save({
-      title: operation === "extract" ? "Salvar páginas extraídas" : operation === "rotate" ? "Salvar PDF girado" : "Salvar PDF reorganizado",
+      title:
+        operation === "extract" ? "Salvar páginas extraídas"
+          : operation === "rotate" ? "Salvar PDF girado"
+            : operation === "split" ? "Nome base dos PDFs divididos"
+              : "Salvar PDF reorganizado",
       defaultPath: `Seven-Reader-${suffix}.pdf`,
       filters: [{ name: "Documento PDF", extensions: ["pdf"] }],
     });
@@ -321,7 +360,9 @@ export default function App() {
           ? await startExtractPages(input, output, pageExpression)
           : operation === "rotate"
             ? await startRotatePages(input, output, pageExpression, angle)
-            : await startReorderPages(input, output, pageExpression);
+            : operation === "split"
+              ? await startSplitPages(input, output, pagesPerFile)
+              : await startReorderPages(input, output, pageExpression);
       setOrganizerOpen(false);
       setNotice(`Operação de páginas iniciada · job ${started.jobId.slice(0, 8)}`);
     } catch (error) {
@@ -338,12 +379,18 @@ export default function App() {
           {notice}
         </button>
       )}
+      {createDialogOpen && (
+        <CreatePdfDialog
+          onClose={() => setCreateDialogOpen(false)}
+          onCreate={(pageSize, pageCount) => void createBlankPdf(pageSize, pageCount)}
+        />
+      )}
       {organizerOpen && (
         <PageOrganizerDialog
           fileName={document?.name ?? "Selecionar PDF"}
           pageCount={document?.pageCount}
           onClose={() => setOrganizerOpen(false)}
-          onRun={(operation, pageExpression, angle) => void runPageOperation(operation, pageExpression, angle)}
+          onRun={(operation, pageExpression, angle, pagesPerFile) => void runPageOperation(operation, pageExpression, angle, pagesPerFile)}
         />
       )}
       {activeJobs.length > 0 && (

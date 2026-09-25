@@ -45,8 +45,24 @@ export async function saveCopy(documentId: string, destination: string): Promise
   await invoke("save_document_as", { documentId, destination });
 }
 
+export async function createBlankDocument(
+  destination: string,
+  pageSize: "a4" | "letter" | "legal",
+  pageCount: number,
+): Promise<void> {
+  await invoke("create_blank_document", { destination, pageSize, pageCount });
+}
+
 export async function startCombine(inputs: string[], output: string): Promise<JobStart> {
   return invoke<JobStart>("start_combine_documents", { inputs, output });
+}
+
+export async function startSplitPages(
+  input: string,
+  output: string,
+  pagesPerFile: number,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_split_pages", { input, output, pagesPerFile });
 }
 
 export async function startExtractPages(

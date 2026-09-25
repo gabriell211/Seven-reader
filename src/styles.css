@@ -249,3 +249,28 @@ svg { width: 20px; height: 20px; }
 @keyframes modalFade { from { opacity: 0; } }
 @keyframes modalRise { from { opacity: 0; transform: translateY(10px) scale(.985); } }
 @media (max-width: 640px) { .operation-tabs { grid-template-columns: 1fr; } .modal-backdrop { padding: 12px; } }
+
+.operation-tabs { grid-template-columns: repeat(4,1fr); }
+.organizer-note--warning { color: #735b2f; border-color: #ead9a6; background: #fff8e4; }
+.organizer-note--warning svg { color: #aa7a17; }
+.create-dialog { width: min(760px,100%); max-height: min(760px,calc(100vh - 56px)); overflow: auto; border: 1px solid rgba(255,255,255,.72); border-radius: 22px; background: #fbfbfd; box-shadow: 0 34px 100px rgba(14,12,24,.34); animation: modalRise .24s cubic-bezier(.2,.8,.2,1); }
+.create-body { padding: 24px 26px; display: grid; grid-template-columns: 220px 1fr; gap: 28px; align-items: center; }
+.paper-preview { min-height: 265px; display: grid; place-items: center; border: 1px solid #e4e3e8; border-radius: 16px; background: linear-gradient(145deg,#f0eff3,#e8e7ec); }
+.paper-sheet { width: 135px; display: grid; place-items: center; align-content: center; gap: 2px; color: #8b8d96; background: white; border: 1px solid #dedde3; border-radius: 3px; box-shadow: 0 15px 34px rgba(24,22,32,.14); transition: width .18s ease,height .18s ease; }
+.paper-sheet span { font: 700 24px/1 "Segoe UI Variable Display","Segoe UI",sans-serif; color: #6e53c7; }
+.paper-sheet small { font-size: 9px; }
+.paper-a4 { height: 191px; }
+.paper-letter { height: 175px; }
+.paper-legal { height: 222px; width: 135px; }
+.create-options { display: grid; gap: 23px; }
+.create-options fieldset { margin: 0; padding: 0; border: 0; }
+.create-options legend,.create-options label > span { margin-bottom: 9px; color: #484a52; font-size: 11px; font-weight: 700; }
+.paper-size-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+.paper-size { min-height: 62px; padding: 10px; display: grid; gap: 3px; text-align: left; border: 1px solid #dddce2; border-radius: 10px; background: white; cursor: pointer; }
+.paper-size strong { font-size: 11px; }
+.paper-size small { color: #91939b; font-size: 8.5px; }
+.paper-size.active { border-color: #8e73ec; color: #5332b8; background: #f0ebff; }
+.create-options label { display: grid; }
+.create-options input { height: 42px; padding: 0 11px; border: 1px solid #d9d8df; border-radius: 10px; background: white; }
+.create-options label > small { margin-top: 6px; color: #92949d; font-size: 9px; }
+@media (max-width: 680px) { .create-body { grid-template-columns: 1fr; } .paper-preview { display: none; } .paper-size-grid { grid-template-columns: 1fr; } .operation-tabs { grid-template-columns: repeat(2,1fr); } }

@@ -1586,6 +1586,68 @@ pub fn start_batch_optimize_pdf(
 }
 
 #[tauri::command]
+pub fn get_optimization_audit(input: String) -> CommandResult<optimizer::OptimizationAudit> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    optimizer::audit(&input).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn start_optimize_pdf_advanced(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: String,
+    output: String,
+    options: optimizer::OptimizeOptions,
+) -> CommandResult<JobStart> {
+    options.validate().map_err(ErrorPayload::from)?;
+    let ghostscript = jobs::require_executable(&["gswin64c", "gswin32c", "gs"], "Ghostscript")
+        .map_err(ErrorPayload::from)?;
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+
+    if options.linearize {
+        let qpdf = jobs::require_executable(&["qpdf"], "qpdf").map_err(ErrorPayload::from)?;
+        let intermediate = state
+            .cache_dir
+            .join("jobs")
+            .join(format!("optimize-{}.pdf", uuid::Uuid::new_v4()));
+        if let Some(parent) = intermediate.parent() {
+            fs::create_dir_all(parent).map_err(|error| ErrorPayload::from(SevenError::Io(error.to_string())))?;
+        }
+        let gs_args = options
+            .ghostscript_args(&input, &intermediate)
+            .map_err(ErrorPayload::from)?;
+        let qpdf_args = vec![
+            "--linearize".into(),
+            intermediate.to_string_lossy().into_owned(),
+            output.to_string_lossy().into_owned(),
+        ];
+        Ok(jobs::start_process_sequence_job(
+            app,
+            &state,
+            "optimize-advanced",
+            vec![
+                jobs::ProcessStep { program: ghostscript, args: gs_args, label: "Compactando e regravando PDF".into() },
+                jobs::ProcessStep { program: qpdf, args: qpdf_args, label: "Aplicando Fast Web View".into() },
+            ],
+            Some(output),
+        ))
+    } else {
+        let args = options
+            .ghostscript_args(&input, &output)
+            .map_err(ErrorPayload::from)?;
+        Ok(jobs::start_process_job(
+            app,
+            &state,
+            "optimize-advanced",
+            ghostscript,
+            args,
+            Some(output),
+        ))
+    }
+}
+
+#[tauri::command]
 pub fn start_optimize_pdf(
     app: AppHandle,
     state: State<'_, AppState>,

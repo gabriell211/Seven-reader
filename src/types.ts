@@ -247,6 +247,60 @@ export interface SignatureValidationReport {
   summary: string;
 }
 
+export interface TextPlacement {
+  pageIndex: number;
+  text: string;
+  x: number;
+  y: number;
+  fontSize: number;
+  rotation: number;
+  gray: number;
+}
+
+export interface ImagePlacement {
+  pageIndex: number;
+  imagePath: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface LinkPlacement {
+  pageIndex: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  target: string;
+  targetPage?: number;
+}
+
+export interface OverlayTextOptions {
+  kind: "header" | "footer" | "page-number" | "watermark" | "bates";
+  text: string;
+  prefix: string;
+  startNumber: number;
+  digits: number;
+  fontSize: number;
+  pageStart: number;
+  pageEnd?: number;
+}
+
+export interface BackgroundOptions {
+  pageStart: number;
+  pageEnd?: number;
+  red: number;
+  green: number;
+  blue: number;
+}
+
+export interface ReplaceTextReport {
+  replacements: number;
+  pagesChanged: number;
+  unsupportedTextOperators: number;
+}
+
 export type ToolId =
   | "edit" | "convert" | "create" | "organize" | "combine" | "comment"
   | "fill-sign" | "certificates" | "scan-ocr" | "forms" | "protect"

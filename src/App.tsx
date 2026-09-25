@@ -14,6 +14,7 @@ import { OcrDialog } from "./components/OcrDialog";
 import { CommentsDialog } from "./components/CommentsDialog";
 import { FormsDialog } from "./components/FormsDialog";
 import { SignatureDialog } from "./components/SignatureDialog";
+import { EditingDialog } from "./components/EditingDialog";
 import {
   addAnnotation,
   cancelJob,
@@ -32,6 +33,12 @@ import {
   renderPage,
   deleteAnnotation,
   fillFormFields,
+  editAddImage,
+  editAddLink,
+  editAddText,
+  editOverlayText,
+  editReplaceText,
+  editSetBackground,
   reviewOcrPage,
   sanitizeDocument,
   scanPageToPdf,
@@ -57,6 +64,7 @@ import { canRunTool } from "./data/tools";
 import type {
   AccessibilityReport,
   AnnotationInfo,
+  BackgroundOptions,
   AnnotationInput,
   Capabilities,
   CompareReport,
@@ -64,16 +72,20 @@ import type {
   DocumentSummary,
   FormFieldInfo,
   FormValue,
+  ImagePlacement,
   JobStatus,
+  LinkPlacement,
   NewFormField,
   OcrOptions,
   OcrWord,
+  OverlayTextOptions,
   RecentDocument,
   RenderResult,
   SanitizeOptions,
   SearchHit,
   SignRequest,
   SignatureValidationReport,
+  TextPlacement,
   ToolId,
 } from "./types";
 
@@ -146,6 +158,7 @@ export default function App() {
   const [signatureTab, setSignatureTab] = useState<"electronic" | "digital" | "validate" | null>(null);
   const [signatureValidation, setSignatureValidation] = useState<SignatureValidationReport | null>(null);
   const [signatureLoading, setSignatureLoading] = useState(false);
+  const [editingOpen, setEditingOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -307,6 +320,15 @@ export default function App() {
     }
 
     try {
+      if (tool === "edit") {
+        if (!document) {
+          setNotice("Abra um PDF para editar.");
+          return;
+        }
+        setEditingOpen(true);
+        return;
+      }
+
       if (tool === "convert" || tool === "export") {
         setConversionOpen(true);
         return;
@@ -442,6 +464,45 @@ export default function App() {
 
 
 
+
+
+  const saveEditedAndOpen = async (operation: () => Promise<void>, output: string, messageText: string) => {
+    try {
+      await operation();
+      setEditingOpen(false);
+      setNotice(messageText);
+      await openPath(output);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runEditAddText = (output: string, placement: TextPlacement) =>
+    saveEditedAndOpen(() => editAddText(document!.path, output, placement), output, "Texto inserido no PDF.");
+
+  const runEditReplaceText = async (output: string, find: string, replacement: string, allPages: boolean) => {
+    if (!document) return;
+    try {
+      const report = await editReplaceText(document.path, output, find, replacement, allPages, page);
+      setEditingOpen(false);
+      setNotice(`${report.replacements} substituição(ões) em ${report.pagesChanged} página(s).`);
+      await openPath(output);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runEditAddImage = (output: string, placement: ImagePlacement) =>
+    saveEditedAndOpen(() => editAddImage(document!.path, output, placement), output, "Imagem inserida no PDF.");
+
+  const runEditAddLink = (output: string, link: LinkPlacement) =>
+    saveEditedAndOpen(() => editAddLink(document!.path, output, link), output, "Link inserido no PDF.");
+
+  const runEditOverlay = (output: string, options: OverlayTextOptions) =>
+    saveEditedAndOpen(() => editOverlayText(document!.path, output, options), output, "Conteúdo aplicado às páginas.");
+
+  const runEditBackground = (output: string, options: BackgroundOptions) =>
+    saveEditedAndOpen(() => editSetBackground(document!.path, output, options), output, "Fundo aplicado às páginas.");
 
   const runElectronicSignature = async (output: string, annotation: AnnotationInput) => {
     if (!document) return;
@@ -780,6 +841,20 @@ export default function App() {
         <button className="global-notice" onClick={() => setNotice(null)} aria-label="Fechar aviso">
           {notice}
         </button>
+      )}
+      {editingOpen && document && (
+        <EditingDialog
+          documentPath={document.path}
+          pageIndex={page}
+          pageCount={document.pageCount}
+          onClose={() => setEditingOpen(false)}
+          onAddText={(output, placement) => void runEditAddText(output, placement)}
+          onReplaceText={(output, find, replacement, allPages) => void runEditReplaceText(output, find, replacement, allPages)}
+          onAddImage={(output, placement) => void runEditAddImage(output, placement)}
+          onAddLink={(output, link) => void runEditAddLink(output, link)}
+          onOverlay={(output, options) => void runEditOverlay(output, options)}
+          onBackground={(output, options) => void runEditBackground(output, options)}
+        />
       )}
       {signatureTab && document && (
         <SignatureDialog

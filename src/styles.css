@@ -402,3 +402,11 @@ svg { width: 20px; height: 20px; }
 .integrity-issues { padding: 0 11px 11px; display: grid; gap: 3px; }
 .integrity-issues span { padding: 5px 7px; border-radius: 6px; color: #8a414b; background: #fff0f2; font-size: 8px; }
 @media (max-width: 650px) { .signature-detail-grid { grid-template-columns: 1fr; } }
+
+.edit-mode-grid { padding: 15px 20px 0; display: grid; grid-template-columns: repeat(6,1fr); gap: 7px; }
+.edit-mode { min-height: 58px; padding: 7px; border: 1px solid #e1e0e6; border-radius: 10px; display: grid; place-items: center; gap: 4px; color: #676972; background: white; cursor: pointer; font-size: 9px; font-weight: 700; }
+.edit-mode svg { width: 18px; }
+.edit-mode.active { color: #5734bd; border-color: #9f88e9; background: #f0ebff; }
+.three-column-fields { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; }
+.color-field { width: 100%; min-height: 54px !important; padding: 4px !important; cursor: pointer; }
+@media (max-width: 720px) { .edit-mode-grid { grid-template-columns: repeat(3,1fr); } .three-column-fields { grid-template-columns: 1fr; } }

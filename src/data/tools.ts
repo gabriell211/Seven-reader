@@ -12,7 +12,7 @@ export interface ToolDefinition {
 }
 
 export const tools: ToolDefinition[] = [
-  { id: "edit", label: "Editar PDF", description: "Texto, imagens, objetos, links e conteúdo.", icon: "edit", group: "Documento", capability: "pdf_engine", implemented: false },
+  { id: "edit", label: "Editar PDF", description: "Texto, imagens, links, cabeçalho/rodapé, numeração, marca d’água, fundo e Bates.", icon: "edit", group: "Documento", implemented: true },
   { id: "convert", label: "Converter", description: "Office/ODF/HTML/TXT para PDF e PDF para imagem, texto ou PostScript.", icon: "convert", group: "Documento", capability: ["office", "ghostscript", "pdftotext"], implemented: true },
   { id: "export", label: "Exportar PDF", description: "Exporte páginas para PNG, JPEG, TIFF, TXT ou PostScript.", icon: "open", group: "Documento", capability: ["ghostscript", "pdftotext"], implemented: true },
   { id: "create", label: "Criar PDF", description: "Crie um documento PDF em branco com tamanho e quantidade de páginas definidos.", icon: "create", group: "Documento", implemented: true },

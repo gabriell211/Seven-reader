@@ -8,17 +8,23 @@ import type {
   CompareReport,
   DocumentMetadata,
   JobStart,
+  BackgroundOptions,
   FormFieldInfo,
   FormValue,
+  ImagePlacement,
+  LinkPlacement,
   MetadataUpdate,
   NewFormField,
   OcrOptions,
   OcrWord,
+  OverlayTextOptions,
   RenderResult,
+  ReplaceTextReport,
   SanitizeOptions,
   SignRequest,
   SignatureValidationReport,
   SanitizeReport,
+  TextPlacement,
   SearchHit,
 } from "../types";
 
@@ -148,6 +154,59 @@ export async function startOptimize(
   preset = "default",
 ): Promise<JobStart> {
   return invoke<JobStart>("start_optimize_pdf", { input, output, preset });
+}
+
+export async function editAddText(
+  input: string,
+  output: string,
+  placement: TextPlacement,
+): Promise<void> {
+  await invoke("edit_add_text", { input, output, placement });
+}
+
+export async function editReplaceText(
+  input: string,
+  output: string,
+  find: string,
+  replacement: string,
+  allPages: boolean,
+  pageIndex: number,
+): Promise<ReplaceTextReport> {
+  return invoke<ReplaceTextReport>("edit_replace_text", {
+    input, output, find, replacement, allPages, pageIndex,
+  });
+}
+
+export async function editAddImage(
+  input: string,
+  output: string,
+  placement: ImagePlacement,
+): Promise<void> {
+  await invoke("edit_add_image", { input, output, placement });
+}
+
+export async function editAddLink(
+  input: string,
+  output: string,
+  link: LinkPlacement,
+): Promise<void> {
+  await invoke("edit_add_link", { input, output, link });
+}
+
+export async function editOverlayText(
+  input: string,
+  output: string,
+  options: OverlayTextOptions,
+): Promise<void> {
+  await invoke("edit_overlay_text", { input, output, options });
+}
+
+export async function editSetBackground(
+  input: string,
+  output: string,
+  options: BackgroundOptions,
+): Promise<void> {
+  await invoke("edit_set_background", { input, output, options });
 }
 
 export async function listAnnotations(path: string): Promise<AnnotationInfo[]> {

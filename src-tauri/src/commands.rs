@@ -517,7 +517,7 @@ pub fn session_add_pdf_attachment(
     description: String,
 ) -> CommandResult<pdf::DocumentSummary> {
     session::apply_revision(&state, &document_id, "attachment", move |input, output| {
-        advanced::add_attachment(input, output, &file_path, &display_name, &description)
+        advanced::add_attachment(input, output, std::path::Path::new(&file_path), &display_name, &description)
     })
     .map(|(summary, _)| summary)
     .map_err(ErrorPayload::from)

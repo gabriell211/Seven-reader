@@ -532,7 +532,21 @@ export interface LayerInfo {
   objectId: string;
   name: string;
   visible: boolean;
+  locked: boolean;
+  depth: number;
+  viewState: "on" | "off" | "unchanged";
+  printState: "on" | "off" | "unchanged";
+  exportState: "on" | "off" | "unchanged";
   intent: string[];
+}
+
+export interface LayerPropertiesUpdate {
+  objectId: string;
+  name: string;
+  locked: boolean;
+  viewState: "on" | "off" | "unchanged";
+  printState: "on" | "off" | "unchanged";
+  exportState: "on" | "off" | "unchanged";
 }
 
 export interface OptimizationAudit {

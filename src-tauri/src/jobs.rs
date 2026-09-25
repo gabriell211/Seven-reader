@@ -20,16 +20,16 @@ pub struct JobStart {
 }
 
 struct JobUpdate {
-    state: &'static str,
-    stage: &'static str,
+    state: String,
+    stage: String,
     progress: Option<f64>,
     output: Option<String>,
     error: Option<String>,
 }
 
 impl JobUpdate {
-    fn new(state: &'static str, stage: &'static str) -> Self {
-        Self { state, stage, progress: None, output: None, error: None }
+    fn new(state: impl Into<String>, stage: impl Into<String>) -> Self {
+        Self { state: state.into(), stage: stage.into(), progress: None, output: None, error: None }
     }
 
     fn progress(mut self, progress: f64) -> Self {
@@ -56,8 +56,8 @@ fn update_job(
 ) {
     let mut guard = jobs.lock();
     if let Some(runtime) = guard.get_mut(id) {
-        runtime.status.state = update.state.to_owned();
-        runtime.status.stage = update.stage.to_owned();
+        runtime.status.state = update.state;
+        runtime.status.stage = update.stage;
         runtime.status.progress = update.progress;
         runtime.status.output = update.output;
         runtime.status.error = update.error;
@@ -136,6 +136,135 @@ pub fn start_process_job(
                 }
             }
         }
+    });
+
+    JobStart { job_id: id }
+}
+
+#[derive(Debug, Clone)]
+pub struct ProcessStep {
+    pub program: PathBuf,
+    pub args: Vec<String>,
+    pub label: String,
+}
+
+pub fn start_process_sequence_job(
+    app: AppHandle,
+    state: &AppState,
+    kind: &str,
+    steps: Vec<ProcessStep>,
+    output_path: Option<PathBuf>,
+) -> JobStart {
+    let id = Uuid::new_v4().to_string();
+    let cancel = Arc::new(AtomicBool::new(false));
+    let status = JobStatus {
+        id: id.clone(),
+        kind: kind.to_owned(),
+        state: "queued".into(),
+        stage: "Na fila".into(),
+        progress: Some(0.0),
+        output: None,
+        error: None,
+    };
+
+    state.jobs.lock().insert(id.clone(), JobRuntime { status, cancel: cancel.clone() });
+    let jobs = state.jobs.clone();
+    let id_for_thread = id.clone();
+
+    thread::spawn(move || {
+        if steps.is_empty() {
+            update_job(
+                &jobs,
+                &app,
+                &id_for_thread,
+                JobUpdate::new("failed", "Fila vazia").error("Nenhuma etapa foi informada".into()),
+            );
+            return;
+        }
+
+        let total = steps.len() as f64;
+        for (index, step) in steps.into_iter().enumerate() {
+            if cancel.load(Ordering::Relaxed) {
+                update_job(&jobs, &app, &id_for_thread, JobUpdate::new("cancelled", "Cancelado"));
+                return;
+            }
+
+            let progress = index as f64 / total;
+            update_job(
+                &jobs,
+                &app,
+                &id_for_thread,
+                JobUpdate::new("running", step.label.clone()).progress(progress),
+            );
+
+            let mut child = match Command::new(&step.program)
+                .args(&step.args)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+            {
+                Ok(child) => child,
+                Err(error) => {
+                    update_job(
+                        &jobs,
+                        &app,
+                        &id_for_thread,
+                        JobUpdate::new("failed", step.label).error(error.to_string()),
+                    );
+                    return;
+                }
+            };
+
+            loop {
+                if cancel.load(Ordering::Relaxed) {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    update_job(&jobs, &app, &id_for_thread, JobUpdate::new("cancelled", "Cancelado"));
+                    return;
+                }
+
+                match child.try_wait() {
+                    Ok(Some(status)) if status.success() => break,
+                    Ok(Some(status)) => {
+                        update_job(
+                            &jobs,
+                            &app,
+                            &id_for_thread,
+                            JobUpdate::new("failed", step.label)
+                                .error(format!("Processo encerrou com código {:?}", status.code())),
+                        );
+                        return;
+                    }
+                    Ok(None) => thread::sleep(Duration::from_millis(250)),
+                    Err(error) => {
+                        let _ = child.kill();
+                        update_job(
+                            &jobs,
+                            &app,
+                            &id_for_thread,
+                            JobUpdate::new("failed", step.label).error(error.to_string()),
+                        );
+                        return;
+                    }
+                }
+            }
+
+            update_job(
+                &jobs,
+                &app,
+                &id_for_thread,
+                JobUpdate::new("running", "Etapa concluída").progress((index + 1) as f64 / total),
+            );
+        }
+
+        let output = output_path.as_ref().map(|path| path.to_string_lossy().into_owned());
+        update_job(
+            &jobs,
+            &app,
+            &id_for_thread,
+            JobUpdate::new("completed", "Concluído").progress(1.0).output(output),
+        );
     });
 
     JobStart { job_id: id }

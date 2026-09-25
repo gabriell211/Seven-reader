@@ -387,6 +387,33 @@ export async function sessionRenamePdfBookmark(
   return invoke<DocumentSummary>("session_rename_pdf_bookmark", { documentId, objectId, title });
 }
 
+export async function sessionDeletePdfBookmark(
+  documentId: string,
+  objectId: string,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_delete_pdf_bookmark", { documentId, objectId });
+}
+
+export async function sessionMovePdfBookmark(
+  documentId: string,
+  objectId: string,
+  direction: "up" | "down" | "indent" | "outdent",
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_move_pdf_bookmark", {
+    documentId, objectId, direction,
+  });
+}
+
+export async function sessionSetPdfBookmarkOpen(
+  documentId: string,
+  objectId: string,
+  open: boolean,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_set_pdf_bookmark_open", {
+    documentId, objectId, open,
+  });
+}
+
 export async function sessionAddPdfAttachment(
   documentId: string,
   filePath: string,

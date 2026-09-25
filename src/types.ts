@@ -248,9 +248,17 @@ export interface AnnotationInfo {
 export interface FormFieldInfo {
   objectId: string;
   name: string;
-  fieldType: "text" | "button" | "choice" | "signature" | "unknown";
+  fieldType: "text" | "checkbox" | "radio" | "dropdown" | "list" | "button" | "signature" | "unknown";
   value: string;
+  defaultValue: string;
+  tooltip: string;
   required: boolean;
+  readOnly: boolean;
+  multiline: boolean;
+  maxLength?: number;
+  pageIndex?: number;
+  rect?: [number, number, number, number];
+  options: string[];
 }
 
 export interface FormValue {
@@ -269,6 +277,27 @@ export interface NewFormField {
   width: number;
   height: number;
   required: boolean;
+  readOnly: boolean;
+  multiline: boolean;
+  maxLength?: number;
+  tooltip: string;
+  defaultValue: string;
+  options: string[];
+}
+
+export interface FormFieldUpdate {
+  objectId: string;
+  name: string;
+  tooltip: string;
+  defaultValue: string;
+  required: boolean;
+  readOnly: boolean;
+  multiline: boolean;
+  maxLength?: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
   options: string[];
 }
 

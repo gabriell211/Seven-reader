@@ -620,7 +620,7 @@ pub async fn scan_page_to_pdf(
     tauri::async_runtime::spawn_blocking(move || {
         let powershell = jobs::require_executable(&["powershell"], "Windows PowerShell/WIA")?;
         let temp = output.with_extension("seven-wia-scan.png");
-        let escaped_temp = temp.to_string_lossy().replace(''', "''");
+        let escaped_temp = temp.to_string_lossy().replace('\'', "''");
         let script = format!(
             "$ErrorActionPreference='Stop'; \
              $dialog=New-Object -ComObject WIA.CommonDialog; \

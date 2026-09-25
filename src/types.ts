@@ -46,6 +46,26 @@ export interface RenderResult {
   revision: number;
 }
 
+export interface SearchHit {
+  pageIndex: number;
+  excerpt: string;
+  occurrences: number;
+}
+
+export interface JobStart {
+  jobId: string;
+}
+
+export interface JobStatus {
+  id: string;
+  kind: string;
+  state: "queued" | "running" | "completed" | "failed" | "cancelled";
+  stage: string;
+  progress?: number;
+  output?: string;
+  error?: string;
+}
+
 export type ToolId =
   | "edit" | "convert" | "create" | "organize" | "combine" | "comment"
   | "fill-sign" | "certificates" | "scan-ocr" | "forms" | "protect"

@@ -557,6 +557,15 @@ export interface OptimizeOptions {
   embedFonts: boolean;
   subsetFonts: boolean;
   linearize: boolean;
+  cleanup: boolean;
+  removeJavascript: boolean;
+  removeOpenActions: boolean;
+  removeEmbeddedFiles: boolean;
+  removeMetadata: boolean;
+  removeXfa: boolean;
+  removeAnnotations: boolean;
+  removeForms: boolean;
+  removeMultimedia: boolean;
 }
 
 export interface PagePreflight {

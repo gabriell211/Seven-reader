@@ -22,6 +22,7 @@ pub struct DocumentSummary {
     pub encrypted: bool,
     pub has_signatures: bool,
     pub has_forms: bool,
+    pub dirty: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -138,6 +139,9 @@ pub fn inspect(path: &Path, password: Option<String>) -> Result<OpenDocument, Se
         has_signatures,
         has_forms,
         revision: 0,
+        working_path: None,
+        undo_stack: Vec::new(),
+        redo_stack: Vec::new(),
     })
 }
 
@@ -152,6 +156,7 @@ pub fn summary(document: &OpenDocument) -> DocumentSummary {
         encrypted: document.encrypted,
         has_signatures: document.has_signatures,
         has_forms: document.has_forms,
+        dirty: document.is_dirty(),
     }
 }
 
@@ -194,7 +199,7 @@ pub fn render_page(
 
     let pdfium = bind_pdfium(&state.resource_dir).map_err(SevenError::PdfEngineUnavailable)?;
     let pdf = pdfium
-        .load_pdf_from_file(&document.path, document.password.as_deref())
+        .load_pdf_from_file(document.active_path(), document.password.as_deref())
         .map_err(|error| SevenError::PdfOpen(error.to_string()))?;
     let page = pdf.pages().get(page_index as PdfPageIndex)
         .map_err(|error| SevenError::Render(error.to_string()))?;
@@ -240,7 +245,7 @@ pub fn search_document(
 
     let pdfium = bind_pdfium(&state.resource_dir).map_err(SevenError::PdfEngineUnavailable)?;
     let pdf = pdfium
-        .load_pdf_from_file(&document.path, document.password.as_deref())
+        .load_pdf_from_file(document.active_path(), document.password.as_deref())
         .map_err(|error| SevenError::PdfOpen(error.to_string()))?;
 
     let needle_lower = needle.to_lowercase();
@@ -280,7 +285,7 @@ pub fn extract_text_in_rect(
     let rect = rect.validated()?;
     let pdfium = bind_pdfium(&state.resource_dir).map_err(SevenError::PdfEngineUnavailable)?;
     let pdf = pdfium
-        .load_pdf_from_file(&document.path, document.password.as_deref())
+        .load_pdf_from_file(document.active_path(), document.password.as_deref())
         .map_err(|error| SevenError::PdfOpen(error.to_string()))?;
     let page = pdf
         .pages()

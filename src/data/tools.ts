@@ -35,7 +35,7 @@ export const tools: ToolDefinition[] = [
   { id: "accessibility", label: "Acessibilidade", description: "Auditoria de tags, idioma, título e estrutura básica.", icon: "accessibility", group: "Profissional", implemented: true },
   { id: "print-production", label: "Produção de impressão", description: "Preflight, cores, sangria e separações.", icon: "print", group: "Profissional", capability: "printing", implemented: false },
   { id: "automation", label: "Ações guiadas", description: "Fluxos repetíveis e processamento em lote.", icon: "automation", group: "Profissional", implemented: false },
-  { id: "javascript", label: "JavaScript e ações PDF", description: "Inspeção controlada; execução automática desativada.", icon: "lock", group: "Avançado", capability: "pdf_engine", implemented: false },
+  { id: "javascript", label: "JavaScript e ações PDF", description: "Inspecione JavaScript, Launch, URI, GoTo e outras ações sem executar conteúdo ativo.", icon: "lock", group: "Avançado", capability: "pdf_engine", implemented: true },
   { id: "portfolio", label: "Portfólios PDF", description: "Inspecione Collection/Portfólio e componentes incorporados sem executar conteúdo.", icon: "attachment", group: "Avançado", capability: "pdf_engine", implemented: true },
   { id: "layers", label: "Camadas", description: "OCGs, intenção e visibilidade inicial; edição segura do estado padrão.", icon: "layers", group: "Avançado", capability: "pdf_engine", implemented: true },
   { id: "articles", label: "Artigos PDF", description: "Inspecione threads Articles preservando sua estrutura.", icon: "bookmark", group: "Avançado", capability: "pdf_engine", implemented: true },

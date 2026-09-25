@@ -4,7 +4,10 @@ import type {
   BackgroundOptions,
   ImagePlacement,
   ImageObjectInfo,
+  LinkInfo,
   LinkPlacement,
+  LinkTargetKind,
+  LinkUpdate,
   OverlayTextOptions,
   TextPlacement,
 } from "../types";
@@ -18,6 +21,8 @@ interface EditingDialogProps {
   pageCount: number;
   imageObjects: ImageObjectInfo[];
   imageObjectsLoading: boolean;
+  links: LinkInfo[];
+  linksLoading: boolean;
   onClose: () => void;
   onAddText: (placement: TextPlacement) => void;
   onReplaceText: (find: string, replacement: string, allPages: boolean) => void;
@@ -25,6 +30,9 @@ interface EditingDialogProps {
   onReplaceImage: (resourceName: string, imagePath: string) => void;
   onRemoveImage: (resourceName: string) => void;
   onAddImage: (placement: ImagePlacement) => void;
+  onReloadLinks: () => void;
+  onUpdateLink: (update: LinkUpdate) => void;
+  onRemoveLink: (pageIndex: number, objectId: string) => void;
   onAddLink: (link: LinkPlacement) => void;
   onOverlay: (options: OverlayTextOptions) => void;
   onBackground: (options: BackgroundOptions) => void;
@@ -35,6 +43,8 @@ export function EditingDialog({
   pageCount,
   imageObjects,
   imageObjectsLoading,
+  links,
+  linksLoading,
   onClose,
   onAddText,
   onReplaceText,
@@ -42,6 +52,9 @@ export function EditingDialog({
   onReplaceImage,
   onRemoveImage,
   onAddImage,
+  onReloadLinks,
+  onUpdateLink,
+  onRemoveLink,
   onAddLink,
   onOverlay,
   onBackground,
@@ -64,8 +77,14 @@ export function EditingDialog({
   const [lockAspect, setLockAspect] = useState(true);
   const [imageAspect, setImageAspect] = useState<number | null>(null);
   const [target, setTarget] = useState("");
-  const [internalLink, setInternalLink] = useState(false);
+  const [linkSection, setLinkSection] = useState<"create" | "existing">("create");
+  const [linkKind, setLinkKind] = useState<LinkTargetKind>("url");
   const [targetPage, setTargetPage] = useState(1);
+  const [namedDestination, setNamedDestination] = useState("");
+  const [linkBorderWidth, setLinkBorderWidth] = useState(0);
+  const [linkBorderColor, setLinkBorderColor] = useState("#2458d6");
+  const [editingLinkId, setEditingLinkId] = useState("");
+  const [editingLinkPageIndex, setEditingLinkPageIndex] = useState(pageIndex);
   const [x, setX] = useState(48);
   const [y, setY] = useState(48);
   const [width, setWidth] = useState(180);
@@ -112,6 +131,49 @@ export function EditingDialog({
     });
     if (typeof selected === "string") onReplaceImage(resourceName, selected);
   };
+
+  const hexToRgb = (hex: string): [number, number, number] => {
+    const value = hex.replace("#", "").padEnd(6, "0").slice(0, 6);
+    return [
+      parseInt(value.slice(0, 2), 16) / 255,
+      parseInt(value.slice(2, 4), 16) / 255,
+      parseInt(value.slice(4, 6), 16) / 255,
+    ];
+  };
+
+  const rgbToHex = (rgb: [number, number, number]): string =>
+    `#${rgb.map((component) =>
+      Math.max(0, Math.min(255, Math.round(component * 255))).toString(16).padStart(2, "0")
+    ).join("")}`;
+
+  const loadLinkForEdit = (link: LinkInfo) => {
+    const [x1, y1, x2, y2] = link.rect;
+    setEditingLinkId(link.objectId);
+    setEditingLinkPageIndex(link.pageIndex);
+    setX(x1);
+    setY(y1);
+    setWidth(Math.max(1, x2 - x1));
+    setHeight(Math.max(1, y2 - y1));
+    setLinkKind(link.targetKind === "unknown" ? "url" : link.targetKind);
+    setTarget(link.target);
+    setTargetPage((link.targetPage ?? 0) + 1);
+    setNamedDestination(link.namedDestination ?? "");
+    setLinkBorderWidth(link.borderWidth);
+    setLinkBorderColor(rgbToHex(link.borderColor));
+  };
+
+  const currentLinkPayload = () => ({
+    x,
+    y,
+    width,
+    height,
+    targetKind: linkKind,
+    target,
+    targetPage: linkKind === "page" ? Math.max(0, targetPage - 1) : undefined,
+    namedDestination: linkKind === "named" ? namedDestination : undefined,
+    borderWidth: linkBorderWidth,
+    borderColor: hexToRgb(linkBorderColor),
+  });
 
   const rectFields = (
     <div className="rect-grid">
@@ -160,9 +222,8 @@ export function EditingDialog({
     }
     if (mode === "link") {
       onAddLink({
-        pageIndex, x, y, width, height,
-        target: internalLink ? "" : target,
-        targetPage: internalLink ? Math.max(0, targetPage - 1) : undefined,
+        pageIndex,
+        ...currentLinkPayload(),
       });
       return;
     }
@@ -193,7 +254,14 @@ export function EditingDialog({
     mode === "add-text" ? Boolean(text.trim())
       : mode === "replace-text" ? Boolean(find)
         : mode === "image" ? Boolean(imagePath)
-          : mode === "link" ? (internalLink ? targetPage >= 1 : Boolean(target.trim()))
+          : mode === "link"
+            ? linkSection === "existing"
+              ? false
+              : linkKind === "page"
+                ? targetPage >= 1
+                : linkKind === "named"
+                  ? Boolean(namedDestination.trim())
+                  : Boolean(target.trim())
             : true;
 
   return (
@@ -307,11 +375,63 @@ export function EditingDialog({
           </>}
 
           {mode === "link" && <>
-            <label className="toggle-row"><input type="checkbox" checked={internalLink} onChange={(e) => setInternalLink(e.target.checked)} /><span><strong>Destino interno</strong><small>Cria /Dest para outra página em vez de URI.</small></span></label>
-            {internalLink
-              ? <label className="workflow-field"><span>Página de destino</span><input type="number" min={1} max={pageCount} value={targetPage} onChange={(e) => setTargetPage(Number(e.target.value))} /></label>
-              : <label className="workflow-field"><span>URL</span><input value={target} onChange={(e) => setTarget(e.target.value)} placeholder="https://..." /></label>}
-            {rectFields}
+            <div className="workflow-tabs inline">
+              <button className={linkSection === "create" ? "active" : ""} onClick={() => { setLinkSection("create"); setEditingLinkId(""); }}>Criar link</button>
+              <button className={linkSection === "existing" ? "active" : ""} onClick={() => { setLinkSection("existing"); setEditingLinkId(""); onReloadLinks(); }}>Links existentes</button>
+            </div>
+
+            {linkSection === "create" ? (
+              <>
+                <label className="workflow-field"><span>Tipo de destino</span><select value={linkKind} onChange={(e) => setLinkKind(e.target.value as LinkTargetKind)}><option value="url">URL web</option><option value="page">Página do PDF</option><option value="file">Arquivo externo</option><option value="named">Destino nomeado</option></select></label>
+                {linkKind === "page"
+                  ? <label className="workflow-field"><span>Página de destino</span><input type="number" min={1} max={pageCount} value={targetPage} onChange={(e) => setTargetPage(Number(e.target.value))} /></label>
+                  : linkKind === "named"
+                    ? <label className="workflow-field"><span>Nome do destino</span><input value={namedDestination} onChange={(e) => setNamedDestination(e.target.value)} /></label>
+                    : <label className="workflow-field"><span>{linkKind === "file" ? "Arquivo/caminho" : "URL"}</span><input value={target} onChange={(e) => setTarget(e.target.value)} placeholder={linkKind === "url" ? "https://..." : "arquivo.pdf"} /></label>}
+                {linkKind === "file" && <div className="organizer-note organizer-note--warning"><SevenIcon name="lock"/><span>O link será gravado como /Launch para compatibilidade, mas o Seven Reader não executa Launch automaticamente.</span></div>}
+                {rectFields}
+                <div className="two-column-fields">
+                  <label className="workflow-field"><span>Espessura da borda</span><input type="number" min={0} max={20} step={0.25} value={linkBorderWidth} onChange={(e)=>setLinkBorderWidth(Math.max(0,Math.min(20,Number(e.target.value)||0)))}/></label>
+                  <label className="workflow-field"><span>Cor da borda</span><input type="color" value={linkBorderColor} onChange={(e)=>setLinkBorderColor(e.target.value)}/></label>
+                </div>
+              </>
+            ) : (
+              <>
+                {linksLoading && <div className="report-loading"><span className="loader-ring"/> Lendo links das páginas…</div>}
+                {!linksLoading && !editingLinkId && links.length === 0 && <div className="empty-panel">Nenhuma anotação Link encontrada.</div>}
+                {!linksLoading && !editingLinkId && links.length > 0 && (
+                  <div className="link-object-list">
+                    {links.map((link)=>(
+                      <button key={link.objectId} onClick={()=>loadLinkForEdit(link)}>
+                        <span><SevenIcon name="attachment"/></span>
+                        <div><strong>Página {link.pageIndex+1} · {link.targetKind}</strong><small>{link.target || link.namedDestination || (link.targetPage!==undefined?`Página ${link.targetPage+1}`:"Destino não resolvido")}</small></div>
+                        <SevenIcon name="chevronRight"/>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {editingLinkId && (
+                  <>
+                    <div className="form-edit-heading"><div><strong>Editando link</strong><small>{editingLinkId} · página {editingLinkPageIndex+1}</small></div><button className="secondary-light-button" onClick={()=>setEditingLinkId("")}>Escolher outro</button></div>
+                    <label className="workflow-field"><span>Tipo de destino</span><select value={linkKind} onChange={(e) => setLinkKind(e.target.value as LinkTargetKind)}><option value="url">URL web</option><option value="page">Página do PDF</option><option value="file">Arquivo externo</option><option value="named">Destino nomeado</option></select></label>
+                    {linkKind === "page"
+                      ? <label className="workflow-field"><span>Página de destino</span><input type="number" min={1} max={pageCount} value={targetPage} onChange={(e) => setTargetPage(Number(e.target.value))} /></label>
+                      : linkKind === "named"
+                        ? <label className="workflow-field"><span>Nome do destino</span><input value={namedDestination} onChange={(e) => setNamedDestination(e.target.value)} /></label>
+                        : <label className="workflow-field"><span>{linkKind === "file" ? "Arquivo/caminho" : "URL"}</span><input value={target} onChange={(e) => setTarget(e.target.value)} placeholder={linkKind === "url" ? "https://..." : "arquivo.pdf"} /></label>}
+                    {rectFields}
+                    <div className="two-column-fields">
+                      <label className="workflow-field"><span>Espessura da borda</span><input type="number" min={0} max={20} step={0.25} value={linkBorderWidth} onChange={(e)=>setLinkBorderWidth(Math.max(0,Math.min(20,Number(e.target.value)||0)))}/></label>
+                      <label className="workflow-field"><span>Cor da borda</span><input type="color" value={linkBorderColor} onChange={(e)=>setLinkBorderColor(e.target.value)}/></label>
+                    </div>
+                    <div className="form-edit-actions">
+                      <button className="danger-quiet" onClick={()=>{onRemoveLink(editingLinkPageIndex,editingLinkId);setEditingLinkId("");}}>Remover link</button>
+                      <button className="primary-button" onClick={()=>onUpdateLink({objectId:editingLinkId,pageIndex:editingLinkPageIndex,...currentLinkPayload()})}><SevenIcon name="save"/> Aplicar link</button>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
           </>}
 
           {mode === "overlay" && <>
@@ -326,7 +446,7 @@ export function EditingDialog({
             <div className="two-column-fields"><label className="workflow-field"><span>Da página</span><input type="number" min={1} max={pageCount} value={pageStart} onChange={(e) => setPageStart(Number(e.target.value))} /></label><label className="workflow-field"><span>Até</span><input type="number" min={1} max={pageCount} value={pageEnd} onChange={(e) => setPageEnd(Number(e.target.value))} /></label></div>
           </>}
 
-          {!(mode === "image" && imageSection === "existing") && (
+          {!(mode === "image" && imageSection === "existing") && !(mode === "link" && linkSection === "existing") && (
             <button className="primary-button workflow-submit" disabled={!canApply} onClick={apply}><SevenIcon name="edit" /> Aplicar à sessão</button>
           )}
         </div>

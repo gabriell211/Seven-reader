@@ -25,6 +25,7 @@ import { PrintProductionDialog } from "./components/PrintProductionDialog";
 import { CatalogDialog } from "./components/CatalogDialog";
 import { GuidedActionsDialog, type GuidedActionKind } from "./components/GuidedActionsDialog";
 import { SharedReviewDialog } from "./components/SharedReviewDialog";
+import { OptimizeDialog } from "./components/OptimizeDialog";
 import { applyAppearance, isTrustedPath, loadSettings, saveSettings, type SevenSettings } from "./lib/settings";
 import {
   buildCatalog,
@@ -44,6 +45,7 @@ import {
   createBlankDocument,
   getAccessibilityReport,
   getCapabilities,
+  getOptimizationAudit,
   getDocumentMetadata,
   getPrintPreflight,
   inspectAdvancedPdf,
@@ -121,6 +123,7 @@ import {
   startOcr,
   startOcrAdvanced,
   startOptimize,
+  startOptimizeAdvanced,
   startBatchOptimize,
 } from "./lib/native";
 import { canRunTool } from "./data/tools";
@@ -152,6 +155,8 @@ import type {
   NewFormField,
   OcrOptions,
   OcrWord,
+  OptimizationAudit,
+  OptimizeOptions,
   OverlayTextOptions,
   PdfActionInfo,
   PrintPreflightReport,
@@ -269,6 +274,9 @@ export default function App() {
   const [compareReport, setCompareReport] = useState<CompareReport | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [ocrOpen, setOcrOpen] = useState(false);
+  const [optimizeOpen, setOptimizeOpen] = useState(false);
+  const [optimizationAudit, setOptimizationAudit] = useState<OptimizationAudit | null>(null);
+  const [optimizationAuditLoading, setOptimizationAuditLoading] = useState(false);
   const [ocrSuspects, setOcrSuspects] = useState<OcrWord[]>([]);
   const [ocrReviewLoading, setOcrReviewLoading] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
@@ -1215,16 +1223,13 @@ export default function App() {
       }
 
       if (tool === "optimize") {
-        const input = await pickInputPdf();
-        if (!input) return;
-        const output = await save({
-          title: "Salvar PDF otimizado",
-          defaultPath: "Seven-Reader-Otimizado.pdf",
-          filters: [{ name: "Documento PDF", extensions: ["pdf"] }],
-        });
-        if (!output) return;
-        const started = await startOptimize(input, output);
-        setNotice(`Otimização iniciada · job ${started.jobId.slice(0, 8)}`);
+        if (!document) {
+          setNotice("Abra um PDF para usar o Otimizador avançado.");
+          return;
+        }
+        setOptimizationAudit(null);
+        setOptimizeOpen(true);
+        return;
       }
     } catch (error) {
       const text = errorMessage(error);
@@ -1241,6 +1246,29 @@ export default function App() {
 
 
 
+
+  const reloadOptimizationAudit = async () => {
+    if (!document) return;
+    try {
+      setOptimizationAuditLoading(true);
+      setOptimizationAudit(await getOptimizationAudit(document.activePath));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    } finally {
+      setOptimizationAuditLoading(false);
+    }
+  };
+
+  const runOptimizeAdvanced = async (output: string, options: OptimizeOptions) => {
+    if (!document) return;
+    try {
+      const started = await startOptimizeAdvanced(document.activePath, output, options);
+      setOptimizeOpen(false);
+      setNotice(`Otimização avançada iniciada · job ${started.jobId.slice(0, 8)}`);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
 
   const reloadPrintPreflight = async (path = document?.activePath) => {
     if (!path) return;
@@ -2179,6 +2207,7 @@ export default function App() {
           onCancel={cancelClosePrompt}
         />
       )}
+      {optimizeOpen && document && <OptimizeDialog documentPath={document.activePath} audit={optimizationAudit} loading={optimizationAuditLoading} onClose={() => setOptimizeOpen(false)} onAudit={() => void reloadOptimizationAudit()} onRun={(output, options) => void runOptimizeAdvanced(output, options)} />}
       {sharedReviewOpen && document && <SharedReviewDialog documentPath={document.activePath} lastReport={reviewTransferReport} onClose={() => setSharedReviewOpen(false)} onExport={(destination) => void runExportReview(destination)} onImport={(xfdf) => void runImportReview(xfdf)} />}
       {guidedActionsOpen && <GuidedActionsDialog onClose={() => setGuidedActionsOpen(false)} onRun={(kind, inputs, outputDirectory) => void runGuidedAction(kind, inputs, outputDirectory)} />}
       {catalogOpen && <CatalogDialog catalogs={catalogs} hits={catalogHits} loading={catalogLoading} onClose={() => setCatalogOpen(false)} onReload={() => void reloadCatalogs()} onBuild={(name, inputs) => void runBuildCatalog(name, inputs)} onSearch={(id, query, matchCase) => void runCatalogSearch(id, query, matchCase)} onDelete={(id) => void runDeleteCatalog(id)} onOpenHit={(path, pageIndex) => { setCatalogOpen(false); void openPath(path, { page: pageIndex, zoom: settings.defaultZoom }); }} />}

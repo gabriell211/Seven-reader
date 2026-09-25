@@ -94,6 +94,19 @@ export async function createBlankDocument(
   await invoke("create_blank_document", { destination, pageSize, pageCount });
 }
 
+export async function createPdfFromText(
+  destination: string,
+  text: string,
+  pageSize: "a4" | "letter" | "legal",
+  fontSize: number,
+): Promise<void> {
+  await invoke("create_pdf_from_text", { destination, text, pageSize, fontSize });
+}
+
+export async function startWebToPdf(url: string, output: string): Promise<JobStart> {
+  return invoke<JobStart>("start_web_to_pdf", { url, output });
+}
+
 export async function createPdfFromImages(
   inputs: string[],
   destination: string,

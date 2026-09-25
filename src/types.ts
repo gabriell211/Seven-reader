@@ -342,6 +342,16 @@ export interface BackgroundOptions {
   blue: number;
 }
 
+export interface SessionReplaceTextResult {
+  document: DocumentSummary;
+  report: ReplaceTextReport;
+}
+
+export interface SessionFormFillResult {
+  document: DocumentSummary;
+  changed: number;
+}
+
 export interface ReplaceTextReport {
   replacements: number;
   pagesChanged: number;

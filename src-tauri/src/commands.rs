@@ -9,6 +9,7 @@ use crate::{
     document_ops,
     editing,
     pdf,
+    print_production,
     redaction,
     search,
     session,
@@ -1504,6 +1505,25 @@ pub fn create_form_field(
     let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
     let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
     forms::create_field(&input, &output, field).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn get_print_preflight(path: String) -> CommandResult<print_production::PrintPreflightReport> {
+    let input = pdf::validate_pdf_path(&path).map_err(ErrorPayload::from)?;
+    print_production::preflight(&input).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_set_page_boxes(
+    state: State<'_, AppState>,
+    document_id: String,
+    update: print_production::PageBoxUpdate,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "page-boxes", move |input, output| {
+        print_production::set_page_boxes(input, output, update)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
 }
 
 #[tauri::command]

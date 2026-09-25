@@ -496,11 +496,36 @@ export interface OverlayTextOptions {
   kind: "header" | "footer" | "page-number" | "watermark" | "bates";
   text: string;
   prefix: string;
+  suffix: string;
   startNumber: number;
   digits: number;
   fontSize: number;
   pageStart: number;
   pageEnd?: number;
+  parity: "all" | "odd" | "even";
+  position: "left" | "center" | "right";
+  marginX: number;
+  marginY: number;
+  rotation: number;
+  opacity: number;
+  imagePath?: string;
+  imageScale: number;
+}
+
+export interface PageLabelOptions {
+  pageStart: number;
+  pageEnd?: number;
+  style: "decimal" | "roman-lower" | "roman-upper" | "letters-lower" | "letters-upper";
+  prefix: string;
+  suffix: string;
+  startNumber: number;
+}
+
+export interface ManagedElementInfo {
+  id: string;
+  kind: string;
+  pageIndices: number[];
+  optionsJson: string;
 }
 
 export interface BackgroundOptions {

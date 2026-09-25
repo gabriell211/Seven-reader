@@ -609,7 +609,59 @@ pub async fn scan_page_to_pdf(
     .map_err(ErrorPayload::from)
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(target_os = "windows")]
+#[tauri::command]
+pub async fn scan_page_to_pdf(
+    destination: String,
+    dpi: u16,
+) -> CommandResult<()> {
+    let output = jobs::validated_output(&destination, "pdf").map_err(ErrorPayload::from)?;
+    let dpi = dpi.clamp(75, 1200);
+    tauri::async_runtime::spawn_blocking(move || {
+        let powershell = jobs::require_executable(&["powershell"], "Windows PowerShell/WIA")?;
+        let temp = output.with_extension("seven-wia-scan.png");
+        let escaped_temp = temp.to_string_lossy().replace(''', "''");
+        let script = format!(
+            "$ErrorActionPreference='Stop'; \
+             $dialog=New-Object -ComObject WIA.CommonDialog; \
+             $device=$dialog.ShowSelectDevice(1,$false,$false); \
+             if($null -eq $device){{ throw 'Nenhum scanner selecionado.' }}; \
+             $item=$device.Items.Item(1); \
+             try{{$item.Properties.Item('6147').Value={dpi}}}catch{{}}; \
+             try{{$item.Properties.Item('6148').Value={dpi}}}catch{{}}; \
+             $image=$dialog.ShowTransfer($item,'{{B96B3CAF-0728-11D3-9D7B-0000F81EF32E}}',$false); \
+             if($null -eq $image){{ throw 'Digitalização cancelada.' }}; \
+             $image.SaveFile('{escaped_temp}')"
+        );
+        let result = std::process::Command::new(powershell)
+            .args(["-NoProfile", "-STA", "-Command", &script])
+            .stdin(std::process::Stdio::null())
+            .output()
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+
+        if !result.status.success() {
+            let stderr = String::from_utf8_lossy(&result.stderr).trim().to_owned();
+            return Err(SevenError::Operation(if stderr.is_empty() {
+                format!("WIA encerrou com código {:?}", result.status.code())
+            } else {
+                stderr
+            }));
+        }
+
+        if !temp.is_file() {
+            return Err(SevenError::Operation("O scanner não gerou uma imagem".into()));
+        }
+
+        let created = pdf::create_pdf_from_images(&[temp.clone()], &output, dpi);
+        let _ = fs::remove_file(&temp);
+        created
+    })
+    .await
+    .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
+    .map_err(ErrorPayload::from)
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
 #[tauri::command]
 pub async fn scan_page_to_pdf(
     _destination: String,

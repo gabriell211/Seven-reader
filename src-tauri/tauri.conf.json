@@ -24,10 +24,12 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost blob: data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' ipc: http://ipc.localhost;",
+      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost blob: data:; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' ipc: http://ipc.localhost;",
       "assetProtocol": {
         "enable": true,
-        "scope": ["$APPCACHE/**"]
+        "scope": [
+          "$APPCACHE/**"
+        ]
       }
     }
   },
@@ -46,10 +48,14 @@
       "icons/icon.png",
       "icons/icon.ico"
     ],
-    "resources": ["resources/*"],
+    "resources": [
+      "resources/*"
+    ],
     "fileAssociations": [
       {
-        "ext": ["pdf"],
+        "ext": [
+          "pdf"
+        ],
         "name": "PDF Document",
         "description": "PDF document",
         "role": "Editor",
@@ -61,21 +67,23 @@
         "displayLanguageSelector": true,
         "installerIcon": "icons/icon.ico",
         "installMode": "both",
-        "languages": ["PortugueseBR", "English"]
-      }
+        "languages": [
+          "PortugueseBR",
+          "English"
+        ],
+        "compression": "lzma",
+        "headerImage": "installer/header.bmp",
+        "sidebarImage": "installer/sidebar.bmp",
+        "uninstallerHeaderImage": "installer/header.bmp",
+        "uninstallerIcon": "icons/icon.ico",
+        "startMenuFolder": "Seven"
+      },
+      "minimumWebview2Version": "109.0.1518.78"
     },
     "linux": {
       "appimage": {
         "bundleMediaFramework": false
       }
     }
-  },
-  "plugins": {
-    "updater": {
-      "active": true,
-      "dialog": true,
-      "pubkey": "",
-      "endpoints": []
-    }
   }
-}
+}\n

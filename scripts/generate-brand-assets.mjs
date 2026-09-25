@@ -52,3 +52,42 @@ const sidebar = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="164"
 await sharp(sidebar).png().toFile(path.join(installer, "sidebar.png"));
 
 console.log("Seven Reader brand assets generated.");
+
+
+async function svgToBmp(svgBuffer, width, height, destination) {
+  const { data, info } = await sharp(svgBuffer)
+    .resize(width, height)
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+
+  const rowStride = Math.ceil((width * 3) / 4) * 4;
+  const pixelBytes = rowStride * height;
+  const header = Buffer.alloc(54);
+  header.write("BM", 0, 2, "ascii");
+  header.writeUInt32LE(54 + pixelBytes, 2);
+  header.writeUInt32LE(54, 10);
+  header.writeUInt32LE(40, 14);
+  header.writeInt32LE(width, 18);
+  header.writeInt32LE(height, 22);
+  header.writeUInt16LE(1, 26);
+  header.writeUInt16LE(24, 28);
+  header.writeUInt32LE(pixelBytes, 34);
+
+  const pixels = Buffer.alloc(pixelBytes);
+  for (let y = 0; y < height; y += 1) {
+    const sourceY = height - 1 - y;
+    for (let x = 0; x < width; x += 1) {
+      const src = (sourceY * info.width + x) * info.channels;
+      const dst = y * rowStride + x * 3;
+      pixels[dst] = data[src + 2];
+      pixels[dst + 1] = data[src + 1];
+      pixels[dst + 2] = data[src];
+    }
+  }
+  await fs.writeFile(destination, Buffer.concat([header, pixels]));
+}
+
+await svgToBmp(header, 150, 57, path.join(installer, "header.bmp"));
+await svgToBmp(sidebar, 164, 314, path.join(installer, "sidebar.bmp"));
+console.log("Seven Reader NSIS artwork generated.");

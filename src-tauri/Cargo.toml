@@ -29,7 +29,7 @@ which = "8"
 pdfium-render = { version = "0.9.4", features = ["image_latest"] }
 lopdf = "0.38"
 sha2 = "0.10"
-hex = "0.4"
+hex = "0.4"\nimage = "0.25"
 
 [profile.release]
 codegen-units = 1

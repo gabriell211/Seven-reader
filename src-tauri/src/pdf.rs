@@ -209,10 +209,11 @@ pub fn search_document(
         if occurrences == 0 {
             continue;
         }
-        let byte_index = text_lower.find(&needle_lower).unwrap_or(0);
-        let start = text[..byte_index.min(text.len())].char_indices().rev().nth(60).map(|(i, _)| i).unwrap_or(0);
-        let end = text[byte_index.min(text.len())..].char_indices().nth(160).map(|(i, _)| byte_index + i).unwrap_or(text.len());
-        let excerpt = text.get(start..end).unwrap_or(&text).replace(['\r', '\n'], " ");
+        let excerpt = text
+            .chars()
+            .take(260)
+            .collect::<String>()
+            .replace(['\r', '\n'], " ");
         hits.push(SearchHit { page_index: index, excerpt, occurrences });
     }
 

@@ -95,12 +95,7 @@ pub fn start_process_job(
                         let output = output_path.as_ref().map(|path| path.to_string_lossy().into_owned());
                         update_job(&jobs, &app, &id_for_thread, "completed", "Concluído", Some(1.0), output, None);
                     } else {
-                        let message = child
-                            .wait_with_output()
-                            .ok()
-                            .and_then(|out| String::from_utf8(out.stderr).ok())
-                            .filter(|text| !text.trim().is_empty())
-                            .unwrap_or_else(|| format!("Processo encerrou com código {:?}", status.code()));
+                        let message = format!("Processo encerrou com código {:?}", status.code());
                         update_job(&jobs, &app, &id_for_thread, "failed", "Falha", None, None, Some(message));
                     }
                     return;

@@ -95,6 +95,16 @@ export interface AdvancedSearchHit {
   occurrences: number;
 }
 
+export interface ReviewTransferReport {
+  annotations: number;
+  skipped: number;
+}
+
+export interface SessionReviewImportResult {
+  document: DocumentSummary;
+  report: ReviewTransferReport;
+}
+
 export interface CatalogSummary {
   id: string;
   name: string;

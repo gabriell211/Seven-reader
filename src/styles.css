@@ -529,3 +529,6 @@ svg { width: 20px; height: 20px; }
 @media (max-width: 760px) {
   .create-source-tabs { grid-template-columns: repeat(3,minmax(0,1fr)); }
 }
+
+.workflow-submit-group { justify-self: end; display: flex; gap: 9px; align-items: center; flex-wrap: wrap; }
+.workflow-submit-group button { display: inline-flex; align-items: center; gap: 7px; }

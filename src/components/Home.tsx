@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import { BrandMark } from "./BrandMark";
 import { SevenIcon } from "./SevenIcon";
 import { canRunTool, tools } from "../data/tools";
@@ -8,6 +9,9 @@ interface HomeProps {
   capabilities: Capabilities | null;
   recents: RecentDocument[];
   onOpen: () => void;
+  onOpenFolder: () => void;
+  lastSessionPath: string | null;
+  onRecoverSession: () => void;
   onOpenRecent: (path: string) => void;
   onClearRecent: () => void;
   onTogglePinned: (path: string) => void;
@@ -32,6 +36,9 @@ export function Home({
   capabilities,
   recents,
   onOpen,
+  onOpenFolder,
+  lastSessionPath,
+  onRecoverSession,
   onOpenRecent,
   onClearRecent,
   onTogglePinned,
@@ -41,6 +48,16 @@ export function Home({
   onTool,
   onSettings,
 }: HomeProps) {
+  const [libraryView, setLibraryView] = useState<"recent" | "pinned" | "favorites">("recent");
+  const visibleRecents = useMemo(() => {
+    const source =
+      libraryView === "pinned" ? recents.filter((item) => item.pinned)
+        : libraryView === "favorites" ? recents.filter((item) => item.favorite)
+          : recents;
+    return [...source]
+      .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || b.lastOpenedAt - a.lastOpenedAt)
+      .slice(0, 8);
+  }, [libraryView, recents]);
   const scrollToTools = () => document.getElementById("all-tools")?.scrollIntoView({ behavior: "smooth" });
 
   return (
@@ -71,9 +88,14 @@ export function Home({
               <button className="primary-button" onClick={onOpen} disabled={!native}>
                 <SevenIcon name="open" /> Abrir PDF
               </button>
-              <button className="secondary-button" disabled title="Abertura de pasta será habilitada com indexação local">
+              <button className="secondary-button" onClick={onOpenFolder} disabled={!native}>
                 <SevenIcon name="folder" /> Abrir pasta
               </button>
+              {lastSessionPath && (
+                <button className="secondary-button" onClick={onRecoverSession} disabled={!native} title={lastSessionPath}>
+                  <SevenIcon name="history" /> Recuperar sessão
+                </button>
+              )}
             </div>
           </div>
           <div className="hero-art" aria-hidden="true">
@@ -117,10 +139,15 @@ export function Home({
         <section className="content-grid">
           <div className="recent-panel">
             <div className="section-heading section-heading--compact">
-              <div><span className="eyebrow">BIBLIOTECA</span><h2>Recentes</h2></div>
+              <div><span className="eyebrow">BIBLIOTECA</span><h2>{libraryView === "recent" ? "Recentes" : libraryView === "pinned" ? "Fixados" : "Favoritos"}</h2></div>
               <button className="text-button" onClick={onClearRecent} disabled={!recents.length}>Limpar recentes</button>
             </div>
-            {recents.length === 0 ? (
+            <div className="library-tabs" role="tablist" aria-label="Biblioteca local">
+              <button className={libraryView === "recent" ? "active" : ""} onClick={() => setLibraryView("recent")}>Recentes</button>
+              <button className={libraryView === "pinned" ? "active" : ""} onClick={() => setLibraryView("pinned")}>Fixados</button>
+              <button className={libraryView === "favorites" ? "active" : ""} onClick={() => setLibraryView("favorites")}>Favoritos</button>
+            </div>
+            {visibleRecents.length === 0 ? (
               <button className="empty-recent" onClick={onOpen} disabled={!native}>
                 <span className="empty-icon"><SevenIcon name="recent" /></span>
                 <strong>Nenhum documento recente</strong>
@@ -128,10 +155,7 @@ export function Home({
               </button>
             ) : (
               <div className="recent-list">
-                {[...recents]
-                  .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || b.lastOpenedAt - a.lastOpenedAt)
-                  .slice(0, 8)
-                  .map((item) => (
+                {visibleRecents.map((item) => (
                     <div className="recent-row" key={item.path}>
                       <button className="recent-open" onClick={() => onOpenRecent(item.path)} title={item.path}>
                         <span className="file-tile">PDF</span>

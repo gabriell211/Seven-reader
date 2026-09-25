@@ -146,6 +146,7 @@ export default function App() {
   const [leavingSplash, setLeavingSplash] = useState(false);
   const [capabilities, setCapabilities] = useState<Capabilities | null>(native ? emptyCapabilities : null);
   const [document, setDocument] = useState<DocumentSummary | null>(null);
+  const [openTabs, setOpenTabs] = useState<DocumentSummary[]>([]);
   const [rendered, setRendered] = useState<RenderResult | null>(null);
   const [page, setPage] = useState(0);
   const [zoom, setZoom] = useState(100);
@@ -288,34 +289,47 @@ export default function App() {
     });
   };
 
+  const activateDocument = async (summary: DocumentSummary) => {
+    setDocument(summary);
+    setPage(0);
+    setZoom(settings.defaultZoom);
+    setSearchHits([]);
+    setRendered(null);
+    try {
+      const security = await inspectAdvancedPdf(summary.path);
+      const reasons = [
+        security.hasJavascript && "JavaScript",
+        security.hasLaunchActions && "Launch actions",
+        security.hasOpenAction && "OpenAction",
+        security.hasRichMedia && "Rich Media",
+        security.hasThreeD && "3D",
+      ].filter(Boolean) as string[];
+      const trusted = trustedOnce.has(summary.path) || isTrustedPath(summary.path, settings.trustedLocations);
+      setProtectedReasons(reasons);
+      setProtectedView(settings.protectedView && reasons.length > 0 && !trusted);
+    } catch {
+      setProtectedReasons(["estrutura não pôde ser totalmente inspecionada"]);
+      setProtectedView(settings.protectedView && !isTrustedPath(summary.path, settings.trustedLocations));
+    }
+    const first = await renderPage(summary.id, 0, 1400);
+    setRendered(first);
+  };
+
   const openPath = async (path: string) => {
     try {
+      const existing = openTabs.find((tab) => tab.path === path);
+      if (existing) {
+        rememberRecent(existing);
+        localStorage.setItem("seven-reader:last-document", existing.path);
+        await activateDocument(existing);
+        return;
+      }
+
       const summary = await openDocument(path);
-      setDocument(summary);
-      setPage(0);
-      setZoom(settings.defaultZoom);
-      setSearchHits([]);
-      setRendered(null);
+      setOpenTabs((current) => [...current, summary]);
       rememberRecent(summary);
       localStorage.setItem("seven-reader:last-document", summary.path);
-      try {
-        const security = await inspectAdvancedPdf(summary.path);
-        const reasons = [
-          security.hasJavascript && "JavaScript",
-          security.hasLaunchActions && "Launch actions",
-          security.hasOpenAction && "OpenAction",
-          security.hasRichMedia && "Rich Media",
-          security.hasThreeD && "3D",
-        ].filter(Boolean) as string[];
-        const trusted = trustedOnce.has(summary.path) || isTrustedPath(summary.path, settings.trustedLocations);
-        setProtectedReasons(reasons);
-        setProtectedView(settings.protectedView && reasons.length > 0 && !trusted);
-      } catch {
-        setProtectedReasons(["estrutura não pôde ser totalmente inspecionada"]);
-        setProtectedView(settings.protectedView && !isTrustedPath(summary.path, settings.trustedLocations));
-      }
-      const first = await renderPage(summary.id, 0, 1400);
-      setRendered(first);
+      await activateDocument(summary);
     } catch (error) {
       const text = errorMessage(error);
       setNotice(text);
@@ -376,13 +390,46 @@ export default function App() {
     }
   };
 
-  const closeCurrent = async () => {
-    if (document) {
-      try { await closeDocument(document.id); } catch { /* state cleanup still proceeds */ }
+  const selectTab = async (summary: DocumentSummary) => {
+    if (summary.id === document?.id) return;
+    try {
+      localStorage.setItem("seven-reader:last-document", summary.path);
+      await activateDocument(summary);
+    } catch (error) {
+      setNotice(errorMessage(error));
     }
-    setDocument(null);
-    setRendered(null);
-    setSearchHits([]);
+  };
+
+  const closeTab = async (documentId: string) => {
+    const closingIndex = openTabs.findIndex((tab) => tab.id === documentId);
+    const closing = openTabs[closingIndex];
+    if (!closing) return;
+
+    try { await closeDocument(documentId); } catch { /* local tab cleanup still proceeds */ }
+
+    const remaining = openTabs.filter((tab) => tab.id !== documentId);
+    setOpenTabs(remaining);
+
+    if (document?.id !== documentId) return;
+    const fallback = remaining[Math.min(Math.max(closingIndex - 1, 0), Math.max(remaining.length - 1, 0))];
+    if (fallback) {
+      try {
+        localStorage.setItem("seven-reader:last-document", fallback.path);
+        await activateDocument(fallback);
+      } catch (error) {
+        setNotice(errorMessage(error));
+      }
+    } else {
+      setDocument(null);
+      setRendered(null);
+      setSearchHits([]);
+      setProtectedView(false);
+      setProtectedReasons([]);
+    }
+  };
+
+  const closeCurrent = async () => {
+    if (document) await closeTab(document.id);
   };
 
   const render = async (nextPage: number, nextZoom: number) => {
@@ -1307,13 +1354,15 @@ export default function App() {
       <>
         <DocumentWorkspace
           document={document}
+          tabs={openTabs}
           rendered={rendered}
           capabilities={capabilities}
           searchHits={searchHits}
           page={page}
           zoom={zoom}
           onHome={() => void closeCurrent()}
-          onClose={() => void closeCurrent()}
+          onSelectTab={(tab) => void selectTab(tab)}
+          onCloseTab={(documentId) => void closeTab(documentId)}
           onOpen={() => void choosePdf()}
           onSaveAs={() => void saveAs()}
           onPrint={() => void runPrint()}

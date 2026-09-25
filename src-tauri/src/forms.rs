@@ -236,7 +236,7 @@ pub fn fill_fields(
         let name = field.get(b"T").ok().map(object_text).unwrap_or_default();
         let Some(value) = requested.get(&name) else { continue };
         let field_type = field_type_name(field);
-        if field_type == "button" {
+        if matches!(field_type.as_str(), "button" | "checkbox" | "radio") {
             let name_value = if value.is_empty() { "Off" } else { value.as_str() };
             field.set("V", Object::Name(name_value.as_bytes().to_vec()));
             field.set("AS", Object::Name(name_value.as_bytes().to_vec()));

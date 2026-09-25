@@ -141,6 +141,129 @@ pub fn start_process_job(
     JobStart { job_id: id }
 }
 
+pub fn start_process_job_with_postprocess<F>(
+    app: AppHandle,
+    state: &AppState,
+    kind: &str,
+    program: PathBuf,
+    args: Vec<String>,
+    output_path: Option<PathBuf>,
+    postprocess_label: &str,
+    postprocess: F,
+) -> JobStart
+where
+    F: FnOnce() -> Result<(), SevenError> + Send + 'static,
+{
+    let id = Uuid::new_v4().to_string();
+    let cancel = Arc::new(AtomicBool::new(false));
+    let status = JobStatus {
+        id: id.clone(),
+        kind: kind.to_owned(),
+        state: "queued".into(),
+        stage: "Na fila".into(),
+        progress: Some(0.0),
+        output: None,
+        error: None,
+    };
+
+    state.jobs.lock().insert(id.clone(), JobRuntime { status, cancel: cancel.clone() });
+    let jobs = state.jobs.clone();
+    let id_for_thread = id.clone();
+    let postprocess_label = postprocess_label.to_owned();
+
+    thread::spawn(move || {
+        update_job(
+            &jobs,
+            &app,
+            &id_for_thread,
+            JobUpdate::new("running", "Processando estrutura").progress(0.1),
+        );
+
+        let mut child = match Command::new(&program)
+            .args(&args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+        {
+            Ok(child) => child,
+            Err(error) => {
+                update_job(
+                    &jobs,
+                    &app,
+                    &id_for_thread,
+                    JobUpdate::new("failed", "Falha ao iniciar").error(error.to_string()),
+                );
+                return;
+            }
+        };
+
+        loop {
+            if cancel.load(Ordering::Relaxed) {
+                let _ = child.kill();
+                let _ = child.wait();
+                update_job(&jobs, &app, &id_for_thread, JobUpdate::new("cancelled", "Cancelado"));
+                return;
+            }
+            match child.try_wait() {
+                Ok(Some(status)) if status.success() => break,
+                Ok(Some(status)) => {
+                    update_job(
+                        &jobs,
+                        &app,
+                        &id_for_thread,
+                        JobUpdate::new("failed", "Falha")
+                            .error(format!("Processo encerrou com código {:?}", status.code())),
+                    );
+                    return;
+                }
+                Ok(None) => thread::sleep(Duration::from_millis(250)),
+                Err(error) => {
+                    let _ = child.kill();
+                    update_job(
+                        &jobs,
+                        &app,
+                        &id_for_thread,
+                        JobUpdate::new("failed", "Falha ao acompanhar processo").error(error.to_string()),
+                    );
+                    return;
+                }
+            }
+        }
+
+        if cancel.load(Ordering::Relaxed) {
+            update_job(&jobs, &app, &id_for_thread, JobUpdate::new("cancelled", "Cancelado"));
+            return;
+        }
+
+        update_job(
+            &jobs,
+            &app,
+            &id_for_thread,
+            JobUpdate::new("running", postprocess_label).progress(0.82),
+        );
+        if let Err(error) = postprocess() {
+            update_job(
+                &jobs,
+                &app,
+                &id_for_thread,
+                JobUpdate::new("failed", "Falha no pós-processamento").error(error.to_string()),
+            );
+            return;
+        }
+
+        let output = output_path.as_ref().map(|path| path.to_string_lossy().into_owned());
+        update_job(
+            &jobs,
+            &app,
+            &id_for_thread,
+            JobUpdate::new("completed", "Concluído").progress(1.0).output(output),
+        );
+    });
+
+    JobStart { job_id: id }
+}
+
 #[derive(Debug, Clone)]
 pub struct ProcessStep {
     pub program: PathBuf,

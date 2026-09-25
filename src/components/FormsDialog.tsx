@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import type { FormFieldInfo, FormFieldUpdate, FormValue, NewFormField, NewFormFieldType } from "../types";
 import { SevenIcon } from "./SevenIcon";
 
@@ -12,6 +13,9 @@ interface FormsDialogProps {
   onCreate: (field: NewFormField) => void;
   onUpdate: (update: FormFieldUpdate) => void;
   onDelete: (objectId: string) => void;
+  onExportData: (destination: string) => void;
+  onImportData: (path: string) => void;
+  onReset: (useDefaults: boolean) => void;
 }
 
 const fieldTypes: Array<{ id: NewFormFieldType; label: string }> = [
@@ -24,8 +28,8 @@ const fieldTypes: Array<{ id: NewFormFieldType; label: string }> = [
   { id: "signature", label: "Assinatura" },
 ];
 
-export function FormsDialog({ pageIndex, fields, loading, onClose, onReload, onFill, onCreate, onUpdate, onDelete }: FormsDialogProps) {
-  const [tab, setTab] = useState<"fill" | "create" | "edit">("fill");
+export function FormsDialog({ pageIndex, fields, loading, onClose, onReload, onFill, onCreate, onUpdate, onDelete, onExportData, onImportData, onReset }: FormsDialogProps) {
+  const [tab, setTab] = useState<"fill" | "create" | "edit" | "data">("fill");
   const [values, setValues] = useState<Record<string, string>>({});
   const [name, setName] = useState("campo_1");
   const [fieldType, setFieldType] = useState<NewFormFieldType>("text");
@@ -75,6 +79,27 @@ export function FormsDialog({ pageIndex, fields, loading, onClose, onReload, onF
     });
   };
 
+  const exportData = async (format: "fdf" | "xfdf") => {
+    const destination = await save({
+      title: `Exportar dados de formulário ${format.toUpperCase()}`,
+      defaultPath: `dados-formulario.${format}`,
+      filters: [{ name: format.toUpperCase(), extensions: [format] }],
+    });
+    if (destination) onExportData(destination);
+  };
+
+  const importData = async () => {
+    const selected = await open({
+      title: "Importar dados de formulário",
+      multiple: false,
+      directory: false,
+      filters: [
+        { name: "Dados de formulário", extensions: ["fdf", "xfdf"] },
+      ],
+    });
+    if (typeof selected === "string") onImportData(selected);
+  };
+
   const loadFieldForEdit = (field: FormFieldInfo) => {
     setEditingId(field.objectId);
     setName(field.name);
@@ -122,6 +147,7 @@ export function FormsDialog({ pageIndex, fields, loading, onClose, onReload, onF
           <button className={tab === "fill" ? "active" : ""} onClick={() => setTab("fill")}>Preencher ({fields.length})</button>
           <button className={tab === "create" ? "active" : ""} onClick={() => setTab("create")}>Criar campo</button>
           <button className={tab === "edit" ? "active" : ""} onClick={() => setTab("edit")}>Editar campos</button>
+          <button className={tab === "data" ? "active" : ""} onClick={() => setTab("data")}>Dados</button>
         </div>
         <div className="workflow-body">
           {tab === "fill" ? (
@@ -168,7 +194,7 @@ export function FormsDialog({ pageIndex, fields, loading, onClose, onReload, onF
               {fieldType === "text" && <label className="workflow-field"><span>Máximo de caracteres</span><input type="number" min={1} max={1000000} value={maxLength} onChange={(event) => setMaxLength(event.target.value ? Math.max(1, Number(event.target.value)) : "")} placeholder="Sem limite" /></label>}
               <button className="primary-button workflow-submit" disabled={!name.trim() || width <= 0 || height <= 0} onClick={submitCreate}><SevenIcon name="form" /> Criar campo na página {pageIndex + 1}</button>
             </>
-          ) : (
+          ) : tab === "edit" ? (
             <>
               {loading && <div className="report-loading"><span className="loader-ring" /> Lendo campos…</div>}
               {!loading && fields.length === 0 && <div className="empty-panel">Nenhum campo para editar.</div>}
@@ -212,6 +238,35 @@ export function FormsDialog({ pageIndex, fields, loading, onClose, onReload, onF
                   </div>
                 </>
               )}
+            </>
+          ) : (
+            <>
+              <div className="form-data-grid">
+                <button onClick={() => void importData()}>
+                  <span><SevenIcon name="open" /></span>
+                  <div><strong>Importar FDF/XFDF</strong><small>Aplica valores aos campos encontrados e cria uma revisão desfazível.</small></div>
+                </button>
+                <button onClick={() => void exportData("xfdf")} disabled={!fields.length}>
+                  <span><SevenIcon name="save" /></span>
+                  <div><strong>Exportar XFDF</strong><small>Formato XML interoperável para dados de formulário.</small></div>
+                </button>
+                <button onClick={() => void exportData("fdf")} disabled={!fields.length}>
+                  <span><SevenIcon name="save" /></span>
+                  <div><strong>Exportar FDF</strong><small>Formato clássico de troca de dados AcroForm.</small></div>
+                </button>
+                <button onClick={() => onReset(true)} disabled={!fields.length}>
+                  <span><SevenIcon name="history" /></span>
+                  <div><strong>Restaurar valores padrão</strong><small>Usa /DV quando o campo possui valor padrão.</small></div>
+                </button>
+                <button className="danger-card" onClick={() => onReset(false)} disabled={!fields.length}>
+                  <span><SevenIcon name="close" /></span>
+                  <div><strong>Limpar formulário</strong><small>Remove os valores atuais sem excluir os campos.</small></div>
+                </button>
+              </div>
+              <div className="organizer-note">
+                <SevenIcon name="shield" />
+                <span>Importação de dados não executa JavaScript, SubmitForm ou outras ações embutidas. Somente os valores dos campos são alterados.</span>
+              </div>
             </>
           )}
         </div>

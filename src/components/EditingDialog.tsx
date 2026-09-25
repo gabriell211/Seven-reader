@@ -8,7 +8,9 @@ import type {
   LinkPlacement,
   LinkTargetKind,
   LinkUpdate,
+  ManagedElementInfo,
   NamedDestinationInfo,
+  PageLabelOptions,
   OverlayTextOptions,
   TextPlacement,
 } from "../types";
@@ -25,6 +27,7 @@ interface EditingDialogProps {
   links: LinkInfo[];
   linksLoading: boolean;
   namedDestinations: NamedDestinationInfo[];
+  managedElements: ManagedElementInfo[];
   onClose: () => void;
   onAddText: (placement: TextPlacement) => void;
   onReplaceText: (find: string, replacement: string, allPages: boolean) => void;
@@ -39,6 +42,11 @@ interface EditingDialogProps {
   onUpdateLink: (update: LinkUpdate) => void;
   onRemoveLink: (pageIndex: number, objectId: string) => void;
   onAddLink: (link: LinkPlacement) => void;
+  onReloadManagedElements: () => void;
+  onUpdateManagedOverlay: (elementId: string, options: OverlayTextOptions) => void;
+  onUpdateManagedBackground: (elementId: string, options: BackgroundOptions) => void;
+  onRemoveManagedElement: (elementId: string) => void;
+  onSetPageLabels: (options: PageLabelOptions) => void;
   onOverlay: (options: OverlayTextOptions) => void;
   onBackground: (options: BackgroundOptions) => void;
 }
@@ -51,6 +59,7 @@ export function EditingDialog({
   links,
   linksLoading,
   namedDestinations,
+  managedElements,
   onClose,
   onAddText,
   onReplaceText,
@@ -65,6 +74,11 @@ export function EditingDialog({
   onUpdateLink,
   onRemoveLink,
   onAddLink,
+  onReloadManagedElements,
+  onUpdateManagedOverlay,
+  onUpdateManagedBackground,
+  onRemoveManagedElement,
+  onSetPageLabels,
   onOverlay,
   onBackground,
 }: EditingDialogProps) {
@@ -105,12 +119,120 @@ export function EditingDialog({
   const [rotation, setRotation] = useState(0);
   const [gray, setGray] = useState(0.15);
   const [overlayKind, setOverlayKind] = useState<OverlayTextOptions["kind"]>("watermark");
+  const [overlaySection, setOverlaySection] = useState<"create" | "manage" | "labels">("create");
+  const [editingManagedId, setEditingManagedId] = useState("");
+  const [suffix, setSuffix] = useState("");
+  const [overlayParity, setOverlayParity] = useState<OverlayTextOptions["parity"]>("all");
+  const [overlayPosition, setOverlayPosition] = useState<OverlayTextOptions["position"]>("center");
+  const [marginX, setMarginX] = useState(36);
+  const [marginY, setMarginY] = useState(20);
+  const [overlayOpacity, setOverlayOpacity] = useState(0.35);
+  const [overlayImagePath, setOverlayImagePath] = useState("");
+  const [overlayImageScale, setOverlayImageScale] = useState(1);
+  const [pageLabelStyle, setPageLabelStyle] = useState<PageLabelOptions["style"]>("decimal");
+  const [pageLabelPrefix, setPageLabelPrefix] = useState("");
+  const [pageLabelSuffix, setPageLabelSuffix] = useState("");
+  const [pageLabelStartNumber, setPageLabelStartNumber] = useState(1);
   const [prefix, setPrefix] = useState("DOC-");
   const [startNumber, setStartNumber] = useState(1);
   const [digits, setDigits] = useState(6);
   const [pageStart, setPageStart] = useState(1);
   const [pageEnd, setPageEnd] = useState(pageCount);
   const [background, setBackground] = useState("#ffffff");
+  const [backgroundOpacity, setBackgroundOpacity] = useState(1);
+  const [backgroundImagePath, setBackgroundImagePath] = useState("");
+  const [backgroundImageScale, setBackgroundImageScale] = useState(1);
+  const [backgroundPosition, setBackgroundPosition] = useState<BackgroundOptions["position"]>("center");
+
+  const chooseOverlayImage = async (target: "watermark" | "background") => {
+    const selected = await open({
+      title: target === "watermark" ? "Selecionar imagem da marca d'água" : "Selecionar imagem de fundo",
+      multiple: false,
+      directory: false,
+      filters: [{ name: "Imagem", extensions: ["png", "jpg", "jpeg", "tif", "tiff", "bmp", "webp"] }],
+    });
+    if (typeof selected === "string") {
+      if (target === "watermark") setOverlayImagePath(selected);
+      else setBackgroundImagePath(selected);
+    }
+  };
+
+  const currentOverlayOptions = (): OverlayTextOptions => ({
+    kind: overlayKind,
+    text,
+    prefix,
+    suffix,
+    startNumber,
+    digits,
+    fontSize,
+    pageStart: Math.max(0, pageStart - 1),
+    pageEnd: Math.max(0, pageEnd - 1),
+    parity: overlayParity,
+    position: overlayPosition,
+    marginX,
+    marginY,
+    rotation,
+    opacity: overlayOpacity,
+    imagePath: overlayImagePath || undefined,
+    imageScale: overlayImageScale,
+  });
+
+  const currentBackgroundOptions = (): BackgroundOptions => {
+    const value = background.replace("#", "");
+    return {
+      pageStart: Math.max(0, pageStart - 1),
+      pageEnd: Math.max(0, pageEnd - 1),
+      red: parseInt(value.slice(0, 2), 16) / 255,
+      green: parseInt(value.slice(2, 4), 16) / 255,
+      blue: parseInt(value.slice(4, 6), 16) / 255,
+      opacity: backgroundOpacity,
+      imagePath: backgroundImagePath || undefined,
+      imageScale: backgroundImageScale,
+      position: backgroundPosition,
+    };
+  };
+
+  const loadManagedElement = (element: ManagedElementInfo) => {
+    try {
+      const parsed = JSON.parse(element.optionsJson) as Partial<OverlayTextOptions & BackgroundOptions>;
+      setEditingManagedId(element.id);
+      if (element.kind === "background") {
+        setMode("background");
+        setPageStart((parsed.pageStart ?? 0) + 1);
+        setPageEnd((parsed.pageEnd ?? pageCount - 1) + 1);
+        setBackgroundOpacity(parsed.opacity ?? 1);
+        setBackgroundImagePath(parsed.imagePath ?? "");
+        setBackgroundImageScale(parsed.imageScale ?? 1);
+        setBackgroundPosition((parsed.position as BackgroundOptions["position"]) ?? "center");
+        const red = Math.round((parsed.red ?? 1) * 255).toString(16).padStart(2, "0");
+        const green = Math.round((parsed.green ?? 1) * 255).toString(16).padStart(2, "0");
+        const blue = Math.round((parsed.blue ?? 1) * 255).toString(16).padStart(2, "0");
+        setBackground(`#${red}${green}${blue}`);
+      } else {
+        setMode("overlay");
+        setOverlaySection("create");
+        setOverlayKind((parsed.kind as OverlayTextOptions["kind"]) ?? "watermark");
+        setText(parsed.text ?? "");
+        setPrefix(parsed.prefix ?? "");
+        setSuffix(parsed.suffix ?? "");
+        setStartNumber(parsed.startNumber ?? 1);
+        setDigits(parsed.digits ?? 6);
+        setFontSize(parsed.fontSize ?? 12);
+        setPageStart((parsed.pageStart ?? 0) + 1);
+        setPageEnd((parsed.pageEnd ?? pageCount - 1) + 1);
+        setOverlayParity((parsed.parity as OverlayTextOptions["parity"]) ?? "all");
+        setOverlayPosition((parsed.position as OverlayTextOptions["position"]) ?? "center");
+        setMarginX(parsed.marginX ?? 36);
+        setMarginY(parsed.marginY ?? 20);
+        setRotation(parsed.rotation ?? 0);
+        setOverlayOpacity(parsed.opacity ?? 0.35);
+        setOverlayImagePath(parsed.imagePath ?? "");
+        setOverlayImageScale(parsed.imageScale ?? 1);
+      }
+    } catch {
+      setEditingManagedId(element.id);
+    }
+  };
 
   const chooseImage = async () => {
     const selected = await open({

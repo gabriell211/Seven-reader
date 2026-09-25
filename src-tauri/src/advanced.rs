@@ -8,10 +8,12 @@ use std::{collections::HashSet, fs, path::Path};
 #[serde(rename_all = "camelCase")]
 pub struct BookmarkInfo {
     pub object_id: String,
+    pub parent_object_id: Option<String>,
     pub title: String,
     pub depth: usize,
     pub page_index: Option<usize>,
     pub open: bool,
+    pub has_children: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -118,6 +120,7 @@ fn bookmark_target(document: &Document, dictionary: &Dictionary) -> Option<usize
 fn walk_bookmarks(
     document: &Document,
     first: Option<ObjectId>,
+    parent: Option<ObjectId>,
     depth: usize,
     output: &mut Vec<BookmarkInfo>,
     visited: &mut HashSet<ObjectId>,
@@ -128,16 +131,18 @@ fn walk_bookmarks(
             break;
         }
         let Ok(dictionary) = document.get_object(id).and_then(Object::as_dict) else { break };
+        let child = dictionary.get(b"First").ok().and_then(|value| value.as_reference().ok());
         output.push(BookmarkInfo {
             object_id: id_string(id),
+            parent_object_id: parent.map(id_string),
             title: dictionary.get(b"Title").ok().map(object_text).unwrap_or_default(),
             depth,
             page_index: bookmark_target(document, dictionary),
             open: dictionary.get(b"Count").ok().and_then(|value| value.as_i64().ok()).unwrap_or(0) >= 0,
+            has_children: child.is_some(),
         });
-        let child = dictionary.get(b"First").ok().and_then(|value| value.as_reference().ok());
         if child.is_some() {
-            walk_bookmarks(document, child, depth + 1, output, visited);
+            walk_bookmarks(document, child, Some(id), depth + 1, output, visited);
         }
         current = dictionary.get(b"Next").ok().and_then(|value| value.as_reference().ok());
     }
@@ -160,7 +165,7 @@ fn bookmark_list(document: &Document) -> Vec<BookmarkInfo> {
         .and_then(|value| value.as_reference().ok());
     let mut output = Vec::new();
     let mut visited = HashSet::new();
-    walk_bookmarks(document, first, 0, &mut output, &mut visited);
+    walk_bookmarks(document, first, None, 0, &mut output, &mut visited);
     output
 }
 
@@ -735,6 +740,372 @@ pub fn extract_attachment(path: &Path, object_id: &str, destination: &Path) -> R
     fs::write(destination, data).map_err(|error| SevenError::Io(error.to_string()))
 }
 
+fn outlines_id(document: &Document) -> Result<ObjectId, SevenError> {
+    document
+        .catalog()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .get(b"Outlines")
+        .map_err(|_| SevenError::OperationRejected("Documento sem árvore de marcadores".into()))?
+        .as_reference()
+        .map_err(|error| SevenError::Operation(error.to_string()))
+}
+
+fn outline_links(
+    document: &Document,
+    id: ObjectId,
+) -> Result<(ObjectId, Option<ObjectId>, Option<ObjectId>), SevenError> {
+    let dictionary = document
+        .get_object(id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    let parent = dictionary
+        .get(b"Parent")
+        .map_err(|_| SevenError::OperationRejected("Marcador sem Parent".into()))?
+        .as_reference()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    let prev = dictionary.get(b"Prev").ok().and_then(|value| value.as_reference().ok());
+    let next = dictionary.get(b"Next").ok().and_then(|value| value.as_reference().ok());
+    Ok((parent, prev, next))
+}
+
+fn set_or_remove_ref(dictionary: &mut Dictionary, key: &str, value: Option<ObjectId>) {
+    if let Some(value) = value {
+        dictionary.set(key, value);
+    } else {
+        dictionary.remove(key.as_bytes());
+    }
+}
+
+fn detach_outline_item(document: &mut Document, id: ObjectId) -> Result<ObjectId, SevenError> {
+    let (parent, prev, next) = outline_links(document, id)?;
+
+    if let Some(prev_id) = prev {
+        let previous = document
+            .get_object_mut(prev_id)
+            .map_err(|error| SevenError::Operation(error.to_string()))?
+            .as_dict_mut()
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+        set_or_remove_ref(previous, "Next", next);
+    } else {
+        let parent_dict = document
+            .get_object_mut(parent)
+            .map_err(|error| SevenError::Operation(error.to_string()))?
+            .as_dict_mut()
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+        set_or_remove_ref(parent_dict, "First", next);
+    }
+
+    if let Some(next_id) = next {
+        let following = document
+            .get_object_mut(next_id)
+            .map_err(|error| SevenError::Operation(error.to_string()))?
+            .as_dict_mut()
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+        set_or_remove_ref(following, "Prev", prev);
+    } else {
+        let parent_dict = document
+            .get_object_mut(parent)
+            .map_err(|error| SevenError::Operation(error.to_string()))?
+            .as_dict_mut()
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+        set_or_remove_ref(parent_dict, "Last", prev);
+    }
+
+    let item = document
+        .get_object_mut(id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    item.remove(b"Prev");
+    item.remove(b"Next");
+    Ok(parent)
+}
+
+fn insert_outline_after(
+    document: &mut Document,
+    id: ObjectId,
+    parent: ObjectId,
+    after: Option<ObjectId>,
+) -> Result<(), SevenError> {
+    if let Some(after_id) = after {
+        let after_parent = document
+            .get_object(after_id)
+            .map_err(|error| SevenError::Operation(error.to_string()))?
+            .as_dict()
+            .map_err(|error| SevenError::Operation(error.to_string()))?
+            .get(b"Parent")
+            .ok()
+            .and_then(|value| value.as_reference().ok());
+        if after_parent != Some(parent) {
+            return Err(SevenError::OperationRejected(
+                "Marcador de referência não pertence ao mesmo nível".into(),
+            ));
+        }
+        let next = document
+            .get_object(after_id)
+            .ok()
+            .and_then(|object| object.as_dict().ok())
+            .and_then(|dictionary| dictionary.get(b"Next").ok())
+            .and_then(|value| value.as_reference().ok());
+
+        {
+            let after_dict = document
+                .get_object_mut(after_id)
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .as_dict_mut()
+                .map_err(|error| SevenError::Operation(error.to_string()))?;
+            after_dict.set("Next", id);
+        }
+        {
+            let item = document
+                .get_object_mut(id)
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .as_dict_mut()
+                .map_err(|error| SevenError::Operation(error.to_string()))?;
+            item.set("Parent", parent);
+            item.set("Prev", after_id);
+            set_or_remove_ref(item, "Next", next);
+        }
+        if let Some(next_id) = next {
+            document
+                .get_object_mut(next_id)
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .as_dict_mut()
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .set("Prev", id);
+        } else {
+            document
+                .get_object_mut(parent)
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .as_dict_mut()
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .set("Last", id);
+        }
+    } else {
+        let first = document
+            .get_object(parent)
+            .ok()
+            .and_then(|object| object.as_dict().ok())
+            .and_then(|dictionary| dictionary.get(b"First").ok())
+            .and_then(|value| value.as_reference().ok());
+        {
+            let item = document
+                .get_object_mut(id)
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .as_dict_mut()
+                .map_err(|error| SevenError::Operation(error.to_string()))?;
+            item.set("Parent", parent);
+            item.remove(b"Prev");
+            set_or_remove_ref(item, "Next", first);
+        }
+        if let Some(first_id) = first {
+            document
+                .get_object_mut(first_id)
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .as_dict_mut()
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .set("Prev", id);
+        } else {
+            document
+                .get_object_mut(parent)
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .as_dict_mut()
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .set("Last", id);
+        }
+        document
+            .get_object_mut(parent)
+            .map_err(|error| SevenError::Operation(error.to_string()))?
+            .as_dict_mut()
+            .map_err(|error| SevenError::Operation(error.to_string()))?
+            .set("First", id);
+    }
+    Ok(())
+}
+
+fn outline_children(document: &Document, parent: ObjectId) -> Vec<ObjectId> {
+    let mut result = Vec::new();
+    let mut current = document
+        .get_object(parent)
+        .ok()
+        .and_then(|object| object.as_dict().ok())
+        .and_then(|dictionary| dictionary.get(b"First").ok())
+        .and_then(|value| value.as_reference().ok());
+    let mut visited = HashSet::new();
+    while let Some(id) = current {
+        if !visited.insert(id) {
+            break;
+        }
+        result.push(id);
+        current = document
+            .get_object(id)
+            .ok()
+            .and_then(|object| object.as_dict().ok())
+            .and_then(|dictionary| dictionary.get(b"Next").ok())
+            .and_then(|value| value.as_reference().ok());
+    }
+    result
+}
+
+fn outline_descendant_count(document: &Document, parent: ObjectId, visited: &mut HashSet<ObjectId>) -> i64 {
+    let mut count = 0i64;
+    for child in outline_children(document, parent) {
+        if !visited.insert(child) {
+            continue;
+        }
+        count += 1 + outline_descendant_count(document, child, visited);
+    }
+    count
+}
+
+fn recompute_outline_counts(document: &mut Document) -> Result<(), SevenError> {
+    let root = outlines_id(document)?;
+    let mut stack = outline_children(document, root);
+    let mut all = Vec::new();
+    while let Some(id) = stack.pop() {
+        all.push(id);
+        stack.extend(outline_children(document, id));
+    }
+
+    for id in all {
+        let descendants = outline_descendant_count(document, id, &mut HashSet::new());
+        let was_closed = document
+            .get_object(id)
+            .ok()
+            .and_then(|object| object.as_dict().ok())
+            .and_then(|dictionary| dictionary.get(b"Count").ok())
+            .and_then(|value| value.as_i64().ok())
+            .is_some_and(|value| value < 0);
+        let dictionary = document
+            .get_object_mut(id)
+            .map_err(|error| SevenError::Operation(error.to_string()))?
+            .as_dict_mut()
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+        if descendants == 0 {
+            dictionary.remove(b"Count");
+        } else {
+            dictionary.set("Count", if was_closed { -descendants } else { descendants });
+        }
+    }
+
+    let total = outline_descendant_count(document, root, &mut HashSet::new());
+    document
+        .get_object_mut(root)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .set("Count", total);
+    Ok(())
+}
+
+fn collect_outline_subtree(document: &Document, id: ObjectId, output: &mut Vec<ObjectId>) {
+    output.push(id);
+    for child in outline_children(document, id) {
+        collect_outline_subtree(document, child, output);
+    }
+}
+
+pub fn delete_bookmark(
+    input: &Path,
+    output: &Path,
+    object_id: &str,
+) -> Result<(), SevenError> {
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let id = parse_id(object_id)?;
+    detach_outline_item(&mut document, id)?;
+    let mut subtree = Vec::new();
+    collect_outline_subtree(&document, id, &mut subtree);
+    for object_id in subtree {
+        document.objects.remove(&object_id);
+    }
+    recompute_outline_counts(&mut document)?;
+    atomic_save(document, output)
+}
+
+pub fn set_bookmark_open(
+    input: &Path,
+    output: &Path,
+    object_id: &str,
+    open: bool,
+) -> Result<(), SevenError> {
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let id = parse_id(object_id)?;
+    let descendants = outline_descendant_count(&document, id, &mut HashSet::new());
+    if descendants == 0 {
+        return Err(SevenError::OperationRejected("Marcador não possui filhos".into()));
+    }
+    document
+        .get_object_mut(id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .set("Count", if open { descendants } else { -descendants });
+    atomic_save(document, output)
+}
+
+pub fn move_bookmark(
+    input: &Path,
+    output: &Path,
+    object_id: &str,
+    direction: &str,
+) -> Result<(), SevenError> {
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let id = parse_id(object_id)?;
+    let root = outlines_id(&document)?;
+    let (parent, prev, next) = outline_links(&document, id)?;
+
+    match direction {
+        "up" => {
+            let previous = prev.ok_or_else(|| SevenError::OperationRejected("Marcador já é o primeiro deste nível".into()))?;
+            let before_previous = document
+                .get_object(previous)
+                .ok()
+                .and_then(|object| object.as_dict().ok())
+                .and_then(|dictionary| dictionary.get(b"Prev").ok())
+                .and_then(|value| value.as_reference().ok());
+            detach_outline_item(&mut document, id)?;
+            insert_outline_after(&mut document, id, parent, before_previous)?;
+        }
+        "down" => {
+            let following = next.ok_or_else(|| SevenError::OperationRejected("Marcador já é o último deste nível".into()))?;
+            detach_outline_item(&mut document, id)?;
+            insert_outline_after(&mut document, id, parent, Some(following))?;
+        }
+        "indent" => {
+            let new_parent = prev.ok_or_else(|| SevenError::OperationRejected("É necessário um marcador anterior para criar hierarquia".into()))?;
+            let after = document
+                .get_object(new_parent)
+                .ok()
+                .and_then(|object| object.as_dict().ok())
+                .and_then(|dictionary| dictionary.get(b"Last").ok())
+                .and_then(|value| value.as_reference().ok());
+            detach_outline_item(&mut document, id)?;
+            insert_outline_after(&mut document, id, new_parent, after)?;
+        }
+        "outdent" => {
+            if parent == root {
+                return Err(SevenError::OperationRejected("Marcador já está no nível raiz".into()));
+            }
+            let grand_parent = document
+                .get_object(parent)
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .as_dict()
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .get(b"Parent")
+                .map_err(|_| SevenError::OperationRejected("Hierarquia inválida".into()))?
+                .as_reference()
+                .map_err(|error| SevenError::Operation(error.to_string()))?;
+            detach_outline_item(&mut document, id)?;
+            insert_outline_after(&mut document, id, grand_parent, Some(parent))?;
+        }
+        _ => return Err(SevenError::OperationRejected("Direção de marcador inválida".into())),
+    }
+
+    recompute_outline_counts(&mut document)?;
+    atomic_save(document, output)
+}
+
 pub fn add_bookmark(input: &Path, output: &Path, bookmark: BookmarkInput) -> Result<(), SevenError> {
     if bookmark.title.trim().is_empty() || bookmark.title.chars().count() > 500 {
         return Err(SevenError::OperationRejected("Título do marcador inválido".into()));
@@ -778,6 +1149,7 @@ pub fn add_bookmark(input: &Path, output: &Path, bookmark: BookmarkInput) -> Res
     if first.is_none() { outlines.set("First", item_id); }
     outlines.set("Last", item_id);
     outlines.set("Count", count.abs() + 1);
+    recompute_outline_counts(&mut document)?;
     atomic_save(document, output)
 }
 

@@ -3,6 +3,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import type {
   BackgroundOptions,
   ImagePlacement,
+  ImageObjectInfo,
   LinkPlacement,
   OverlayTextOptions,
   TextPlacement,
@@ -14,9 +15,14 @@ type EditMode = "add-text" | "replace-text" | "image" | "link" | "overlay" | "ba
 interface EditingDialogProps {
   pageIndex: number;
   pageCount: number;
+  imageObjects: ImageObjectInfo[];
+  imageObjectsLoading: boolean;
   onClose: () => void;
   onAddText: (placement: TextPlacement) => void;
   onReplaceText: (find: string, replacement: string, allPages: boolean) => void;
+  onReloadImages: () => void;
+  onReplaceImage: (resourceName: string, imagePath: string) => void;
+  onRemoveImage: (resourceName: string) => void;
   onAddImage: (placement: ImagePlacement) => void;
   onAddLink: (link: LinkPlacement) => void;
   onOverlay: (options: OverlayTextOptions) => void;
@@ -26,9 +32,14 @@ interface EditingDialogProps {
 export function EditingDialog({
   pageIndex,
   pageCount,
+  imageObjects,
+  imageObjectsLoading,
   onClose,
   onAddText,
   onReplaceText,
+  onReloadImages,
+  onReplaceImage,
+  onRemoveImage,
   onAddImage,
   onAddLink,
   onOverlay,
@@ -40,6 +51,16 @@ export function EditingDialog({
   const [replacement, setReplacement] = useState("");
   const [allPages, setAllPages] = useState(false);
   const [imagePath, setImagePath] = useState("");
+  const [imageSection, setImageSection] = useState<"insert" | "existing">("insert");
+  const [imageRotation, setImageRotation] = useState(0);
+  const [imageOpacity, setImageOpacity] = useState(1);
+  const [mirrorX, setMirrorX] = useState(false);
+  const [mirrorY, setMirrorY] = useState(false);
+  const [cropLeft, setCropLeft] = useState(0);
+  const [cropTop, setCropTop] = useState(0);
+  const [cropRight, setCropRight] = useState(0);
+  const [cropBottom, setCropBottom] = useState(0);
+  const [lockAspect, setLockAspect] = useState(true);
   const [target, setTarget] = useState("");
   const [internalLink, setInternalLink] = useState(false);
   const [targetPage, setTargetPage] = useState(1);
@@ -68,6 +89,16 @@ export function EditingDialog({
     if (typeof selected === "string") setImagePath(selected);
   };
 
+  const replaceExistingImage = async (resourceName: string) => {
+    const selected = await open({
+      title: `Substituir imagem ${resourceName}`,
+      multiple: false,
+      directory: false,
+      filters: [{ name: "Imagem", extensions: ["png", "jpg", "jpeg", "tif", "tiff", "bmp", "webp"] }],
+    });
+    if (typeof selected === "string") onReplaceImage(resourceName, selected);
+  };
+
   const rectFields = (
     <div className="rect-grid">
       <label className="workflow-field"><span>X</span><input type="number" value={x} onChange={(e) => setX(Number(e.target.value))} /></label>
@@ -87,7 +118,22 @@ export function EditingDialog({
       return;
     }
     if (mode === "image") {
-      onAddImage({ pageIndex, imagePath, x, y, width, height });
+      onAddImage({
+        pageIndex,
+        imagePath,
+        x,
+        y,
+        width,
+        height,
+        rotation: imageRotation,
+        opacity: imageOpacity,
+        mirrorX,
+        mirrorY,
+        cropLeft,
+        cropTop,
+        cropRight,
+        cropBottom,
+      });
       return;
     }
     if (mode === "link") {
@@ -172,8 +218,66 @@ export function EditingDialog({
           </>}
 
           {mode === "image" && <>
-            <button className="image-drop" onClick={() => void chooseImage()}><SevenIcon name="open" /><strong>{imagePath || "Selecionar imagem"}</strong><small>PNG, JPEG, TIFF, BMP ou WebP.</small></button>
-            {rectFields}
+            <div className="workflow-tabs inline">
+              <button className={imageSection === "insert" ? "active" : ""} onClick={() => setImageSection("insert")}>Inserir nova</button>
+              <button className={imageSection === "existing" ? "active" : ""} onClick={() => { setImageSection("existing"); onReloadImages(); }}>Imagens existentes</button>
+            </div>
+
+            {imageSection === "insert" ? (
+              <>
+                <button className="image-drop" onClick={() => void chooseImage()}>
+                  <SevenIcon name="open" />
+                  <strong>{imagePath || "Selecionar imagem"}</strong>
+                  <small>PNG, JPEG, TIFF, BMP ou WebP.</small>
+                </button>
+
+                {rectFields}
+
+                <div className="three-column-fields">
+                  <label className="workflow-field"><span>Rotação</span><input type="number" min={-360} max={360} value={imageRotation} onChange={(e) => setImageRotation(Number(e.target.value))} /></label>
+                  <label className="workflow-field"><span>Opacidade</span><input type="number" min={0} max={1} step={0.05} value={imageOpacity} onChange={(e) => setImageOpacity(Math.max(0, Math.min(1, Number(e.target.value))))} /></label>
+                  <label className="toggle-row compact-toggle"><input type="checkbox" checked={lockAspect} onChange={(e) => setLockAspect(e.target.checked)} /><span><strong>Manter proporção</strong><small>Evita distorção manual.</small></span></label>
+                </div>
+
+                <div className="two-column-fields">
+                  <label className="toggle-row"><input type="checkbox" checked={mirrorX} onChange={(e) => setMirrorX(e.target.checked)} /><span><strong>Espelhar horizontal</strong></span></label>
+                  <label className="toggle-row"><input type="checkbox" checked={mirrorY} onChange={(e) => setMirrorY(e.target.checked)} /><span><strong>Espelhar vertical</strong></span></label>
+                </div>
+
+                <fieldset className="image-crop-box">
+                  <legend>Recorte proporcional</legend>
+                  <div className="four-column-fields">
+                    <label className="workflow-field"><span>Esq.</span><input type="number" min={0} max={0.95} step={0.01} value={cropLeft} onChange={(e) => setCropLeft(Number(e.target.value))} /></label>
+                    <label className="workflow-field"><span>Topo</span><input type="number" min={0} max={0.95} step={0.01} value={cropTop} onChange={(e) => setCropTop(Number(e.target.value))} /></label>
+                    <label className="workflow-field"><span>Dir.</span><input type="number" min={0} max={0.95} step={0.01} value={cropRight} onChange={(e) => setCropRight(Number(e.target.value))} /></label>
+                    <label className="workflow-field"><span>Base</span><input type="number" min={0} max={0.95} step={0.01} value={cropBottom} onChange={(e) => setCropBottom(Number(e.target.value))} /></label>
+                  </div>
+                  <small>0 = sem recorte; 0,10 = remove 10% daquele lado.</small>
+                </fieldset>
+              </>
+            ) : (
+              <>
+                {imageObjectsLoading && <div className="report-loading"><span className="loader-ring" /> Lendo XObjects de imagem…</div>}
+                {!imageObjectsLoading && imageObjects.length === 0 && (
+                  <div className="empty-panel">Nenhuma imagem de nível de página encontrada. Imagens dentro de Form XObjects são preservadas e não são alteradas automaticamente.</div>
+                )}
+                {!imageObjectsLoading && imageObjects.length > 0 && (
+                  <div className="image-object-list">
+                    {imageObjects.map((object) => (
+                      <article className="image-object-row" key={object.resourceName}>
+                        <span className="image-object-glyph"><SevenIcon name="open" /></span>
+                        <div>
+                          <strong>/{object.resourceName}</strong>
+                          <small>{object.pixelWidth && object.pixelHeight ? `${object.pixelWidth} × ${object.pixelHeight} px` : "Dimensão não declarada"} · objeto {object.objectId}</small>
+                        </div>
+                        <button className="secondary-light-button" onClick={() => void replaceExistingImage(object.resourceName)}>Substituir</button>
+                        <button className="danger-quiet" onClick={() => onRemoveImage(object.resourceName)}>Remover</button>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
           </>}
 
           {mode === "link" && <>
@@ -196,7 +300,9 @@ export function EditingDialog({
             <div className="two-column-fields"><label className="workflow-field"><span>Da página</span><input type="number" min={1} max={pageCount} value={pageStart} onChange={(e) => setPageStart(Number(e.target.value))} /></label><label className="workflow-field"><span>Até</span><input type="number" min={1} max={pageCount} value={pageEnd} onChange={(e) => setPageEnd(Number(e.target.value))} /></label></div>
           </>}
 
-          <button className="primary-button workflow-submit" disabled={!canApply} onClick={apply}><SevenIcon name="edit" /> Aplicar à sessão</button>
+          {!(mode === "image" && imageSection === "existing") && (
+            <button className="primary-button workflow-submit" disabled={!canApply} onClick={apply}><SevenIcon name="edit" /> Aplicar à sessão</button>
+          )}
         </div>
       </section>
     </div>

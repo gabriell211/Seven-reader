@@ -501,6 +501,50 @@ pub fn session_edit_replace_text(
 }
 
 #[tauri::command]
+pub fn list_page_image_objects(
+    state: State<'_, AppState>,
+    document_id: String,
+    page_index: usize,
+) -> CommandResult<Vec<editing::ImageObjectInfo>> {
+    let document = state
+        .documents
+        .lock()
+        .get(&document_id)
+        .cloned()
+        .ok_or_else(|| ErrorPayload::from(SevenError::DocumentNotOpen))?;
+    editing::list_image_objects(document.active_path(), page_index).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_replace_image_object(
+    state: State<'_, AppState>,
+    document_id: String,
+    page_index: usize,
+    resource_name: String,
+    image_path: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "replace-image", move |input, output| {
+        editing::replace_image_object(input, output, page_index, &resource_name, &image_path)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_remove_image_object(
+    state: State<'_, AppState>,
+    document_id: String,
+    page_index: usize,
+    resource_name: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "remove-image", move |input, output| {
+        editing::remove_image_object(input, output, page_index, &resource_name)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn session_edit_add_image(
     state: State<'_, AppState>,
     document_id: String,

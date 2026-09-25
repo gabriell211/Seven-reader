@@ -1,28 +1,53 @@
 import { useMemo, useState } from "react";
 import { BrandMark } from "./BrandMark";
-import { SevenIcon } from "./SevenIcon";
-import { tools } from "../data/tools";
-import type { Capabilities, DocumentSummary, RenderResult, ToolId } from "../types";
+import { SevenIcon, type IconName } from "./SevenIcon";
+import { canRunTool, tools } from "../data/tools";
+import type { Capabilities, DocumentSummary, RenderResult, SearchHit, ToolId } from "../types";
 import { nativeAssetUrl } from "../lib/native";
 
 interface WorkspaceProps {
   document: DocumentSummary;
   rendered: RenderResult | null;
   capabilities: Capabilities | null;
+  searchHits: SearchHit[];
   page: number;
   zoom: number;
   onHome: () => void;
+  onClose: () => void;
+  onOpen: () => void;
+  onSaveAs: () => void;
   onRender: (page: number, zoom: number) => void;
   onSearch: (query: string) => void;
   onTool: (tool: ToolId) => void;
 }
 
+const primaryTools: Array<{ id: ToolId; icon: IconName; label: string }> = [
+  { id: "edit", icon: "edit", label: "Editar" },
+  { id: "convert", icon: "convert", label: "Converter" },
+  { id: "fill-sign", icon: "sign", label: "Assinar" },
+  { id: "comment", icon: "comment", label: "Comentar" },
+  { id: "create", icon: "create", label: "Criar" },
+];
+
 export function DocumentWorkspace({
-  document, rendered, capabilities, page, zoom, onHome, onRender, onSearch, onTool,
+  document,
+  rendered,
+  capabilities,
+  searchHits,
+  page,
+  zoom,
+  onHome,
+  onClose,
+  onOpen,
+  onSaveAs,
+  onRender,
+  onSearch,
+  onTool,
 }: WorkspaceProps) {
   const [toolsOpen, setToolsOpen] = useState(false);
-  const [leftPanel, setLeftPanel] = useState<"thumbs" | "bookmarks" | null>("thumbs");
+  const [leftPanel, setLeftPanel] = useState<"thumbs" | "search" | null>("thumbs");
   const [search, setSearch] = useState("");
+  const [viewerTool, setViewerTool] = useState<"select" | "hand">("select");
 
   const pageLabel = useMemo(() => `${page + 1} / ${document.pageCount}`, [page, document.pageCount]);
 
@@ -31,74 +56,101 @@ export function DocumentWorkspace({
     onRender(page, next);
   };
 
+  const submitSearch = () => {
+    onSearch(search);
+    setLeftPanel("search");
+  };
+
   return (
-    <div className="workspace">
+    <div className={`workspace viewer-${viewerTool}`}>
       <header className="workspace-topbar">
         <button className="workspace-brand" onClick={onHome} aria-label="Início"><BrandMark size={30} /></button>
         <div className="document-tab">
           <span className="tab-file-icon">PDF</span>
           <span className="tab-title">{document.name}</span>
-          <button aria-label="Fechar"><SevenIcon name="close" /></button>
+          <button aria-label="Fechar documento" onClick={onClose}><SevenIcon name="close" /></button>
         </div>
         <div className="topbar-spacer" />
         <label className="workspace-search">
           <SevenIcon name="search" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && onSearch(search)}
-            placeholder="Pesquisar documento, ferramenta ou comando" />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            onKeyDown={(event) => event.key === "Enter" && submitSearch()}
+            placeholder="Pesquisar no documento"
+          />
         </label>
-        <button className="icon-button" aria-label="Configurações"><SevenIcon name="settings" /></button>
+        <button className="icon-button" aria-label="Configurações" disabled><SevenIcon name="settings" /></button>
       </header>
 
       <nav className="global-bar" aria-label="Ferramentas do documento">
         <button className={toolsOpen ? "global-action active" : "global-action"} onClick={() => setToolsOpen(!toolsOpen)}>
           <SevenIcon name="tools" /><span>Todas as ferramentas</span>
         </button>
-        {[
-          ["edit", "edit", "Editar"],
-          ["convert", "convert", "Converter"],
-          ["fill-sign", "sign", "Assinar"],
-          ["comment", "comment", "Comentar"],
-          ["create", "create", "Criar"],
-        ].map(([tool, icon, label]) => (
-          <button className="global-action" key={tool} onClick={() => onTool(tool as ToolId)}>
-            <SevenIcon name={icon as "edit"} /><span>{label}</span>
-          </button>
-        ))}
+        {primaryTools.map((tool) => {
+          const enabled = canRunTool(tool.id, capabilities);
+          return (
+            <button className="global-action" key={tool.id} disabled={!enabled} onClick={() => enabled && onTool(tool.id)}>
+              <SevenIcon name={tool.icon} /><span>{tool.label}</span>
+            </button>
+          );
+        })}
         <div className="global-divider" />
-        <button className="global-action compact"><SevenIcon name="open" /><span>Abrir</span></button>
-        <button className="global-action compact"><SevenIcon name="save" /><span>Salvar</span></button>
-        <button className="global-action compact"><SevenIcon name="print" /><span>Imprimir</span></button>
+        <button className="global-action compact" onClick={onOpen}><SevenIcon name="open" /><span>Abrir</span></button>
+        <button className="global-action compact" onClick={onSaveAs}><SevenIcon name="save" /><span>Salvar como</span></button>
+        <button className="global-action compact" disabled title="Pipeline de impressão ainda não implementado"><SevenIcon name="print" /><span>Imprimir</span></button>
       </nav>
 
       <div className="workspace-body">
         <aside className="side-rail">
-          <button className={leftPanel === "thumbs" ? "rail-button active" : "rail-button"}
-            onClick={() => setLeftPanel(leftPanel === "thumbs" ? null : "thumbs")} aria-label="Miniaturas">
+          <button
+            className={leftPanel === "thumbs" ? "rail-button active" : "rail-button"}
+            onClick={() => setLeftPanel(leftPanel === "thumbs" ? null : "thumbs")}
+            aria-label="Miniaturas"
+          >
             <SevenIcon name="pages" />
           </button>
-          <button className={leftPanel === "bookmarks" ? "rail-button active" : "rail-button"}
-            onClick={() => setLeftPanel(leftPanel === "bookmarks" ? null : "bookmarks")} aria-label="Marcadores">
-            <SevenIcon name="bookmark" />
+          <button
+            className={leftPanel === "search" ? "rail-button active" : "rail-button"}
+            onClick={() => setLeftPanel(leftPanel === "search" ? null : "search")}
+            aria-label="Resultados de busca"
+          >
+            <SevenIcon name="search" />
           </button>
-          <button className="rail-button" aria-label="Comentários"><SevenIcon name="comment" /></button>
-          <button className="rail-button" aria-label="Anexos"><SevenIcon name="attachment" /></button>
-          <button className="rail-button" aria-label="Camadas"><SevenIcon name="layers" /></button>
+          <button className="rail-button" aria-label="Comentários" disabled><SevenIcon name="comment" /></button>
+          <button className="rail-button" aria-label="Anexos" disabled><SevenIcon name="attachment" /></button>
+          <button className="rail-button" aria-label="Camadas" disabled><SevenIcon name="layers" /></button>
         </aside>
 
         {leftPanel && (
           <aside className="left-panel">
-            <div className="panel-title"><strong>{leftPanel === "thumbs" ? "Miniaturas" : "Marcadores"}</strong><button onClick={() => setLeftPanel(null)}><SevenIcon name="close" /></button></div>
+            <div className="panel-title">
+              <strong>{leftPanel === "thumbs" ? "Miniaturas" : "Resultados"}</strong>
+              <button onClick={() => setLeftPanel(null)}><SevenIcon name="close" /></button>
+            </div>
             {leftPanel === "thumbs" ? (
               <div className="thumbnail-list">
-                {Array.from({ length: Math.min(document.pageCount, 20) }, (_, index) => (
+                {Array.from({ length: Math.min(document.pageCount, 100) }, (_, index) => (
                   <button key={index} className={page === index ? "thumbnail active" : "thumbnail"} onClick={() => onRender(index, zoom)}>
-                    <span className="thumb-sheet">{index === page && rendered ? <img src={nativeAssetUrl(rendered.cachePath)} alt="" /> : <span />}</span>
+                    <span className="thumb-sheet">
+                      {index === page && rendered ? <img src={nativeAssetUrl(rendered.cachePath)} alt="" /> : <span className="thumb-number">{index + 1}</span>}
+                    </span>
                     <small>{index + 1}</small>
                   </button>
                 ))}
               </div>
-            ) : <div className="empty-panel">Nenhum marcador detectado.</div>}
+            ) : (
+              <div className="search-results">
+                {!searchHits.length && <div className="empty-panel">Pesquise um termo para ver ocorrências.</div>}
+                {searchHits.map((hit) => (
+                  <button key={hit.pageIndex} className="search-hit" onClick={() => onRender(hit.pageIndex, zoom)}>
+                    <strong>Página {hit.pageIndex + 1}</strong>
+                    <span>{hit.excerpt || "Texto encontrado nesta página."}</span>
+                    <small>{hit.occurrences} ocorrência(s)</small>
+                  </button>
+                ))}
+              </div>
+            )}
           </aside>
         )}
 
@@ -114,13 +166,13 @@ export function DocumentWorkspace({
           </div>
 
           <div className="quick-tools" role="toolbar" aria-label="Ferramentas rápidas">
-            <button aria-label="Seleção"><SevenIcon name="text" /></button>
-            <button aria-label="Mão"><SevenIcon name="hand" /></button>
+            <button className={viewerTool === "select" ? "active" : ""} aria-label="Seleção" onClick={() => setViewerTool("select")}><SevenIcon name="text" /></button>
+            <button className={viewerTool === "hand" ? "active" : ""} aria-label="Mão" onClick={() => setViewerTool("hand")}><SevenIcon name="hand" /></button>
             <span />
-            <button aria-label="Comentário"><SevenIcon name="comment" /></button>
-            <button aria-label="Destaque"><SevenIcon name="highlight" /></button>
-            <button aria-label="Desenho"><SevenIcon name="draw" /></button>
-            <button aria-label="Assinatura"><SevenIcon name="sign" /></button>
+            <button aria-label="Comentário" disabled><SevenIcon name="comment" /></button>
+            <button aria-label="Destaque" disabled><SevenIcon name="highlight" /></button>
+            <button aria-label="Desenho" disabled><SevenIcon name="draw" /></button>
+            <button aria-label="Assinatura" disabled><SevenIcon name="sign" /></button>
           </div>
 
           <div className="view-controls">
@@ -143,11 +195,17 @@ export function DocumentWorkspace({
             <div className="drawer-search"><SevenIcon name="search" /><input placeholder="Encontrar ferramenta" /></div>
             <div className="drawer-tools">
               {tools.map((tool) => {
-                const enabled = !tool.capability || capabilities?.[tool.capability]?.available;
+                const enabled = canRunTool(tool.id, capabilities);
+                const capabilityAvailable = !tool.capability || capabilities?.[tool.capability]?.available;
+                const status = !tool.implemented
+                  ? "Em implementação — ação bloqueada para não simular suporte"
+                  : !capabilityAvailable
+                    ? "Dependência nativa não encontrada neste dispositivo"
+                    : tool.description;
                 return (
-                  <button key={tool.id} className="drawer-tool" disabled={!enabled} onClick={() => onTool(tool.id)}>
+                  <button key={tool.id} className="drawer-tool" disabled={!enabled} onClick={() => enabled && onTool(tool.id)}>
                     <span><SevenIcon name={tool.icon} /></span>
-                    <div><strong>{tool.label}</strong><small>{enabled ? tool.description : "Recurso nativo indisponível neste dispositivo"}</small></div>
+                    <div><strong>{tool.label}</strong><small>{status}</small></div>
                     <SevenIcon name="chevronRight" />
                   </button>
                 );

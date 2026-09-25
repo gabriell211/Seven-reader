@@ -103,6 +103,7 @@ import {
   sessionAddPdfAttachment,
   sessionUpdatePdfAttachment,
   sessionRemovePdfAttachment,
+  sessionUpdatePdfLayerProperties,
   sessionSetPdfLayerVisibility,
   sessionUpdateDocumentMetadata,
   sessionSetPageBoxes,
@@ -1444,6 +1445,17 @@ export default function App() {
     }
   };
 
+  const runUpdateLayerProperties = async (update: LayerPropertiesUpdate) => {
+    if (!document) return;
+    try {
+      const summary = await sessionUpdatePdfLayerProperties(document.id, update);
+      await acceptDocumentRevision(summary, "Propriedades da camada atualizadas.");
+      await refreshAdvancedFrom(summary);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
   const runLayerVisibility = async (objectId: string, visible: boolean) => {
     if (!document) return;
     try {
@@ -2310,6 +2322,7 @@ export default function App() {
           onRemoveAttachment={(objectId)=>void runRemoveAttachment(objectId)}
           onExtractAttachment={(objectId,destination)=>void runExtractAttachment(objectId,destination)}
           onLayerVisibility={(objectId,visible)=>void runLayerVisibility(objectId,visible)}
+          onUpdateLayer={(update)=>void runUpdateLayerProperties(update)}
         />
       )}
       {redactionOpen && document && (

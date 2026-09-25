@@ -6,6 +6,7 @@ use crate::{
     forms,
     ocr,
     document_ops,
+    editing,
     pdf,
     signatures,
     state::{AppState, JobStatus},
@@ -438,6 +439,76 @@ pub fn start_optimize_pdf(
         input.to_string_lossy().into_owned(),
     ];
     Ok(jobs::start_process_job(app, &state, "optimize", executable, args, Some(output)))
+}
+
+#[tauri::command]
+pub fn edit_add_text(
+    input: String,
+    output: String,
+    placement: editing::TextPlacement,
+) -> CommandResult<()> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    editing::add_text(&input, &output, placement).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn edit_replace_text(
+    input: String,
+    output: String,
+    find: String,
+    replacement: String,
+    all_pages: bool,
+    page_index: usize,
+) -> CommandResult<editing::ReplaceTextReport> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    editing::replace_text(&input, &output, &find, &replacement, all_pages, page_index)
+        .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn edit_add_image(
+    input: String,
+    output: String,
+    placement: editing::ImagePlacement,
+) -> CommandResult<()> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    editing::add_image(&input, &output, placement).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn edit_add_link(
+    input: String,
+    output: String,
+    link: editing::LinkPlacement,
+) -> CommandResult<()> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    editing::add_link(&input, &output, link).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn edit_overlay_text(
+    input: String,
+    output: String,
+    options: editing::OverlayTextOptions,
+) -> CommandResult<()> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    editing::add_overlay_text(&input, &output, options).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn edit_set_background(
+    input: String,
+    output: String,
+    options: editing::BackgroundOptions,
+) -> CommandResult<()> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    editing::set_background(&input, &output, options).map_err(ErrorPayload::from)
 }
 
 #[tauri::command]

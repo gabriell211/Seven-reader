@@ -955,3 +955,27 @@ svg { width: 20px; height: 20px; }
   .managed-element-list article { grid-template-columns:30px 1fr; }
   .optimizer-discard-grid { grid-template-columns:1fr; }
 }
+
+.visual-organizer { margin:16px 18px 4px; padding:14px; border:1px solid #dedde4; border-radius:14px; display:grid; gap:12px; background:#f8f8fb; }
+.visual-organizer-toolbar { display:flex; gap:12px; justify-content:space-between; align-items:center; flex-wrap:wrap; }
+.visual-organizer-toolbar > div:first-child { display:grid; gap:2px; }
+.visual-organizer-toolbar strong { font-size:11px; }
+.visual-organizer-toolbar small { color:#8c8e96; font-size:8.5px; }
+.visual-page-actions { display:flex; gap:5px; align-items:center; flex-wrap:wrap; }
+.visual-page-actions button,.visual-page-actions select { min-height:31px; padding:0 8px; border:1px solid #dddce3; border-radius:7px; display:inline-flex; gap:5px; align-items:center; background:white; color:#666872; cursor:pointer; font-size:8.5px; font-weight:700; }
+.visual-page-actions button:disabled { opacity:.35; cursor:default; }
+.visual-page-actions svg { width:12px; }
+.visual-page-grid { max-height:360px; overflow:auto; padding:4px; display:grid; grid-template-columns:repeat(auto-fill,minmax(105px,1fr)); gap:10px; align-content:start; }
+.visual-page-card { min-width:0; padding:7px; border:1px solid #dcdbe2; border-radius:10px; display:grid; gap:6px; background:white; cursor:pointer; box-shadow:0 2px 8px rgba(24,22,34,.04); }
+.visual-page-card:hover { border-color:#bdb1e6; }
+.visual-page-card.selected { border-color:#7047db; box-shadow:0 0 0 2px rgba(112,71,219,.13); background:#f8f5ff; }
+.visual-thumb { aspect-ratio:.72; overflow:hidden; border:1px solid #e4e3e8; border-radius:5px; display:grid; place-items:center; background:#f1f1f4; }
+.visual-thumb img { width:100%; height:100%; object-fit:contain; background:white; }
+.visual-thumb-placeholder { color:#aaaab2; font-size:20px; font-weight:800; }
+.visual-page-meta { display:flex; justify-content:space-between; gap:6px; align-items:center; }
+.visual-page-meta strong { color:#555760; font-size:9.5px; }
+.visual-page-meta small { color:#999aa2; font-size:7.8px; }
+.visual-order-footer { display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; }
+.visual-order-footer > span { color:#898b94; font-size:8.5px; line-height:1.4; }
+.visual-load-more { justify-self:center; }
+@media (max-width:700px) { .visual-page-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }

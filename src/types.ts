@@ -459,6 +459,12 @@ export interface LinkPlacement {
   borderColor: [number, number, number];
 }
 
+export interface NamedDestinationInfo {
+  name: string;
+  pageIndex?: number;
+  editable: boolean;
+}
+
 export interface LinkInfo {
   objectId: string;
   pageIndex: number;

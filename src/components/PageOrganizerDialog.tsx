@@ -71,6 +71,7 @@ export function PageOrganizerDialog({ documentId, fileName, pageCount, onClose, 
 
   useEffect(() => {
     let cancelled = false;
+    if (!documentId) return;
     void (async () => {
       const uniquePages = [...new Set(pageOrder.slice(0, visibleLimit))];
       for (const pageIndex of uniquePages) {
@@ -249,7 +250,7 @@ export function PageOrganizerDialog({ documentId, fileName, pageCount, onClose, 
           <button className="icon-button" onClick={onClose} aria-label="Fechar"><SevenIcon name="close" /></button>
         </header>
 
-        <section className="visual-organizer">
+        {documentId && pageOrder.length > 0 && <section className="visual-organizer">
           <div className="visual-organizer-toolbar">
             <div>
               <strong>Organizador visual</strong>
@@ -303,7 +304,7 @@ export function PageOrganizerDialog({ documentId, fileName, pageCount, onClose, 
             <span>Arraste miniaturas para reordenar. Ctrl/Cmd seleciona várias; Shift seleciona intervalo.</span>
             <button className="primary-button" disabled={!pageOrder.length} onClick={applyVisualOrder}><SevenIcon name="save" /> Aplicar ordem visual</button>
           </div>
-        </section>
+        </section>}
 
         <div className="operation-tabs operation-tabs--pages" role="tablist" aria-label="Operação">
           {operations.map((item) => (

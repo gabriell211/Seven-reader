@@ -56,6 +56,74 @@ pub async fn open_document(
 }
 
 #[tauri::command]
+pub async fn restore_document_session(
+    state: State<'_, AppState>,
+    path: String,
+    working_path: String,
+    password: Option<String>,
+) -> CommandResult<pdf::DocumentSummary> {
+    let canonical = pdf::validate_pdf_path(&path).map_err(ErrorPayload::from)?;
+    let working = pdf::validate_pdf_path(&working_path).map_err(ErrorPayload::from)?;
+    let editing_root = state.cache_dir.join("editing");
+    fs::create_dir_all(&editing_root)
+        .map_err(|error| ErrorPayload::from(SevenError::Io(error.to_string())))?;
+    let editing_root = fs::canonicalize(&editing_root)
+        .map_err(|error| ErrorPayload::from(SevenError::InvalidPath(error.to_string())))?;
+    let working = fs::canonicalize(&working)
+        .map_err(|error| ErrorPayload::from(SevenError::InvalidPath(error.to_string())))?;
+
+    if !working.starts_with(&editing_root) {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "A revisão de recuperação não pertence ao cache seguro do Seven Reader".into(),
+        )));
+    }
+
+    let password_for_original = password.clone();
+    let mut inspected = tauri::async_runtime::spawn_blocking(move || {
+        pdf::inspect(&canonical, password_for_original)
+    })
+    .await
+    .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
+    .map_err(ErrorPayload::from)?;
+
+    let working_for_inspection = working.clone();
+    let password_for_working = password.clone();
+    let working_inspected = tauri::async_runtime::spawn_blocking(move || {
+        pdf::inspect(&working_for_inspection, password_for_working)
+    })
+    .await
+    .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
+    .map_err(ErrorPayload::from)?;
+
+    let recovery_dir = state.cache_dir.join("editing").join(&inspected.id);
+    fs::create_dir_all(&recovery_dir)
+        .map_err(|error| ErrorPayload::from(SevenError::Io(error.to_string())))?;
+    let recovered = recovery_dir.join("rev-00000001-recovered.pdf");
+    fs::copy(&working, &recovered)
+        .map_err(|error| ErrorPayload::from(SevenError::Io(error.to_string())))?;
+    pdf::validate_pdf_path(recovered.to_string_lossy().as_ref()).map_err(ErrorPayload::from)?;
+
+    inspected.working_path = Some(recovered);
+    inspected.revision = 1;
+    inspected.file_size = working_inspected.file_size;
+    inspected.page_count = working_inspected.page_count;
+    inspected.pdf_version = working_inspected.pdf_version;
+    inspected.encrypted = working_inspected.encrypted;
+    inspected.has_signatures = working_inspected.has_signatures;
+    inspected.has_forms = working_inspected.has_forms;
+
+    let summary = pdf::summary(&inspected);
+    state.documents.lock().insert(inspected.id.clone(), inspected);
+
+    if let Some(old_dir) = working.parent() {
+        if old_dir.starts_with(&editing_root) && old_dir != recovery_dir {
+            let _ = fs::remove_dir_all(old_dir);
+        }
+    }
+    Ok(summary)
+}
+
+#[tauri::command]
 pub fn close_document(state: State<'_, AppState>, document_id: String) -> CommandResult<()> {
     state.documents.lock().remove(&document_id);
     let editing_dir = state.cache_dir.join("editing").join(&document_id);

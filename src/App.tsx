@@ -1682,6 +1682,10 @@ export default function App() {
           canNavigateBack={canNavigateBack}
           canNavigateForward={canNavigateForward}
           capabilities={capabilities}
+          quickTools={settings.quickTools}
+          quickToolsPosition={settings.quickToolsPosition}
+          sidePanels={settings.sidePanels}
+          taskHistory={taskHistory}
           searchHits={searchHits}
           advancedSearchHits={advancedSearchHits}
           page={page}
@@ -1694,6 +1698,7 @@ export default function App() {
           onReorderTabs={reorderTabs}
           onNavigateBack={() => void navigateHistory(-1)}
           onNavigateForward={() => void navigateHistory(1)}
+          onQuickToolsPositionChange={(position) => setSettings((current) => ({ ...current, quickToolsPosition: position }))}
           onOpen={() => void choosePdf()}
           onSaveAs={() => void saveAs()}
           onPrint={() => void runPrint()}

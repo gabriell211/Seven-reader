@@ -72,6 +72,8 @@ pub fn run() {
             commands::session_edit_set_background,
             commands::session_fill_form_fields,
             commands::session_create_form_field,
+            commands::session_duplicate_form_field,
+            commands::session_set_page_tab_order,
             commands::export_form_data,
             commands::session_import_form_data,
             commands::session_reset_form,

@@ -72,6 +72,8 @@ pub fn run() {
             commands::session_edit_set_background,
             commands::session_fill_form_fields,
             commands::session_create_form_field,
+            commands::session_update_form_field,
+            commands::session_delete_form_field,
             commands::session_add_pdf_bookmark,
             commands::session_rename_pdf_bookmark,
             commands::session_add_pdf_attachment,

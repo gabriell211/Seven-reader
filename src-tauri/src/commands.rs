@@ -1243,16 +1243,52 @@ pub fn start_combine_documents(
         canonical.push(pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?);
     }
     let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
-    let mut args = vec!["--empty".to_owned(), "--pages".to_owned()];
-    for input in canonical {
+    let base = canonical[0].clone();
+
+    let mut offsets = Vec::new();
+    let mut page_offset = lopdf::Document::load(&base)
+        .map_err(|error| ErrorPayload::from(SevenError::PdfOpen(error.to_string())))?
+        .get_pages()
+        .len();
+    for source in canonical.iter().skip(1) {
+        offsets.push((source.clone(), page_offset));
+        page_offset += lopdf::Document::load(source)
+            .map_err(|error| ErrorPayload::from(SevenError::PdfOpen(error.to_string())))?
+            .get_pages()
+            .len();
+    }
+
+    // Keep the first PDF as qpdf's primary document so document-level
+    // metadata, outlines, names, page labels and other global structures
+    // are preserved whenever qpdf can preserve them.
+    let mut args = vec![
+        base.to_string_lossy().into_owned(),
+        "--pages".into(),
+        ".".into(),
+        "1-z".into(),
+    ];
+    for input in canonical.iter().skip(1) {
         args.push(input.to_string_lossy().into_owned());
         args.push("1-z".into());
     }
     args.push("--".into());
     args.push(output.to_string_lossy().into_owned());
-    Ok(jobs::start_process_job(app, &state, "combine", executable, args, Some(output)))
-}
 
+    let post_output = output.clone();
+    Ok(jobs::start_process_job_with_postprocess(
+        app,
+        &state,
+        "combine",
+        executable,
+        args,
+        Some(output),
+        "Mesclando árvores de marcadores",
+        move || {
+            advanced::append_bookmarks_from_sources(&post_output, &offsets)?;
+            Ok(())
+        },
+    ))
+}
 #[tauri::command]
 pub fn start_split_pages(
     app: AppHandle,

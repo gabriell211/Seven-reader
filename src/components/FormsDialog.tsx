@@ -1,17 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { save } from "@tauri-apps/plugin-dialog";
 import type { FormFieldInfo, FormValue, NewFormField, NewFormFieldType } from "../types";
 import { SevenIcon } from "./SevenIcon";
 
 interface FormsDialogProps {
-  documentPath: string;
   pageIndex: number;
   fields: FormFieldInfo[];
   loading: boolean;
   onClose: () => void;
   onReload: () => void;
-  onFill: (output: string, values: FormValue[]) => void;
-  onCreate: (output: string, field: NewFormField) => void;
+  onFill: (values: FormValue[]) => void;
+  onCreate: (field: NewFormField) => void;
 }
 
 const fieldTypes: Array<{ id: NewFormFieldType; label: string }> = [
@@ -24,7 +22,7 @@ const fieldTypes: Array<{ id: NewFormFieldType; label: string }> = [
   { id: "signature", label: "Assinatura" },
 ];
 
-export function FormsDialog({ documentPath, pageIndex, fields, loading, onClose, onReload, onFill, onCreate }: FormsDialogProps) {
+export function FormsDialog({ pageIndex, fields, loading, onClose, onReload, onFill, onCreate }: FormsDialogProps) {
   const [tab, setTab] = useState<"fill" | "create">("fill");
   const [values, setValues] = useState<Record<string, string>>({});
   const [name, setName] = useState("campo_1");
@@ -46,21 +44,12 @@ export function FormsDialog({ documentPath, pageIndex, fields, loading, onClose,
     [fields, values],
   );
 
-  const output = async (suffix: string) => save({
-    title: "Salvar PDF com formulário",
-    defaultPath: documentPath.replace(/\.pdf$/i, `-${suffix}.pdf`),
-    filters: [{ name: "Documento PDF", extensions: ["pdf"] }],
-  });
-
-  const submitFill = async () => {
-    const destination = await output("preenchido");
-    if (destination) onFill(destination, fillValues);
+  const submitFill = () => {
+    onFill(fillValues);
   };
 
-  const submitCreate = async () => {
-    const destination = await output("formulario");
-    if (!destination) return;
-    onCreate(destination, {
+  const submitCreate = () => {
+    onCreate({
       name,
       fieldType,
       pageIndex,
@@ -76,7 +65,7 @@ export function FormsDialog({ documentPath, pageIndex, fields, loading, onClose,
   return (
     <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section className="workflow-dialog forms-dialog" role="dialog" aria-modal="true">
-        <header className="organizer-head"><div><span className="eyebrow">ACROFORM</span><h2>Formulários PDF</h2><p>Preenchimento e criação de widgets persistidos no documento.</p></div><button className="icon-button" onClick={onClose}><SevenIcon name="close" /></button></header>
+        <header className="organizer-head"><div><span className="eyebrow">ACROFORM</span><h2>Formulários PDF</h2><p>Preencha e prepare campos na sessão atual; use Salvar quando quiser gravar no arquivo original.</p></div><button className="icon-button" onClick={onClose}><SevenIcon name="close" /></button></header>
         <div className="workflow-tabs">
           <button className={tab === "fill" ? "active" : ""} onClick={() => setTab("fill")}>Preencher ({fields.length})</button>
           <button className={tab === "create" ? "active" : ""} onClick={() => setTab("create")}>Criar campo</button>
@@ -96,7 +85,7 @@ export function FormsDialog({ documentPath, pageIndex, fields, loading, onClose,
                   ))}
                 </div>
               )}
-              <button className="primary-button workflow-submit" disabled={!fields.length} onClick={() => void submitFill()}><SevenIcon name="save" /> Salvar preenchimento</button>
+              <button className="primary-button workflow-submit" disabled={!fields.length} onClick={submitFill}><SevenIcon name="form" /> Aplicar preenchimento</button>
             </>
           ) : (
             <>
@@ -112,7 +101,7 @@ export function FormsDialog({ documentPath, pageIndex, fields, loading, onClose,
                 <label className="workflow-field"><span>Altura</span><input type="number" min={1} value={height} onChange={(event) => setHeight(Number(event.target.value))} /></label>
               </div>
               <label className="toggle-row"><input type="checkbox" checked={required} onChange={(event) => setRequired(event.target.checked)} /><span><strong>Campo obrigatório</strong><small>Define o bit Required em /Ff.</small></span></label>
-              <button className="primary-button workflow-submit" disabled={!name.trim() || width <= 0 || height <= 0} onClick={() => void submitCreate()}><SevenIcon name="form" /> Criar campo na página {pageIndex + 1}</button>
+              <button className="primary-button workflow-submit" disabled={!name.trim() || width <= 0 || height <= 0} onClick={submitCreate}><SevenIcon name="form" /> Criar campo na página {pageIndex + 1}</button>
             </>
           )}
         </div>

@@ -774,3 +774,17 @@ svg { width: 20px; height: 20px; }
 .image-object-row strong { font:700 10px ui-monospace,SFMono-Regular,Consolas,monospace; }
 .image-object-row small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#8c8e96; font-size:8.5px; }
 @media (max-width:720px) { .four-column-fields { grid-template-columns:repeat(2,1fr); } .image-object-row { grid-template-columns:32px 1fr; } }
+
+.form-value-actions { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:7px; align-items:center; }
+.form-edit-list { max-height:380px; overflow:auto; display:grid; gap:6px; }
+.form-edit-list > button { min-height:54px; padding:9px 10px; border:1px solid #e2e1e7; border-radius:10px; display:grid; grid-template-columns:minmax(0,1fr) 18px; gap:8px; align-items:center; text-align:left; background:white; cursor:pointer; }
+.form-edit-list > button:hover { border-color:#cfc5f2; background:#fbf9ff; }
+.form-edit-list > button > div { min-width:0; display:grid; gap:2px; }
+.form-edit-list strong { font-size:10.5px; }
+.form-edit-list small { color:#8c8e96; font-size:8.5px; }
+.form-edit-list svg { width:13px; color:#aaaab2; }
+.form-edit-heading { min-height:52px; padding:9px 10px; border:1px solid #ddd8ef; border-radius:10px; display:flex; gap:10px; justify-content:space-between; align-items:center; background:#f7f4ff; }
+.form-edit-heading > div { min-width:0; display:grid; gap:2px; }
+.form-edit-heading strong { font-size:10.5px; }
+.form-edit-heading small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#8a8c95; font:8px ui-monospace,SFMono-Regular,Consolas,monospace; }
+.form-edit-actions { display:flex; justify-content:space-between; gap:9px; align-items:center; flex-wrap:wrap; }

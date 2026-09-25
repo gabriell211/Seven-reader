@@ -22,8 +22,13 @@ import { SettingsDialog } from "./components/SettingsDialog";
 import { UnsavedChangesDialog } from "./components/UnsavedChangesDialog";
 import { ActionsDialog } from "./components/ActionsDialog";
 import { PrintProductionDialog } from "./components/PrintProductionDialog";
+import { CatalogDialog } from "./components/CatalogDialog";
 import { applyAppearance, isTrustedPath, loadSettings, saveSettings, type SevenSettings } from "./lib/settings";
 import {
+  buildCatalog,
+  listCatalogs,
+  searchCatalog,
+  deleteCatalog,
   addAnnotation,
   addInkAnnotation,
   cancelJob,
@@ -110,6 +115,8 @@ import type {
   BackgroundOptions,
   AnnotationInput,
   Capabilities,
+  CatalogHit,
+  CatalogSummary,
   CompareReport,
   DocumentMetadata,
   DocumentSummary,
@@ -220,6 +227,10 @@ export default function App() {
   const [taskHistory, setTaskHistory] = useState<JobStatus[]>(loadTaskHistory);
   const [recentTools, setRecentTools] = useState<ToolId[]>(loadRecentTools);
   const [notice, setNotice] = useState<string | null>(null);
+  const [catalogOpen, setCatalogOpen] = useState(false);
+  const [catalogs, setCatalogs] = useState<CatalogSummary[]>([]);
+  const [catalogHits, setCatalogHits] = useState<CatalogHit[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
   const [organizerOpen, setOrganizerOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [conversionOpen, setConversionOpen] = useState(false);
@@ -999,6 +1010,12 @@ export default function App() {
         return;
       }
 
+      if (tool === "catalog") {
+        setCatalogHits([]);
+        setCatalogOpen(true);
+        return;
+      }
+
       if (tool === "print-production") {
         if (!document) {
           setNotice("Abra um PDF para executar o preflight.");
@@ -1501,6 +1518,37 @@ export default function App() {
     }
   };
 
+  const reloadCatalogs = async () => {
+    try { setCatalogs(await listCatalogs()); } catch (error) { setNotice(errorMessage(error)); }
+  };
+
+  const runBuildCatalog = async (name: string, inputs: string[]) => {
+    try {
+      setCatalogLoading(true);
+      const created = await buildCatalog(name, inputs);
+      setNotice(`Índice "${created.name}" criado com ${created.documentCount} documento(s).`);
+      setCatalogs(await listCatalogs());
+    } catch (error) { setNotice(errorMessage(error)); }
+    finally { setCatalogLoading(false); }
+  };
+
+  const runCatalogSearch = async (id: string, query: string, matchCase: boolean) => {
+    try {
+      setCatalogLoading(true);
+      setCatalogHits(await searchCatalog(id, query, matchCase));
+    } catch (error) { setNotice(errorMessage(error)); }
+    finally { setCatalogLoading(false); }
+  };
+
+  const runDeleteCatalog = async (id: string) => {
+    try {
+      await deleteCatalog(id);
+      setCatalogHits([]);
+      setCatalogs(await listCatalogs());
+      setNotice("Índice local excluído.");
+    } catch (error) { setNotice(errorMessage(error)); }
+  };
+
   const createImagesPdf = async (inputs: string[], dpi: number) => {
     const destination = await save({
       title: "Criar PDF a partir de imagens",
@@ -1893,6 +1941,7 @@ export default function App() {
           onCancel={cancelClosePrompt}
         />
       )}
+      {catalogOpen && <CatalogDialog catalogs={catalogs} hits={catalogHits} loading={catalogLoading} onClose={() => setCatalogOpen(false)} onReload={() => void reloadCatalogs()} onBuild={(name, inputs) => void runBuildCatalog(name, inputs)} onSearch={(id, query, matchCase) => void runCatalogSearch(id, query, matchCase)} onDelete={(id) => void runDeleteCatalog(id)} onOpenHit={(path, pageIndex) => { setCatalogOpen(false); void openPath(path, { page: pageIndex, zoom: settings.defaultZoom }); }} />}
       {settingsOpen && <SettingsDialog settings={settings} onClose={() => setSettingsOpen(false)} onChange={setSettings} />}
       {printProductionOpen && document && (
         <PrintProductionDialog

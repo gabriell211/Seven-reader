@@ -1,41 +1,48 @@
 # Seven Reader
 
 <p align="center">
-  <strong>Leitor, editor e suíte completa de PDF para desktop.</strong>
+  <strong>Suíte desktop completa para leitura, edição, criação e processamento profissional de PDFs.</strong>
 </p>
 
 <p align="center">
-  Visualize, edite, organize, converta, assine, proteja, preencha, digitalize e processe documentos PDF em uma aplicação moderna, rápida e local-first.
+  Read. Edit. Convert. Sign. Protect.
 </p>
 
 ---
 
-## Sobre o projeto
+## Visão do produto
 
-O **Seven Reader** é uma aplicação desktop completa para trabalhar com documentos PDF.
+O **Seven Reader** é uma aplicação desktop local-first para trabalhar com documentos PDF do início ao fim.
 
-O objetivo é reunir em um único aplicativo os fluxos que normalmente exigem diferentes ferramentas:
+A proposta não é ser somente um visualizador. O aplicativo deve cobrir o fluxo completo de documentos:
 
-- Leitura e navegação de PDF
-- Edição de texto, imagens e objetos
-- Organização de páginas
-- Conversão de arquivos
-- OCR
-- Comentários e anotações
-- Formulários
-- Assinaturas eletrônicas e digitais
-- Proteção e criptografia
-- Redação permanente de conteúdo sensível
-- Compactação e otimização
-- Impressão avançada
-- Comparação de documentos
-- Digitalização
-- Acessibilidade
-- Processamento em lote
+- abrir e navegar;
+- pesquisar;
+- editar texto, imagens, objetos e links;
+- organizar e combinar páginas;
+- criar PDFs;
+- converter formatos;
+- digitalizar;
+- executar OCR;
+- revisar OCR;
+- comentar e revisar;
+- preencher e criar formulários;
+- assinar eletronicamente;
+- assinar e certificar com certificados digitais;
+- proteger e criptografar;
+- redigir conteúdo sensível permanentemente;
+- sanitizar documentos;
+- compactar e otimizar;
+- comparar versões;
+- medir;
+- preparar documentos acessíveis;
+- executar produção gráfica e impressão avançada;
+- automatizar tarefas repetitivas;
+- processar arquivos em lote.
 
-> **Status:** reconstrução completa a partir do zero. A identidade visual oficial do Seven Reader deve ser preservada, enquanto arquitetura, interface, mecanismo de PDF e fluxos de trabalho serão refeitos.
+> **Status:** reconstrução completa a partir do zero. A identidade visual oficial do Seven Reader deve ser preservada. Interface, arquitetura, engine de PDF e fluxos internos serão refeitos.
 
-O Seven Reader é um produto independente. Sua interface deve seguir padrões modernos de produtividade para PDF sem copiar identidade visual, ícones proprietários ou ativos de terceiros.
+O Seven Reader é um produto independente. Referências de mercado servem somente para estudar fluxos de uso e cobertura funcional. Identidade, componentes visuais, ícones, ativos e implementação devem ser próprios.
 
 ---
 
@@ -43,24 +50,28 @@ O Seven Reader é um produto independente. Sua interface deve seguir padrões mo
 
 O Seven Reader deve ser:
 
-- Rápido mesmo com PDFs grandes
-- Local-first
-- Seguro por padrão
-- Multiplataforma
-- Compatível com documentos PDF reais do dia a dia
-- Simples para leitura
-- Completo para uso profissional
-- Consistente entre todas as ferramentas
-- Capaz de abrir múltiplos documentos simultaneamente
-- Capaz de continuar operações longas em segundo plano
-- Capaz de recuperar sessões após falhas
-- Capaz de operar sem depender de serviços online para os fluxos principais
+- rápido mesmo com PDFs grandes;
+- local-first;
+- seguro por padrão;
+- multiplataforma;
+- utilizável sem criar conta;
+- funcional offline nos fluxos principais;
+- compatível com PDFs reais e complexos;
+- simples para leitura casual;
+- completo para uso profissional;
+- consistente entre ferramentas;
+- acessível por teclado e tecnologias assistivas;
+- capaz de abrir múltiplos documentos;
+- capaz de processar tarefas pesadas sem travar a interface;
+- capaz de recuperar sessões após falhas;
+- capaz de salvar sem corromper o documento original;
+- extensível sem acoplar a interface a uma única engine de PDF.
 
 ---
 
 # Stack
 
-O Seven Reader utiliza a mesma base tecnológica do **Seven Mail**.
+O Seven Reader deve seguir a mesma base tecnológica do **Seven Mail**, removendo dependências específicas de e-mail e adicionando somente o necessário para PDF.
 
 ## Frontend
 
@@ -69,40 +80,68 @@ O Seven Reader utiliza a mesma base tecnológica do **Seven Mail**.
 - TypeScript **5.9+**
 - Vite **7+**
 - `@vitejs/plugin-react`
-- CSS moderno com design system próprio
+- Design system próprio
+- CSS moderno
 - APIs Tauri para integração nativa
 
 ## Desktop
 
 - Tauri **2.11+**
+- `@tauri-apps/api` **2.11+**
+- `@tauri-apps/cli` **2.11+**
 - Rust
-- Tauri Plugins oficiais
+- Plugins oficiais do Tauri sempre que possível
 - Janelas nativas independentes
 - File associations
-- Deep links quando necessário
+- Drag and drop nativo
 - Diálogos nativos
-- Sistema de atualização
-- Integração com impressão e sistema operacional
+- Notificações nativas
+- Atualização automática
+- Integração com scanner, impressora, certificados e sistema operacional
 
-## Núcleo nativo
+## Backend nativo
 
-O backend Rust será responsável por:
+O Rust é responsável por operações pesadas e sensíveis:
 
-- Abertura e validação de arquivos
-- Renderização
-- Parsing
-- Manipulação estrutural
-- Conversões
-- OCR
-- Assinaturas digitais
-- Criptografia
-- Impressão
-- Processamento em lote
-- Cache
-- Indexação
-- Operações pesadas em background
+- parsing;
+- validação;
+- renderização;
+- manipulação estrutural;
+- leitura e escrita;
+- OCR;
+- conversão;
+- compressão;
+- criptografia;
+- assinaturas digitais;
+- certificados;
+- impressão;
+- indexação;
+- processamento em lote;
+- cache;
+- filas;
+- isolamento de operações arriscadas.
 
-A interface React nunca deverá executar processamento pesado de PDF diretamente na thread principal.
+A interface React **não** deve executar processamento pesado de PDF na thread principal.
+
+## Engine de PDF
+
+A engine deve ficar atrás de uma abstração própria.
+
+Requisitos:
+
+- licença compatível com o projeto;
+- renderização de PDF 1.x e PDF 2.0;
+- suporte a texto, imagens, transparência e fontes;
+- extração estruturada;
+- edição incremental quando possível;
+- suporte a forms, annotations, links, bookmarks e layers;
+- renderização por página e por tiles;
+- acesso a objetos de baixo nível quando necessário;
+- capacidade de salvar sem rasterizar o documento inteiro.
+
+Não acoplar o domínio diretamente a PDFium, MuPDF, Poppler ou qualquer engine específica.
+
+> Dependências AGPL ou comerciais só podem entrar no núcleo após uma decisão explícita de licenciamento.
 
 ---
 
@@ -110,174 +149,337 @@ A interface React nunca deverá executar processamento pesado de PDF diretamente
 
 ## Local-first
 
-Abrir, ler, editar, assinar, converter e organizar PDFs não deve exigir uma conta online.
+Abrir, ler, editar, assinar, converter, organizar, digitalizar e executar OCR deve funcionar localmente sempre que tecnicamente possível.
 
-Arquivos do usuário permanecem locais por padrão.
+Por padrão:
+
+- documentos não são enviados para servidores;
+- OCR é local;
+- cache é local;
+- histórico é local;
+- assinaturas ficam no dispositivo;
+- chaves privadas não deixam o sistema;
+- telemetria é opcional.
 
 ## Processamento nativo
 
-Operações pesadas devem acontecer no backend Rust ou em workers nativos.
-
-A camada React é responsável pela experiência visual e pela orquestração da interface.
+Operações pesadas acontecem no backend Rust ou em workers/processos dedicados.
 
 ## Operações não destrutivas
 
 Sempre que possível:
 
-- manter o documento original intacto;
-- trabalhar em uma cópia ou estado transacional;
-- permitir desfazer/refazer;
-- gravar somente após confirmação;
-- usar gravação atômica para evitar corrupção.
+- manter o original intacto;
+- usar estado transacional;
+- trabalhar em cópia temporária;
+- oferecer desfazer/refazer;
+- usar gravação atômica;
+- validar o arquivo salvo;
+- manter recuperação após crash.
 
 ## Segurança por padrão
 
-PDF é uma entrada não confiável.
+PDF é entrada não confiável.
 
-O aplicativo deve tratar com cuidado:
+O aplicativo deve tratar como potencialmente hostil:
 
-- JavaScript embutido
-- URLs
-- anexos
-- formulários
-- ações automáticas
-- conteúdo multimídia
-- fontes incorporadas
-- documentos malformados
-- arquivos criptografados
-- assinaturas digitais
-- objetos desconhecidos
+- JavaScript;
+- URLs;
+- launch actions;
+- anexos;
+- formulários;
+- mídia;
+- fontes;
+- objetos 3D;
+- arquivos criptografados;
+- objetos comprimidos;
+- streams malformados;
+- documentos corrompidos;
+- certificados;
+- ações automáticas.
 
 ---
 
-# Experiência principal
+# Arquitetura da interface
 
-## Tela inicial
+A interface deve ser organizada por **fluxos completos**, e não por centenas de comandos soltos.
+
+Exemplos de fluxos principais:
+
+- Editar
+- Converter
+- Criar
+- Organizar
+- Combinar
+- Comentar
+- Preencher e assinar
+- Certificados
+- Digitalizar e OCR
+- Preparar formulário
+- Proteger
+- Redigir
+- Comparar
+- Otimizar
+- Acessibilidade
+- Produção de impressão
+- Automatizar
+
+---
+
+# Tela inicial
 
 - [ ] Arquivos recentes
 - [ ] Favoritos
 - [ ] Fixados
+- [ ] Recuperar sessão
 - [ ] Abrir arquivo
 - [ ] Abrir pasta
 - [ ] Criar PDF
-- [ ] Digitalizar
 - [ ] Combinar arquivos
+- [ ] Digitalizar
 - [ ] Converter
 - [ ] OCR
 - [ ] Compactar
 - [ ] Assinar
 - [ ] Ferramentas recentes
-- [ ] Recuperar sessão anterior
-- [ ] Histórico local opcional
+- [ ] Tarefas recentes
 - [ ] Drag and drop
+- [ ] Histórico local opcional
+- [ ] Limpar recentes
+- [ ] Abrir localização do arquivo
+- [ ] Remover item da lista sem apagar o arquivo
 
-## Janela do documento
+---
 
-A janela principal deve possuir uma estrutura consistente:
+# Workspace do documento
 
-- Barra global superior
-- Abas de documentos
-- Painel de ferramentas
-- Documento central
-- Ferramentas rápidas
-- Painel lateral configurável
-- Navegação inferior
-- Indicadores de zoom, página e estado
-- Barra de pesquisa
-- Menus contextuais
+## Estrutura
+
+A janela do documento deve possuir:
+
+- menu principal;
+- barra global;
+- abas;
+- painel "Todas as ferramentas";
+- painel da ferramenta ativa;
+- documento central;
+- barra flutuante de ferramentas rápidas;
+- painéis laterais;
+- navegação;
+- zoom;
+- número da página;
+- estado do documento;
+- pesquisa;
+- menus contextuais;
+- notificações de segurança;
+- status de tarefas em background.
+
+## Menu principal
+
+No Windows, deve concentrar ações equivalentes a:
+
+- Arquivo
+- Editar
+- Exibir
+- Preferências
+- Propriedades
+- Ajuda
+
+No macOS, respeitar convenções nativas de menu.
 
 ## Barra global
 
-- [ ] Abrir
-- [ ] Salvar
-- [ ] Salvar como
-- [ ] Imprimir
-- [ ] Compartilhar arquivo local
-- [ ] Desfazer
-- [ ] Refazer
-- [ ] Pesquisar
-- [ ] Acessar ferramentas
-- [ ] Preferências
-- [ ] Informações do documento
+Separar claramente:
+
+### Ferramentas do documento
+
+- Todas as ferramentas
+- Editar
+- Converter
+- Assinar
+- Comentar
+- Criar
+
+### Ações do arquivo
+
+- Abrir
+- Salvar
+- Salvar como
+- Imprimir
+- Pesquisar
+- Compartilhar/exportar
+- Desfazer
+- Refazer
+- Propriedades
+
+## Pesquisa global
+
+Um único campo deve conseguir procurar:
+
+- texto no documento;
+- comandos;
+- ferramentas;
+- páginas;
+- marcadores;
+- comentários;
+- campos de formulário.
 
 ## Todas as ferramentas
 
-Um único painel deve reunir todas as ferramentas disponíveis.
+Um ponto único para descobrir todas as ferramentas.
 
 Categorias:
 
 - Visualizar
 - Editar
-- Organizar
+- Organizar páginas
+- Combinar arquivos
 - Converter
-- Criar
+- Criar PDF
+- Digitalizar e OCR
 - Comentar
 - Preencher e assinar
-- Digitalizar e OCR
+- Solicitar assinaturas
+- Certificados
+- Preparar formulário
 - Proteger
 - Redigir
-- Compactar
+- Otimizar
 - Comparar
 - Medir
 - Acessibilidade
-- Formulários
-- Certificados
-- Impressão
+- Produção de impressão
+- Ações guiadas
+- JavaScript e ações PDF
+- Portfólios PDF
+- Camadas
+- Ferramentas geoespaciais
 
 ## Ferramentas rápidas
 
-Barra flutuante e personalizável com:
+Widget flutuante e personalizável.
+
+Ferramentas padrão:
 
 - Seleção
 - Mão
 - Comentário
 - Destaque
+- Sublinhado
+- Tachado
 - Desenho
 - Texto
 - Preenchimento
 - Assinatura
 - Borracha
-- Ferramentas favoritas
+
+Personalização:
+
+- [ ] adicionar
+- [ ] remover
+- [ ] reordenar
+- [ ] fixar
+- [ ] mover livremente
+- [ ] restaurar padrão
+- [ ] memorizar layout por usuário
+
+## Painéis laterais
+
+Painéis configuráveis e ocultáveis.
+
+Possíveis painéis:
+
+- Miniaturas
+- Marcadores
+- Comentários
+- Anexos
+- Camadas
+- Assinaturas
+- Tags
+- Ordem de leitura
+- Campos
+- Resultados de busca
+- Tarefas
+- Assistência inteligente opcional
 
 O usuário deve poder:
 
-- adicionar ferramentas;
-- remover ferramentas;
-- reordenar;
-- fixar;
-- mover a barra;
-- restaurar o padrão.
+- [ ] mostrar/ocultar
+- [ ] reordenar quando possível
+- [ ] recolher
+- [ ] restaurar configuração padrão
+
+## Painel direito inferior
+
+Acesso rápido a:
+
+- página atual;
+- página total;
+- zoom;
+- ajustar página;
+- ajustar largura;
+- tamanho real;
+- página única;
+- rolagem contínua;
+- duas páginas;
+- duas páginas contínuas;
+- marquee zoom;
+- zoom dinâmico.
+
+## Documento central
+
+- zoom inicial inteligente;
+- menus contextuais conforme seleção;
+- seleção de texto;
+- seleção de imagem;
+- seleção de objeto;
+- drag and drop;
+- cursores contextuais;
+- feedback visual de edição;
+- overlays de OCR, forms, comentários e acessibilidade.
 
 ---
 
-# Leitura de PDF
+# Leitura e visualização
 
 ## Renderização
 
-- [ ] Renderização de alta qualidade
-- [ ] Antialiasing
-- [ ] Texto vetorial nítido
-- [ ] Imagens em alta resolução
-- [ ] Transparência
-- [ ] Máscaras
-- [ ] Gradientes
-- [ ] Fontes incorporadas
-- [ ] Font fallback
-- [ ] Perfis de cor
-- [ ] Rotação
+- [ ] PDF 1.x
+- [ ] PDF 2.0
+- [ ] antialiasing
+- [ ] texto vetorial nítido
+- [ ] imagens de alta resolução
+- [ ] transparência
+- [ ] blend modes
+- [ ] máscaras
+- [ ] gradientes
+- [ ] padrões
+- [ ] fontes incorporadas
+- [ ] subset fonts
+- [ ] font fallback
+- [ ] ICC profiles
+- [ ] DeviceRGB
+- [ ] DeviceCMYK
+- [ ] DeviceGray
+- [ ] spot colors
 - [ ] CropBox
 - [ ] MediaBox
 - [ ] TrimBox
 - [ ] BleedBox
 - [ ] ArtBox
+- [ ] rotação
+- [ ] páginas com tamanhos diferentes
 
 ## Navegação
 
 - [ ] Próxima página
 - [ ] Página anterior
-- [ ] Ir para página
 - [ ] Primeira página
 - [ ] Última página
+- [ ] Ir para página
+- [ ] Histórico de navegação
+- [ ] Voltar à visualização anterior
+- [ ] Avançar à visualização seguinte
 - [ ] Rolagem contínua
 - [ ] Página única
 - [ ] Duas páginas
@@ -285,335 +487,709 @@ O usuário deve poder:
 - [ ] Ajustar página
 - [ ] Ajustar largura
 - [ ] Tamanho real
-- [ ] Zoom manual
+- [ ] Zoom +
+- [ ] Zoom -
 - [ ] Zoom por seleção
 - [ ] Zoom dinâmico
+- [ ] Lupa
+- [ ] Pan/Mão
 - [ ] Rotação visual
 - [ ] Tela cheia
 - [ ] Modo leitura
-- [ ] Apresentação
+- [ ] Modo apresentação
+- [ ] Reflow quando o PDF permitir
 
-## Painel lateral
+## Réguas, grades e guias
 
-- [ ] Miniaturas
-- [ ] Marcadores
-- [ ] Anexos
-- [ ] Camadas
-- [ ] Comentários
-- [ ] Assinaturas
-- [ ] Formulários
-- [ ] Estrutura/tags
-- [ ] Resultados de busca
+- [ ] Régua horizontal
+- [ ] Régua vertical
+- [ ] Grade
+- [ ] Snap na grade
+- [ ] Guias
+- [ ] Coordenadas do cursor
+- [ ] Unidades configuráveis
 
-O painel deve ser personalizável e recolhível.
+---
 
-## Múltiplos documentos
+# Abas e múltiplas janelas
 
-- [ ] Abas
+- [ ] Abrir vários PDFs em abas
 - [ ] Reordenar abas
-- [ ] Fechar outras abas
-- [ ] Reabrir aba fechada
+- [ ] Fechar aba
+- [ ] Fechar outras
+- [ ] Reabrir fechada
+- [ ] Próxima aba
+- [ ] Aba anterior
 - [ ] Abrir em nova janela
-- [ ] Mover aba para outra janela
-- [ ] Comparar lado a lado
+- [ ] Mover para nova janela
+- [ ] Abrir dois documentos lado a lado
 - [ ] Restaurar sessão
+- [ ] Memorizar posição e zoom por documento
+- [ ] Detectar arquivo alterado externamente
 
 ---
 
 # Pesquisa
 
-- [ ] Pesquisa simples
-- [ ] Pesquisa em todas as páginas
-- [ ] Destaque dos resultados
-- [ ] Navegação resultado a resultado
-- [ ] Contagem de resultados
-- [ ] Diferenciar maiúsculas/minúsculas
+## Busca simples
+
+- [ ] Texto
+- [ ] Próximo resultado
+- [ ] Resultado anterior
+- [ ] Total de ocorrências
+- [ ] Destaques no documento
+
+## Busca avançada
+
+- [ ] Maiúsculas/minúsculas
 - [ ] Palavra inteira
-- [ ] Pesquisa em comentários
-- [ ] Pesquisa em marcadores
-- [ ] Pesquisa em campos de formulário
-- [ ] Pesquisa em anexos de texto compatíveis
-- [ ] Pesquisa em documentos OCR
-- [ ] Indexação local para documentos grandes
-- [ ] Histórico de pesquisa opcional
+- [ ] Intervalo de páginas
+- [ ] Comentários
+- [ ] Marcadores
+- [ ] Campos
+- [ ] Anexos textuais
+- [ ] Texto OCR
+- [ ] Metadados
+- [ ] Índice local
+- [ ] Histórico opcional
+- [ ] Regex opcional como melhoria própria
 
 ---
 
-# Seleção e cópia
+# Seleção e clipboard
 
 - [ ] Selecionar texto
 - [ ] Selecionar bloco
+- [ ] Seleção por coluna
 - [ ] Selecionar imagem
+- [ ] Selecionar objeto
+- [ ] Selecionar área
 - [ ] Copiar texto
 - [ ] Copiar imagem
 - [ ] Copiar área como imagem
-- [ ] Copiar mantendo ordem de leitura
-- [ ] Seleção por coluna
+- [ ] Copiar preservando ordem de leitura
 - [ ] Selecionar tudo
+- [ ] Criar PDF diretamente da área de transferência
 
 ---
 
-# Edição de PDF
+# Editar PDF
 
-A edição deve acontecer diretamente sobre o PDF, sem transformar o documento inteiro em uma imagem ou em um editor visual desconectado da estrutura real do arquivo.
+A edição deve atuar sobre a estrutura real do PDF sempre que possível.
+
+Não converter o documento inteiro em imagens para simular edição.
 
 ## Texto
 
-- [ ] Editar texto existente
-- [ ] Inserir texto
+- [ ] Adicionar texto
+- [ ] Alterar texto existente
+- [ ] Substituir texto
 - [ ] Excluir texto
-- [ ] Alterar fonte
-- [ ] Alterar tamanho
+- [ ] Fonte
+- [ ] Tamanho
+- [ ] Cor
 - [ ] Negrito
 - [ ] Itálico
-- [ ] Cor
-- [ ] Alinhamento
+- [ ] Sublinhado quando aplicável
 - [ ] Espaçamento
-- [ ] Reposicionar bloco
-- [ ] Redimensionar bloco
-- [ ] Quebra de linha
+- [ ] Alinhamento
+- [ ] Rotação
+- [ ] Reposicionamento
+- [ ] Redimensionamento da caixa
+- [ ] Reflow dentro da caixa
+- [ ] Listas com marcadores
+- [ ] Listas numeradas
+- [ ] Fonte padrão
+- [ ] Verificação ortográfica
+- [ ] Dicionário de palavras aceitas
+- [ ] Aviso de fonte ausente
 - [ ] Preservação de layout
-- [ ] Font fallback seguro
-- [ ] Aviso quando a fonte original não estiver disponível
 
 ## Imagens
 
-- [ ] Inserir imagem
-- [ ] Substituir imagem
-- [ ] Excluir imagem
-- [ ] Redimensionar
+- [ ] Adicionar
+- [ ] Substituir
+- [ ] Excluir
 - [ ] Recortar
+- [ ] Redimensionar
 - [ ] Girar
+- [ ] Espelhar
 - [ ] Reposicionar
-- [ ] Ajustar opacidade
+- [ ] Opacidade
 - [ ] Manter proporção
+- [ ] Editar em aplicativo externo opcional
+- [ ] Reimportar edição externa
 
 ## Objetos
 
-- [ ] Selecionar objeto
+- [ ] Selecionar raster
+- [ ] Selecionar vetor
 - [ ] Mover
 - [ ] Redimensionar
 - [ ] Rotacionar
 - [ ] Duplicar
 - [ ] Excluir
-- [ ] Alterar ordem
-- [ ] Agrupar quando aplicável
+- [ ] Ordem de empilhamento
+- [ ] Propriedades
+- [ ] Espaço de cor
+- [ ] Rendering intent
+- [ ] Tags quando aplicável
 
-## Links
+## Links e destinos
 
-- [ ] Criar link
-- [ ] Editar link
-- [ ] Remover link
-- [ ] Link para URL
-- [ ] Link para página
-- [ ] Link para arquivo
-- [ ] Ação segura
+- [ ] Criar link para URL
+- [ ] Criar link para página
+- [ ] Criar link para arquivo
+- [ ] Criar destino nomeado
+- [ ] Editar destino
+- [ ] Remover destino
+- [ ] Alterar área clicável
+- [ ] Alterar aparência
+- [ ] Mover área
+- [ ] Redimensionar área
+- [ ] Validar URL
+- [ ] Confirmar links externos conforme política de segurança
 
-## Elementos de página
+## Cabeçalho e rodapé
 
-- [ ] Cabeçalho
-- [ ] Rodapé
-- [ ] Numeração
-- [ ] Marca d'água
-- [ ] Plano de fundo
+- [ ] Adicionar
+- [ ] Atualizar
+- [ ] Remover
+- [ ] Texto
 - [ ] Data
-- [ ] Texto personalizado
-- [ ] Imagem personalizada
-- [ ] Aplicar em intervalo de páginas
+- [ ] Página
+- [ ] Total de páginas
+- [ ] Margens
+- [ ] Intervalo
+- [ ] Páginas pares/ímpares
+- [ ] Preview
+
+## Numeração de página
+
+- [ ] Número visual
+- [ ] Renumerar labels de páginas
+- [ ] Prefixo
+- [ ] Sufixo
+- [ ] Numeração romana
+- [ ] Intervalos
+
+## Marca d'água
+
+- [ ] Texto
+- [ ] Imagem
+- [ ] Rotação
+- [ ] Escala
+- [ ] Opacidade
+- [ ] Posição
+- [ ] Intervalo de páginas
+- [ ] Adicionar
+- [ ] Atualizar
+- [ ] Remover
+
+## Plano de fundo
+
+- [ ] Cor
+- [ ] Imagem
+- [ ] Opacidade
+- [ ] Escala
+- [ ] Posição
+- [ ] Intervalo
+- [ ] Adicionar
+- [ ] Atualizar
+- [ ] Remover
+
+## Numeração Bates
+
+- [ ] Adicionar
+- [ ] Prefixo
+- [ ] Sufixo
+- [ ] Dígitos
+- [ ] Número inicial
+- [ ] Aplicar em lote
+- [ ] Adicionar ao nome do arquivo
+- [ ] Remover
+- [ ] Pesquisar por número Bates
 
 ---
 
-# Organização de páginas
+# Organizar páginas
 
-- [ ] Reordenar por drag and drop
-- [ ] Inserir páginas
-- [ ] Inserir outro PDF
-- [ ] Inserir imagem
-- [ ] Inserir página em branco
-- [ ] Excluir páginas
-- [ ] Duplicar páginas
-- [ ] Girar páginas
-- [ ] Recortar páginas
-- [ ] Redimensionar páginas
-- [ ] Extrair páginas
-- [ ] Substituir páginas
-- [ ] Dividir PDF
-- [ ] Combinar PDFs
-- [ ] Combinar imagens e documentos
+## Visualização
+
+- [ ] Miniaturas grandes
 - [ ] Seleção múltipla
-- [ ] Operações por intervalo
-- [ ] Numeração Bates
+- [ ] Ctrl/Cmd + clique
+- [ ] Shift + clique
+- [ ] Drag and drop
+- [ ] Menu contextual
 - [ ] Preview antes de aplicar
+
+## Operações
+
+- [ ] Reordenar
+- [ ] Recortar
+- [ ] Copiar
+- [ ] Colar
+- [ ] Duplicar
+- [ ] Excluir
+- [ ] Girar
+- [ ] Recortar página
+- [ ] Redimensionar página
+- [ ] Substituir
+- [ ] Renumerar
+- [ ] Extrair
+- [ ] Dividir
+
+## Inserir
+
+Inserir páginas de:
+
+- [ ] arquivo
+- [ ] outro PDF
+- [ ] imagem
+- [ ] clipboard
+- [ ] scanner
+- [ ] página web
+- [ ] página em branco
+
+Permitir inserir:
+
+- antes da primeira;
+- depois da primeira;
+- antes da última;
+- depois da última;
+- antes de página específica;
+- depois de página específica.
+
+## Extrair
+
+- [ ] Intervalo
+- [ ] Seleção
+- [ ] Manter no original
+- [ ] Excluir do original após extrair
+- [ ] Criar um PDF único
+- [ ] Extrair cada página como arquivo separado
+- [ ] Preservar forms/comments/links quando tecnicamente aplicável
+
+## Dividir
+
+Dividir por:
+
+- [ ] número máximo de páginas
+- [ ] tamanho máximo do arquivo
+- [ ] marcadores de nível superior
+
+Opções:
+
+- [ ] vários arquivos de entrada
+- [ ] pasta de saída
+- [ ] padrão de nome
+- [ ] preview do plano de divisão
+
+---
+
+# Combinar arquivos
+
+## Entradas
+
+- [ ] PDFs
+- [ ] DOC/DOCX
+- [ ] XLS/XLSX
+- [ ] PPT/PPTX
+- [ ] imagens
+- [ ] texto
+- [ ] páginas web
+- [ ] áudio como anexo/objeto compatível
+- [ ] vídeo como anexo/objeto compatível
+- [ ] arquivos já abertos
+- [ ] pastas quando aplicável
+
+## Fluxo
+
+- [ ] Drag and drop
+- [ ] Adicionar arquivos
+- [ ] Adicionar arquivos abertos
+- [ ] Expandir arquivo para ver páginas
+- [ ] Reordenar arquivos
+- [ ] Reordenar páginas
+- [ ] Remover página
+- [ ] Remover arquivo
+- [ ] Preview
+- [ ] Combinar
+- [ ] Salvar como novo arquivo
+
+---
+
+# Criar PDF
+
+## Fontes
+
+- [ ] Arquivo
+- [ ] Vários arquivos
+- [ ] Página em branco
+- [ ] Scanner
+- [ ] Área de transferência
+- [ ] Página web
+- [ ] Site com múltiplos níveis
+- [ ] Portfólio PDF
+- [ ] Imagem
+- [ ] Impressora virtual no Windows quando implementável
+
+## Página web para PDF
+
+- [ ] URL
+- [ ] HTML local
+- [ ] Capturar um nível
+- [ ] Capturar N níveis
+- [ ] Capturar site inteiro
+- [ ] Permanecer no mesmo path
+- [ ] Permanecer no mesmo servidor
+- [ ] Criar bookmarks
+- [ ] Criar tags
+- [ ] Cabeçalho com título/URL
+- [ ] Rodapé com URL/data
+- [ ] Encoding
+- [ ] Layout
+- [ ] Fila de URLs
+- [ ] Adicionar páginas capturadas a PDF existente
+
+## Página em branco
+
+- [ ] Tamanho
+- [ ] Orientação
+- [ ] Texto estático
+- [ ] Imagens
+- [ ] Form fields
+- [ ] Metadados
+
+---
+
+# Compatibilidade de entrada para criação/conversão
+
+O sistema deve possuir uma camada de capabilities. Formatos que exigem software externo não podem aparecer como suportados se o conversor necessário não estiver disponível.
+
+## Microsoft Office
+
+- [ ] DOC
+- [ ] DOCX
+- [ ] XLS
+- [ ] XLSX
+- [ ] PPT
+- [ ] PPTX
+
+## Texto
+
+- [ ] TXT
+- [ ] RTF
+
+## PostScript
+
+- [ ] PS
+- [ ] EPS
+- [ ] PRN
+
+## Imagens
+
+- [ ] BMP
+- [ ] JPEG/JPG
+- [ ] GIF
+- [ ] TIFF
+- [ ] PNG
+- [ ] PCX
+- [ ] RLE
+- [ ] DIB
+- [ ] SVG quando conversor compatível estiver disponível
+
+## Web
+
+- [ ] HTML
+- [ ] URL
+
+## OpenDocument / Office alternativo
+
+- [ ] ODT
+- [ ] ODP
+- [ ] ODS
+- [ ] ODG
+- [ ] ODF
+- [ ] SXW
+- [ ] SXI
+- [ ] SXC
+- [ ] SXD
+- [ ] STW
+
+## Formatos avançados/opcionais
+
+- [ ] WPD
+- [ ] PSD
+- [ ] AI
+- [ ] INDD
+- [ ] U3D
+- [ ] PRC
+- [ ] DWG
+- [ ] DWT
+- [ ] DXF
+- [ ] DWF
+- [ ] DST
+- [ ] XPS
+- [ ] MPP
+- [ ] VSD
+
+Esses formatos devem usar adapters e detecção de capacidade. Nunca simular suporte quando o conversor real não existir.
 
 ---
 
 # Conversão
 
-A conversão deve ter um **workspace próprio em uma segunda janela nativa**, separado da janela principal de leitura.
-
-Isso evita poluir o leitor e permite processar várias conversões ao mesmo tempo.
+A conversão deve ter um **workspace próprio em uma segunda janela nativa**, separado da leitura.
 
 ## Janela de conversão
 
-- [ ] Abrir como janela independente
-- [ ] Drag and drop de vários arquivos
-- [ ] Fila de processamento
+- [ ] Janela independente
+- [ ] Drag and drop
+- [ ] Vários arquivos
+- [ ] Fila
 - [ ] Progresso individual
 - [ ] Progresso total
-- [ ] Cancelamento
-- [ ] Pausa
-- [ ] Repetir tarefa
-- [ ] Histórico local
-- [ ] Abrir pasta de saída
-- [ ] Selecionar pasta padrão
-- [ ] Sobrescrever ou renomear automaticamente
-- [ ] Processamento em background
-- [ ] Notificação ao concluir
+- [ ] Pausar
+- [ ] Retomar
+- [ ] Cancelar
+- [ ] Retry
+- [ ] Histórico
+- [ ] Pasta de saída
+- [ ] Abrir pasta
+- [ ] Padrão de nomes
+- [ ] Sobrescrever
+- [ ] Renomear automaticamente
+- [ ] Processar em background
+- [ ] Notificação ao terminar
+- [ ] Log por arquivo
+- [ ] Relatório final
 
-## Conversão automática
+## Detecção automática
 
-Ao adicionar um arquivo, o Seven Reader deve identificar automaticamente:
+Ao adicionar um arquivo, detectar:
 
-- formato de entrada;
-- conversões possíveis;
-- necessidade de OCR;
-- documento digital ou digitalizado;
-- quantidade de páginas;
-- presença de senha;
-- orientação;
+- formato;
+- MIME real;
+- páginas;
 - tamanho;
-- possíveis limitações.
-
-O usuário não deve precisar configurar parâmetros técnicos para uma conversão comum.
+- senha;
+- scan/imagem;
+- texto extraível;
+- orientação;
+- OCR necessário;
+- conversões disponíveis;
+- limitações;
+- dependências externas.
 
 ## PDF para
 
 - [ ] DOCX
+- [ ] DOC
 - [ ] XLSX
+- [ ] XLS
 - [ ] PPTX
-- [ ] TXT
+- [ ] PPT
 - [ ] RTF
+- [ ] TXT
 - [ ] HTML
-- [ ] Markdown
+- [ ] Markdown como extensão própria
 - [ ] JPG
 - [ ] PNG
 - [ ] TIFF
-- [ ] SVG quando tecnicamente aplicável
+- [ ] BMP
+- [ ] PostScript
 - [ ] PDF/A
+- [ ] PDF/X quando compatível
 - [ ] PDF otimizado
 
-## Para PDF
-
-- [ ] DOCX
-- [ ] XLSX
-- [ ] PPTX
-- [ ] TXT
-- [ ] RTF
-- [ ] HTML
-- [ ] Markdown
-- [ ] JPG
-- [ ] PNG
-- [ ] TIFF
-- [ ] SVG
-- [ ] Múltiplas imagens
-- [ ] Clipboard
-- [ ] Scanner
-
-## Opções de conversão
+## Opções
 
 - [ ] Preservar layout
 - [ ] Preservar imagens
 - [ ] Preservar tabelas
 - [ ] Detectar colunas
-- [ ] Manter links
-- [ ] Manter marcadores
-- [ ] Intervalo de páginas
-- [ ] Resolução de imagem
+- [ ] Preservar links
+- [ ] Preservar bookmarks
+- [ ] Intervalo
+- [ ] DPI
 - [ ] Qualidade
 - [ ] Compressão
 - [ ] OCR automático
 - [ ] Idioma OCR
-- [ ] Pasta de saída
-- [ ] Nome de saída
+- [ ] Imagens por página
+- [ ] Uma imagem por documento
+- [ ] Convenção de nomes
 
 ---
 
-# OCR
+# Conversão avançada e predefinições
 
-O OCR deve possuir fluxo próprio e não ser apenas um botão de conversão.
+## Presets
 
-## Reconhecimento
+- [ ] Criar preset
+- [ ] Duplicar
+- [ ] Editar
+- [ ] Excluir
+- [ ] Importar
+- [ ] Exportar
 
-- [ ] Detectar páginas digitalizadas
-- [ ] OCR automático opcional
-- [ ] OCR por página
-- [ ] OCR por intervalo
-- [ ] OCR do documento inteiro
-- [ ] Múltiplos idiomas
-- [ ] Detecção automática de idioma
-- [ ] Detectar orientação
-- [ ] Corrigir rotação
-- [ ] Deskew
-- [ ] Limpeza de ruído
-- [ ] Ajuste de contraste
-- [ ] Preservar imagem original
-- [ ] Camada de texto pesquisável
-- [ ] Texto editável
+## Configurações
 
-## Revisão de confiança
+- [ ] Qualidade de imagem
+- [ ] Downsampling
+- [ ] Compressão
+- [ ] Font embedding
+- [ ] Subset de fontes
+- [ ] Perfis ICC
+- [ ] RGB
+- [ ] CMYK
+- [ ] Gray
+- [ ] Rendering intent
+- [ ] Preservar overprint
+- [ ] Metadados
+- [ ] PDF standards
+- [ ] Compatibilidade de versão PDF
 
-O Seven Reader deve permitir revisar OCR **palavra por palavra**.
+## Pastas monitoradas
 
-- [ ] Confidence score por palavra
-- [ ] Destacar palavras de baixa confiança
-- [ ] Próxima palavra suspeita
-- [ ] Palavra suspeita anterior
-- [ ] Mostrar imagem original da região
-- [ ] Mostrar resultado reconhecido
-- [ ] Corrigir manualmente
-- [ ] Aceitar sugestão
-- [ ] Ignorar ocorrência
-- [ ] Ignorar palavra
-- [ ] Aplicar correção
-- [ ] Filtrar por nível de confiança
-- [ ] Revisão antes de salvar
+Opcional para desktop profissional:
+
+- [ ] Watch folder
+- [ ] Preset por pasta
+- [ ] Pasta de entrada
+- [ ] Pasta de saída
+- [ ] Log
+- [ ] Retry
+- [ ] Quarentena de erro
 
 ---
 
 # Digitalização
 
-- [ ] Detectar scanners disponíveis
+## Entrada
+
+- [ ] Detectar scanners
 - [ ] Scanner padrão
+- [ ] WIA no Windows quando aplicável
+- [ ] TWAIN quando aplicável
+- [ ] SANE no Linux quando aplicável
 - [ ] Flatbed
-- [ ] Alimentador
+- [ ] ADF
+- [ ] Frente
 - [ ] Frente e verso
-- [ ] Resolução
+
+## Configurações
+
 - [ ] Cor
-- [ ] Tons de cinza
+- [ ] Grayscale
 - [ ] Preto e branco
-- [ ] Tamanho de página
+- [ ] DPI
+- [ ] Tamanho da página
+- [ ] Qualidade
+- [ ] Otimizar imagem
 - [ ] Auto crop
 - [ ] Deskew
 - [ ] Remover páginas em branco
-- [ ] OCR após digitalização
-- [ ] Criar um único PDF
-- [ ] Acrescentar a PDF existente
-- [ ] Preview
+- [ ] Limpeza de fundo
+
+## Saída
+
+- [ ] Criar novo PDF
+- [ ] Anexar a PDF
+- [ ] Salvar múltiplos PDFs
+- [ ] OCR após scan
+- [ ] Adicionar metadados
+- [ ] Criar PDF/A-1b
+- [ ] Scan mais páginas
+- [ ] Scan verso
+- [ ] Finalizar
 - [ ] Reordenar antes de salvar
 
 ---
 
-# Comentários e anotações
+# OCR
 
-- [ ] Nota
-- [ ] Destaque
-- [ ] Sublinhado
-- [ ] Tachado
-- [ ] Inserção de texto
-- [ ] Substituição de texto
+## Reconhecimento
+
+- [ ] Página atual
+- [ ] Intervalo
+- [ ] Documento inteiro
+- [ ] Vários documentos
+- [ ] Vários idiomas
+- [ ] Detecção automática de idioma opcional
+- [ ] Detecção de orientação
+- [ ] Auto rotate
+- [ ] Deskew
+- [ ] Despeckle
+- [ ] Ajuste de contraste
+- [ ] Melhoria de scan
+- [ ] Imagem original preservada
+- [ ] Camada pesquisável
+- [ ] Texto selecionável
+- [ ] Texto editável
+- [ ] Pasta de saída para lote
+- [ ] Padrão de nome
+
+## OCR automático ao editar scan
+
+Ao entrar em modo de edição em um PDF somente imagem:
+
+- detectar que é scan;
+- oferecer/aplicar OCR;
+- gerar uma cópia editável;
+- tentar combinar fonte e formatação;
+- preservar o original.
+
+## Revisar texto reconhecido
+
+Fluxo de revisão:
+
+- [ ] Ativar "Revisar texto reconhecido"
+- [ ] Marcar palavras suspeitas
+- [ ] Mostrar bounding box
+- [ ] Mostrar imagem original
+- [ ] Mostrar "Reconhecido como"
+- [ ] Editar reconhecimento
+- [ ] Aceitar
+- [ ] Ir automaticamente à próxima suspeita
+- [ ] Voltar à anterior
+- [ ] Ignorar
+- [ ] Encerrar revisão
+
+## Melhoria própria: confidence review
+
+Além do comportamento de suspeitas:
+
+- [ ] Confidence score por palavra
+- [ ] Threshold configurável
+- [ ] Ordenar do menor confidence para o maior
+- [ ] Filtrar por confidence
+- [ ] Revisar apenas abaixo do threshold
+- [ ] Estatísticas por página
+- [ ] Estatísticas do documento
+
+---
+
+# Comentários e revisão
+
+## Texto e marcação
+
+- [ ] Nota adesiva
+- [ ] Highlight
+- [ ] Underline
+- [ ] Strikethrough
+- [ ] Inserir texto
+- [ ] Substituir texto
 - [ ] Caixa de texto
-- [ ] Chamada
-- [ ] Desenho livre
+- [ ] Callout
+- [ ] Comentário sobre texto selecionado
+- [ ] Comentário sobre imagem selecionada
+
+## Desenho
+
+- [ ] Lápis
 - [ ] Borracha
 - [ ] Linha
 - [ ] Seta
@@ -621,186 +1197,477 @@ O Seven Reader deve permitir revisar OCR **palavra por palavra**.
 - [ ] Círculo
 - [ ] Polígono
 - [ ] Nuvem
-- [ ] Carimbo
-- [ ] Carimbos personalizados
-- [ ] Anexo em comentário
+
+## Anexos em comentários
+
+- [ ] Arquivo
+- [ ] Áudio quando suportado
+
+## Propriedades
+
 - [ ] Cor
 - [ ] Opacidade
 - [ ] Espessura
 - [ ] Autor
 - [ ] Data
-- [ ] Respostas
-- [ ] Resolver comentário
-- [ ] Filtro
-- [ ] Ordenação
-- [ ] Exportar comentários
-- [ ] Importar comentários XFDF/FDF quando compatível
+- [ ] Estado
+- [ ] Bloquear comentário
+- [ ] Tornar padrão
+
+## Discussão
+
+- [ ] Responder
+- [ ] Resolver
+- [ ] Reabrir
+- [ ] Marcar como não lido
+- [ ] Reações
+- [ ] Agrupar comentários
+- [ ] Desagrupar
+
+## Lista de comentários
+
+- [ ] Buscar
+- [ ] Filtrar
+- [ ] Ordenar
+- [ ] Próximo
+- [ ] Anterior
+- [ ] Exportar
+- [ ] Importar FDF
+- [ ] Importar XFDF
+- [ ] Resumo imprimível
+- [ ] Verificação ortográfica em comentários
 
 ---
 
-# Formulários
+# Carimbos
 
-## Preenchimento
+- [ ] Carimbos padrão
+- [ ] Carimbo personalizado
+- [ ] Categorias
+- [ ] Carimbo dinâmico
+- [ ] Data
+- [ ] Usuário
+- [ ] Identidade
+- [ ] Editar identidade
+- [ ] Excluir customizado
+- [ ] Reutilizar carimbo
 
-- [ ] Campos de texto
+---
+
+# Formulários PDF
+
+## Preparar formulário
+
+Criar a partir de:
+
+- [ ] PDF existente
+- [ ] Documento convertido
+- [ ] Página em branco
+- [ ] Scanner
+
+## Detecção automática
+
+- [ ] Detectar campos
+- [ ] Detectar labels
+- [ ] Sugerir tipos
+- [ ] Revisar antes de aplicar
+
+## Tipos de campo
+
+- [ ] Text Field
 - [ ] Checkbox
 - [ ] Radio
-- [ ] Combo box
-- [ ] List box
-- [ ] Botões
-- [ ] Data
-- [ ] Assinatura
+- [ ] Dropdown
+- [ ] List Box
+- [ ] Button
+- [ ] Digital Signature
+- [ ] Barcode
+- [ ] Date
+- [ ] Campo numérico
+
+## Edição de campos
+
+- [ ] Criar
+- [ ] Duplicar
+- [ ] Copiar
+- [ ] Mover
+- [ ] Redimensionar
+- [ ] Seleção múltipla
+- [ ] Alinhar
+- [ ] Distribuir
+- [ ] Centralizar
+- [ ] Guides
 - [ ] Tab order
-- [ ] Reset
-- [ ] Importar dados
-- [ ] Exportar dados
-- [ ] Auto preenchimento local opcional
+- [ ] Required
+- [ ] Read only
+- [ ] Tooltip
+- [ ] Nome interno
+- [ ] Aparência
+- [ ] Fonte
+- [ ] Cor
+- [ ] Border
+- [ ] Visibility
 
-## Criação e edição
+## Formatação e validação
 
-- [ ] Detectar campos automaticamente
-- [ ] Criar campo
-- [ ] Editar campo
-- [ ] Excluir campo
-- [ ] Duplicar campo
-- [ ] Alinhar campos
-- [ ] Distribuir campos
-- [ ] Campo obrigatório
+- [ ] Texto
+- [ ] Número
+- [ ] Percentual
+- [ ] Data
+- [ ] Hora
+- [ ] Máscara especial
 - [ ] Validação
-- [ ] Formatação
-- [ ] Cálculos
-- [ ] Propriedades visuais
-- [ ] Ordem de tabulação
+- [ ] Limite de caracteres
+- [ ] Multiline
+- [ ] Comb
+
+## Cálculos
+
+- [ ] Soma
+- [ ] Produto
+- [ ] Média
+- [ ] Mínimo
+- [ ] Máximo
+- [ ] Notação simplificada
+- [ ] Script customizado
+- [ ] Ordem de cálculo
+- [ ] Recalcular automaticamente
+
+## JavaScript de formulário
+
+JavaScript nunca deve ser executado sem política de segurança.
+
+- [ ] Document JavaScript
+- [ ] Field actions
+- [ ] Calculation script
+- [ ] Validation script
+- [ ] Keystroke script
+- [ ] Sandbox/restrições
+
+## Barcodes
+
+- [ ] PDF417
+- [ ] QR Code
+- [ ] Data Matrix
+- [ ] Codificar campos selecionados
+- [ ] XML
+- [ ] Tab delimited
+- [ ] Custom calculation script
+- [ ] Preview/teste
+- [ ] Decode condition
+- [ ] Ajuste de célula
+
+## Dados
+
+- [ ] Importar
+- [ ] Exportar
+- [ ] FDF
+- [ ] XFDF
+- [ ] Reset
+- [ ] Clear form
+- [ ] Autofill local opcional
 
 ## Compatibilidade
 
 - [ ] AcroForm
 - [ ] FDF
 - [ ] XFDF
-- [ ] XFA quando tecnicamente viável
-- [ ] Preservação de dados ao salvar
+- [ ] XFA somente quando tecnicamente viável
+- [ ] Preservação ao salvar
 
 ---
 
-# Assinaturas
+# Preencher e assinar
 
-## Assinatura simples
+## Preenchimento simples
 
-- [ ] Digitar assinatura
-- [ ] Desenhar assinatura
-- [ ] Usar imagem
-- [ ] Salvar assinatura localmente
+- [ ] Detectar áreas de preenchimento
+- [ ] Inserir texto
+- [ ] Checkmark
+- [ ] X
+- [ ] Dot
+- [ ] Data
 - [ ] Iniciais
-- [ ] Posicionar
+- [ ] Assinatura
+
+## Assinatura eletrônica local
+
+- [ ] Digitar
+- [ ] Desenhar
+- [ ] Usar imagem
+- [ ] Salvar localmente
+- [ ] Remover assinatura salva
 - [ ] Redimensionar
-- [ ] Excluir antes de salvar
-- [ ] Preenchimento e assinatura em fluxo único
+- [ ] Reposicionar
 
-## Certificados digitais
+---
 
-- [ ] Assinar com certificado
-- [ ] PKCS#12 / PFX
-- [ ] Certificados do sistema
-- [ ] CMS / PKCS#7
-- [ ] Validar assinatura
-- [ ] Mostrar cadeia de certificados
-- [ ] Mostrar integridade
-- [ ] Mostrar alterações posteriores
-- [ ] Timestamp
-- [ ] Certificados confiáveis
+# Solicitação de assinaturas
+
+Módulo opcional online/servidor.
+
+- [ ] Adicionar signatários
+- [ ] Ordem de assinatura
+- [ ] Campos por signatário
+- [ ] Mensagem
+- [ ] Prazo
+- [ ] Lembretes
+- [ ] Envio em massa
+- [ ] Tracking
+- [ ] Status
+- [ ] Cancelar solicitação
+- [ ] Baixar contrato final
+- [ ] Audit trail
+
+O núcleo local do Seven Reader não deve depender deste módulo.
+
+---
+
+# Certificados e assinaturas digitais
+
+## Digital IDs
+
+- [ ] PKCS#12
+- [ ] PFX
+- [ ] Certificado do Windows
+- [ ] Smart card
+- [ ] Hardware token
+- [ ] IDs autoassinadas
+- [ ] ID padrão
+- [ ] Registrar
+- [ ] Excluir
+- [ ] Alterar senha quando suportado
+- [ ] Roaming ID quando houver provider
+- [ ] Directory server
+
+## Assinar
+
+- [ ] Approval signature
+- [ ] Certify
 - [ ] Assinatura visível
 - [ ] Assinatura invisível
+- [ ] Motivo
+- [ ] Local
+- [ ] Aparência personalizada
+- [ ] Timestamp server
 - [ ] Bloquear documento após assinatura
+- [ ] Permitir somente preenchimento
+- [ ] Permitir comentários
 - [ ] Múltiplas assinaturas
-- [ ] Painel de assinaturas
+
+## Validar
+
+- [ ] Validar uma assinatura
+- [ ] Validar todas
+- [ ] Cadeia de confiança
+- [ ] Certificado do signatário
+- [ ] Timestamp
+- [ ] Integridade
+- [ ] Alterações posteriores
+- [ ] Documento certificado
+- [ ] Certificado expirado
+- [ ] Trust settings
+- [ ] Revocation checking quando disponível
+- [ ] OCSP
+- [ ] CRL
+
+## Padrões
+
+Quando a biblioteca criptográfica permitir:
+
+- [ ] CMS
+- [ ] PKCS#7
+- [ ] PAdES
+- [ ] CAdES
+- [ ] ETSI compatibility
+- [ ] XML signatures para XFA somente se XFA for suportado
+
+## Versões assinadas
+
+- [ ] Ver versão assinada
+- [ ] Comparar com versão atual
+- [ ] Mostrar alterações desde assinatura
 
 ---
 
 # Proteção
 
-## Senhas e criptografia
+## Senhas
 
-- [ ] Senha para abrir
+- [ ] Senha de abertura
 - [ ] Senha de permissões
 - [ ] Restringir impressão
 - [ ] Restringir cópia
 - [ ] Restringir edição
-- [ ] Criptografia compatível com PDF moderno
-- [ ] AES-256 quando suportado
-- [ ] Remover proteção mediante autorização
-- [ ] Exibir propriedades de segurança
+- [ ] Restringir comentário
+- [ ] Remover segurança com autorização
+- [ ] Mostrar permissões atuais
 
-## Sanitização
+## Criptografia
 
-- [ ] Remover metadados
-- [ ] Remover anexos
-- [ ] Remover scripts
-- [ ] Remover ações ocultas
-- [ ] Remover dados de formulário
-- [ ] Remover comentários
-- [ ] Remover conteúdo oculto
-- [ ] Remover camadas ocultas
-- [ ] Limpar histórico interno quando aplicável
-- [ ] Relatório antes da limpeza
+- [ ] AES compatível com o padrão PDF
+- [ ] AES-256 quando aplicável
+- [ ] Criptografia por senha
+- [ ] Criptografia por certificado
+- [ ] Escolher destinatários
+- [ ] Permissões por destinatário
+- [ ] Alterar configuração
+- [ ] Remover criptografia mediante autorização
+
+## Políticas de segurança
+
+- [ ] Política por senha
+- [ ] Política por certificado
+- [ ] Política para anexos
+- [ ] Criar
+- [ ] Copiar
+- [ ] Editar
+- [ ] Excluir
+- [ ] Importar/exportar
+- [ ] Políticas servidor-side como módulo enterprise opcional
+- [ ] Revogação como módulo enterprise opcional
+
+## Enterprise labels
+
+Opcional:
+
+- [ ] Labels de sensibilidade
+- [ ] Adapter para Microsoft Purview Information Protection
+- [ ] Restrições derivadas da label
+
+---
+
+# Visualização protegida e sandbox
+
+- [ ] Modo protegido
+- [ ] Visualização protegida
+- [ ] Abrir arquivo não confiável isolado
+- [ ] Bloquear escrita fora do sandbox
+- [ ] Bloquear execução de anexos
+- [ ] Bloquear ações de lançamento
+- [ ] Confirmar URLs externas
+- [ ] Restringir APIs JavaScript
+- [ ] Lista de locais confiáveis
+- [ ] Lista de hosts confiáveis
+- [ ] Trust once
+- [ ] Trust permanently com confirmação
+- [ ] Security warnings claros
 
 ---
 
 # Redação permanente
 
-A redação deve remover efetivamente o conteúdo do PDF.
+Redação deve remover os objetos reais do documento.
 
-Não basta desenhar um retângulo preto sobre a página.
+Um retângulo visual sobre o conteúdo **não** é redação.
 
-- [ ] Marcar texto
-- [ ] Marcar área
-- [ ] Pesquisar e redigir
-- [ ] Redigir várias ocorrências
-- [ ] Códigos de redação
-- [ ] Texto de sobreposição
-- [ ] Cor personalizada
-- [ ] Aplicar redações
-- [ ] Sanitizar após redigir
-- [ ] Confirmar ação irreversível
-- [ ] Criar cópia de segurança
-- [ ] Verificar se o conteúdo foi realmente removido
+## Marcação
+
+- [ ] Texto
+- [ ] Imagem
+- [ ] Área
+- [ ] Página
+- [ ] Várias páginas
+
+## Buscar e redigir
+
+- [ ] Palavra
+- [ ] Frase
+- [ ] Múltiplas palavras
+- [ ] Padrões
+- [ ] Regex como melhoria opcional
+- [ ] Palavra inteira
+- [ ] Parte da palavra
+- [ ] Selecionar ocorrências
+- [ ] Marcar todas
+
+## Aparência
+
+- [ ] Cor
+- [ ] Sem cor
+- [ ] Texto sobreposto
+- [ ] Texto customizado
+- [ ] Fonte
+- [ ] Tamanho
+- [ ] Alinhamento
+- [ ] Opacidade de marcação
+
+## Códigos
+
+- [ ] Código único
+- [ ] Vários códigos por marca
+- [ ] Conjuntos de códigos
+- [ ] Criar conjunto
+- [ ] Editar conjunto
+- [ ] Excluir conjunto
+- [ ] Importar/exportar conjuntos
+
+## Aplicação
+
+- [ ] Preview
+- [ ] Confirmar irreversibilidade
+- [ ] Aplicar
+- [ ] Oferecer sanitização
+- [ ] Salvar como novo arquivo por padrão
+- [ ] Verificação pós-redação
+- [ ] Garantir que texto removido não seja recuperável por busca/cópia
 
 ---
 
-# Criação de PDF
+# Sanitização e conteúdo oculto
 
-- [ ] Criar PDF vazio
-- [ ] Criar de arquivo
-- [ ] Criar de imagem
-- [ ] Criar de várias imagens
-- [ ] Criar da área de transferência
-- [ ] Criar de scanner
-- [ ] Criar de HTML
-- [ ] Combinar vários arquivos
-- [ ] Definir tamanho de página
-- [ ] Orientação
-- [ ] Margens
+## Remover tudo
+
 - [ ] Metadados
-- [ ] PDF/A quando necessário
+- [ ] Comentários
+- [ ] Anexos
+- [ ] Scripts
+- [ ] Hidden text
+- [ ] Hidden layers
+- [ ] Embedded content
+- [ ] Form data
+- [ ] Links/actions perigosos
+- [ ] Informações privadas
+- [ ] Objetos não exibidos
+
+## Remoção seletiva
+
+- [ ] Analisar conteúdo oculto
+- [ ] Mostrar categorias encontradas
+- [ ] Selecionar categorias
+- [ ] Remover selecionadas
+- [ ] Relatório final
 
 ---
 
-# Compactação e otimização
+# Compactação
 
-- [ ] Compactação rápida
+## Rápida
+
 - [ ] Baixa
 - [ ] Média
 - [ ] Alta
-- [ ] Personalizada
-- [ ] Downsample de imagens
-- [ ] Compressão de imagens
-- [ ] Remoção de objetos não utilizados
-- [ ] Otimização de fontes
+
+## Otimizador avançado
+
+- [ ] Auditoria de uso de espaço
+- [ ] Downsample color
+- [ ] Downsample grayscale
+- [ ] Downsample monochrome
+- [ ] JPEG
+- [ ] JPEG2000 quando suportado
+- [ ] ZIP/Flate
+- [ ] JBIG2 quando suportado
+- [ ] Remover thumbnails
+- [ ] Desincorporar fontes quando seguro
+- [ ] Subset fonts
+- [ ] Descartar objetos
+- [ ] Descartar user data
 - [ ] Limpeza estrutural
-- [ ] Linearização para visualização progressiva
-- [ ] Estimativa de tamanho
-- [ ] Comparação antes/depois
-- [ ] Relatório de uso de espaço
-- [ ] Preservar qualidade configurável
+- [ ] Linearização/Fast Web View
+- [ ] Compatibilidade alvo
+- [ ] Estimativa antes/depois
+- [ ] Salvar preset
 
 ---
 
@@ -811,52 +1678,104 @@ Não basta desenhar um retângulo preto sobre a página.
 - [ ] Excluir
 - [ ] Reordenar
 - [ ] Hierarquia
-- [ ] Alterar destino
 - [ ] Expandir/recolher
-- [ ] Gerar a partir de títulos quando possível
-- [ ] Preservar na combinação
-- [ ] Preservar na conversão
+- [ ] Expandir todos
+- [ ] Recolher todos
+- [ ] Destino
+- [ ] Aparência
+- [ ] Ação
+- [ ] Gerar a partir de estrutura
+- [ ] Preservar em combinação/conversão
 
 ---
 
 # Anexos
 
-- [ ] Listar anexos
-- [ ] Abrir
+- [ ] Listar
+- [ ] Preview seguro
+- [ ] Abrir com confirmação
 - [ ] Salvar
 - [ ] Adicionar
-- [ ] Excluir
+- [ ] Remover
 - [ ] Renomear
 - [ ] Descrição
-- [ ] Aviso para tipos perigosos
+- [ ] MIME
+- [ ] Hash
+- [ ] Bloquear extensões perigosas
 - [ ] Nunca executar automaticamente
 
 ---
 
-# Camadas
+# Camadas PDF
 
-- [ ] Visualizar Optional Content Groups
+- [ ] Visualizar OCGs
 - [ ] Mostrar/ocultar
-- [ ] Preservar estado
-- [ ] Imprimir respeitando configuração
-- [ ] Inspecionar propriedades básicas
+- [ ] Estado inicial
+- [ ] Importar arquivo como camada
+- [ ] Reordenar camada
+- [ ] Editar propriedades
+- [ ] Adicionar navegação de camada
+- [ ] Merge layers
+- [ ] Flatten layers
+- [ ] Imprimir respeitando visibility
+- [ ] Preservar em save
+- [ ] Preservar em conversão quando possível
 
 ---
 
-# Comparação de documentos
+# Portfólios PDF
 
-- [ ] Comparar dois PDFs
-- [ ] Detectar páginas alteradas
-- [ ] Texto adicionado
-- [ ] Texto removido
-- [ ] Texto alterado
-- [ ] Imagens alteradas
-- [ ] Movimento de conteúdo
-- [ ] Resumo das diferenças
-- [ ] Navegação diferença a diferença
-- [ ] Filtros
-- [ ] Relatório de comparação
-- [ ] Visualização lado a lado
+Um Portfólio PDF mantém arquivos independentes dentro de uma unidade integrada.
+
+- [ ] Criar portfólio
+- [ ] Abrir portfólio
+- [ ] Adicionar arquivo
+- [ ] Adicionar pasta
+- [ ] Adicionar scanner
+- [ ] Adicionar página web
+- [ ] Adicionar clipboard
+- [ ] Remover componente
+- [ ] Renomear componente
+- [ ] Editar descrição
+- [ ] Preview de componente
+- [ ] Extrair componente
+- [ ] Pesquisar
+- [ ] Ordenar lista
+- [ ] Assinaturas/certificação do portfólio
+- [ ] Painel de assinaturas do portfólio
+
+---
+
+# Conteúdo multimídia e 3D
+
+Suporte sempre isolado e desativado por padrão para conteúdo ativo.
+
+- [ ] Detectar objetos 3D
+- [ ] U3D
+- [ ] PRC
+- [ ] Poster/preview estático
+- [ ] Áudio incorporado
+- [ ] Vídeo incorporado
+- [ ] Extrair mídia
+- [ ] Política de confiança
+- [ ] Nunca executar automaticamente
+- [ ] Compatibilidade legada somente quando segura
+
+---
+
+# PDF geoespacial
+
+Módulo profissional.
+
+- [ ] Detectar geospatial PDF
+- [ ] Coordenadas
+- [ ] Localizar posição
+- [ ] Medir distância geográfica
+- [ ] Medir área
+- [ ] Unidades
+- [ ] Importar shapefile quando tecnicamente viável
+- [ ] Exportar marcações geoespaciais
+- [ ] Criar PDF geoespacial quando a engine permitir
 
 ---
 
@@ -865,228 +1784,585 @@ Não basta desenhar um retângulo preto sobre a página.
 - [ ] Distância
 - [ ] Perímetro
 - [ ] Área
-- [ ] Calibração de escala
+- [ ] Calibrar escala
+- [ ] Escala por página
 - [ ] Unidades
-- [ ] Snap quando aplicável
-- [ ] Anotações de medição
+- [ ] Snap
+- [ ] Labels
+- [ ] Comentários de medição
 - [ ] Propriedades
+- [ ] Exportar medições
 
 ---
 
-# Propriedades do documento
+# Comparar documentos
+
+## Configuração
+
+- [ ] Arquivo antigo
+- [ ] Arquivo novo
+- [ ] Trocar lados
+- [ ] Intervalo de páginas
+- [ ] Comparar somente texto
+
+## Tipo de documento
+
+- [ ] Auto detect
+- [ ] Relatório
+- [ ] Planilha
+- [ ] Layout de revista
+- [ ] Apresentação
+- [ ] Scan
+- [ ] Desenho
+- [ ] Ilustração
+
+## Estratégia
+
+- texto corrido para documentos reflowable;
+- pareamento de páginas/slides semelhantes;
+- comparação por pixel para scans/desenhos;
+- texto e gráficos analisados separadamente quando necessário.
+
+## Resultados
+
+- [ ] Documento de relatório
+- [ ] Resumo total
+- [ ] Texto adicionado
+- [ ] Texto removido
+- [ ] Texto alterado
+- [ ] Formatting
+- [ ] Imagens
+- [ ] Background
+- [ ] Annotations
+- [ ] Página movida
+- [ ] Próxima diferença
+- [ ] Diferença anterior
+- [ ] Side by side
+- [ ] Single page
+- [ ] Filter
+- [ ] Show/hide categories
+- [ ] Status por diferença
+- [ ] Comments list
+- [ ] Salvar relatório
+
+---
+
+# Ações de PDF
+
+Elementos do PDF podem disparar ações, desde que a política de segurança permita.
+
+- [ ] Link action
+- [ ] Button action
+- [ ] Page open
+- [ ] Page close
+- [ ] Bookmark action
+- [ ] Go to page
+- [ ] Go to named destination
+- [ ] Open URL
+- [ ] Submit form
+- [ ] Reset form
+- [ ] Execute JavaScript em sandbox restrita
+- [ ] Bloquear launch actions perigosas
+
+---
+
+# Ações guiadas e automação
+
+Ferramenta para executar sequências de comandos sobre um ou vários arquivos.
+
+## Executar
+
+- [ ] Ação predefinida
+- [ ] Ação customizada
+- [ ] Arquivo atual
+- [ ] Vários arquivos
+- [ ] Pasta
+- [ ] Scanner
+- [ ] Página web
+- [ ] Clipboard
+- [ ] Start
+- [ ] Stop
+- [ ] Resume
+- [ ] Progresso por etapa
+- [ ] Full report
+
+## Criar ação
+
+- [ ] Adicionar tarefa
+- [ ] Reordenar tarefa
+- [ ] Remover tarefa
+- [ ] Fixar configurações
+- [ ] Perguntar ao usuário durante execução
+- [ ] Adicionar grupo/painel
+- [ ] Adicionar instrução
+- [ ] Adicionar divisor
+- [ ] Nome
+- [ ] Descrição
+
+## Gerenciar
+
+- [ ] Editar
+- [ ] Renomear
+- [ ] Copiar
+- [ ] Excluir
+- [ ] Reordenar
+- [ ] Importar
+- [ ] Exportar
+
+---
+
+# Propriedades e metadados
 
 - [ ] Título
 - [ ] Autor
 - [ ] Assunto
-- [ ] Palavras-chave
+- [ ] Keywords
 - [ ] Criador
 - [ ] Produtor
 - [ ] Data de criação
 - [ ] Data de modificação
-- [ ] Tamanho
-- [ ] Número de páginas
 - [ ] Versão PDF
+- [ ] Páginas
+- [ ] Tamanho
 - [ ] Segurança
 - [ ] Fontes
-- [ ] Página inicial
-- [ ] Layout inicial
-- [ ] Metadados XMP
-
----
-
-# Impressão
-
-- [ ] Impressão nativa
-- [ ] Selecionar impressora
-- [ ] Intervalo
-- [ ] Página atual
-- [ ] Páginas ímpares
-- [ ] Páginas pares
-- [ ] Várias páginas por folha
-- [ ] Livreto
-- [ ] Ajustar
-- [ ] Tamanho real
-- [ ] Escala personalizada
-- [ ] Centralizar
-- [ ] Auto rotação
-- [ ] Orientação
-- [ ] Frente e verso quando suportado
-- [ ] Cor
-- [ ] Tons de cinza
-- [ ] Comentários
-- [ ] Formulários
-- [ ] Preview
-- [ ] Seleção de bandeja quando suportado
-- [ ] Impressão rasterizada como fallback
+- [ ] Initial view
+- [ ] Page layout
+- [ ] Page mode
+- [ ] Language
+- [ ] XMP
+- [ ] Custom metadata
+- [ ] Metadata import/export quando aplicável
 
 ---
 
 # Acessibilidade
 
+## Uso
+
 - [ ] Navegação completa por teclado
-- [ ] ARIA
-- [ ] Leitores de tela
+- [ ] Screen readers
+- [ ] ARIA da própria interface
 - [ ] Foco visível
 - [ ] Alto contraste
-- [ ] Redução de animações
-- [ ] Escala da interface
-- [ ] Ordem de leitura
-- [ ] Estrutura de tags
-- [ ] Texto alternativo de imagens
-- [ ] Verificação de acessibilidade
-- [ ] Relatório de problemas
-- [ ] Assistência para correção
-- [ ] Leitura em voz alta usando APIs do sistema
+- [ ] Reduced motion
+- [ ] Escala
+- [ ] Read Out Loud
+- [ ] Reflow
+- [ ] Preferências de leitura
+
+## Preparar acessibilidade
+
+- [ ] Accessibility checker
+- [ ] Relatório
+- [ ] Autotag
+- [ ] Detectar PDF somente imagem
+- [ ] Sugerir OCR
+- [ ] Definir idioma
+- [ ] Título do documento
+- [ ] Tab order
+- [ ] Tags
+- [ ] Reading order
+- [ ] Alternate text
+- [ ] Form field descriptions
+- [ ] Tables
+- [ ] Headers
+- [ ] Lists
+- [ ] Artifacts
+
+## Reading Order
+
+- [ ] Overlay numerado
+- [ ] Text/Paragraph
+- [ ] Figure
+- [ ] Figure/Caption
+- [ ] Form Field
+- [ ] Table
+- [ ] Heading
+- [ ] Background/Artifact
+- [ ] Corrigir ordem manualmente
+
+## Tags panel
+
+- [ ] Visualizar árvore
+- [ ] Criar tag
+- [ ] Remover
+- [ ] Reordenar
+- [ ] Alterar tipo
+- [ ] Corrigir tabela complexa
+- [ ] Alt text
+- [ ] Links
+- [ ] Artifacts
+
+## MathML
+
+- [ ] Preservar MathML em PDFs marcados quando disponível
+- [ ] Expor conteúdo matemático a screen readers
+- [ ] Testes com NVDA e tecnologias assistivas compatíveis
+
+---
+
+# Impressão
+
+## Diálogo principal
+
+- [ ] Impressora
+- [ ] Cópias
+- [ ] Intervalo
+- [ ] Página atual
+- [ ] Seleção
+- [ ] Páginas ímpares
+- [ ] Páginas pares
+- [ ] Reverse
+- [ ] Ajustar
+- [ ] Tamanho real
+- [ ] Shrink oversized
+- [ ] Escala customizada
+- [ ] Centralizar
+- [ ] Auto rotate
+- [ ] Orientação
+- [ ] Páginas por folha
+- [ ] Ordem
+- [ ] Duplex
+- [ ] Duplex manual
+- [ ] Booklet
+- [ ] Poster/Tiling
+- [ ] Large format
+- [ ] Mixed page sizes
+- [ ] Marked pages
+- [ ] Custom page size
+- [ ] Tray quando driver permitir
+- [ ] Color
+- [ ] Grayscale
+- [ ] Print as image
+- [ ] Preview
+
+## Comentários e formulários
+
+- [ ] Documento
+- [ ] Documento e marcações
+- [ ] Documento e carimbos
+- [ ] Somente campos
+- [ ] Resumo de comentários
+
+## Presets de impressão
+
+- [ ] Criar
+- [ ] Salvar
+- [ ] Editar
+- [ ] Excluir
+- [ ] Aplicar
+
+---
+
+# Produção de impressão
+
+Módulo profissional para pré-impressão.
+
+## Output Preview
+
+- [ ] Separations preview
+- [ ] Soft proof
+- [ ] Simulation profile
+- [ ] Simulate black ink
+- [ ] Simulate paper color
+- [ ] Simulate overprinting
+- [ ] Spot colors
+- [ ] Process plates
+- [ ] Ink coverage
+- [ ] Total Area Coverage
+
+## Preflight
+
+- [ ] Perfis de verificação
+- [ ] Centenas de checks
+- [ ] Detectar problemas
+- [ ] Fixups automáticos quando seguros
+- [ ] PDF/A validation
+- [ ] PDF/X validation
+- [ ] PDF/E validation quando aplicável
+- [ ] Relatório
+- [ ] Preset customizado
+
+## Edit Object
+
+- [ ] Raster
+- [ ] Vector
+- [ ] Tags
+- [ ] Color space
+- [ ] Rendering intent
+- [ ] Position
+- [ ] Size
+
+## Convert Colors
+
+- [ ] RGB -> CMYK
+- [ ] CMYK -> RGB
+- [ ] Gray
+- [ ] Spot/process
+- [ ] ICC profile
+- [ ] Rendering intent
+- [ ] Preserve black
+- [ ] Preserve overprint quando possível
+
+## Separações
+
+- [ ] Host-based
+- [ ] In-RIP quando dispositivo suportar
+- [ ] Process plates
+- [ ] Spot plates
+- [ ] Frequency
+- [ ] Screen angle
+- [ ] Ink Manager
+
+## Trapping
+
+- [ ] Detectar estado
+- [ ] Off
+- [ ] In-RIP
+- [ ] Presets
+
+## Transparência
+
+- [ ] Transparency flattening
+- [ ] Presets
+- [ ] Preview
+
+## Marcas e sangria
+
+- [ ] Crop marks
+- [ ] Registration marks
+- [ ] Color bars
+- [ ] Page information
+- [ ] Bleed
+
+---
+
+# Exportação
+
+## PDF para imagem
+
+- [ ] JPEG
+- [ ] PNG
+- [ ] TIFF
+- [ ] BMP quando útil
+- [ ] DPI
+- [ ] Color space
+- [ ] Todas as páginas
+- [ ] Intervalo
+- [ ] Nome por página
+
+## PDF para documento
+
+- [ ] Word
+- [ ] Excel
+- [ ] PowerPoint
+- [ ] RTF
+- [ ] TXT
+- [ ] HTML
+- [ ] PostScript
+
+---
+
+# Salvamento
+
+- [ ] Salvar
+- [ ] Salvar como
+- [ ] Salvar cópia
+- [ ] Incremental save quando seguro
+- [ ] Full rewrite quando necessário
+- [ ] Autosave
+- [ ] Recovery file
+- [ ] Escrita atômica
+- [ ] Detectar alteração externa
+- [ ] Resolver conflito
+- [ ] Validar arquivo salvo
+- [ ] Preservar assinatura quando permitido
+- [ ] Avisar antes de invalidar assinatura
+- [ ] Histórico de undo/redo da sessão
+
+---
+
+# Gerenciador de tarefas
+
+Toda operação pesada deve gerar um `job_id`.
+
+- [ ] Fila global
+- [ ] Prioridade
+- [ ] Concorrência limitada
+- [ ] Progresso real
+- [ ] Etapa atual
+- [ ] Cancelamento cooperativo
+- [ ] Pausa
+- [ ] Retomar
+- [ ] Retry
+- [ ] Backoff
+- [ ] Persistência
+- [ ] Recuperação após reinício quando segura
+- [ ] Notificação
+- [ ] Log
+- [ ] Erro por arquivo
+- [ ] Relatório
+
+---
+
+# Processamento em lote
+
+- [ ] Converter
+- [ ] OCR
+- [ ] Compactar
+- [ ] Aplicar senha
+- [ ] Criptografar
+- [ ] Remover metadados
+- [ ] Sanitizar
+- [ ] Marca d'água
+- [ ] Cabeçalho/rodapé
+- [ ] Bates
+- [ ] Redação por busca
+- [ ] Combinar
+- [ ] Dividir
+- [ ] Extrair
+- [ ] Renomear
+- [ ] Validar PDF/A
+- [ ] Preflight
+- [ ] Assinar quando política permitir
+
+---
+
+# Recursos inteligentes opcionais
+
+Estes recursos **não** fazem parte da dependência mínima para leitura/edição e devem ser opt-in.
+
+## Assistência em linguagem natural
+
+- [ ] Pesquisar no documento por linguagem natural
+- [ ] Resumir
+- [ ] Perguntas e respostas
+- [ ] Gerar outline
+- [ ] Reescrever texto selecionado
+- [ ] Substituir texto
+- [ ] Formatar texto
+- [ ] Highlight por comando
+- [ ] Reorganizar páginas por comando
+- [ ] Adicionar header/footer por comando
+- [ ] Adicionar watermark por comando
+- [ ] Mostrar alterações antes de aplicar
+- [ ] Nunca aplicar alteração destrutiva sem confirmação
+
+## Tradução
+
+- [ ] Detectar idioma
+- [ ] Traduzir conteúdo
+- [ ] Preservar original
+- [ ] Preview
+- [ ] Exportar versão traduzida
+
+## Coleções de documentos
+
+Opcional online ou local:
+
+- [ ] Criar workspace
+- [ ] Adicionar múltiplos arquivos
+- [ ] DOCX/PPTX/XLSX/TXT/RTF/PDF
+- [ ] URLs
+- [ ] Texto colado
+- [ ] Busca unificada
+- [ ] Citações para a origem
+- [ ] Compartilhar workspace quando backend estiver configurado
+
+## Resumo em áudio
+
+Opcional:
+
+- [ ] Gerar resumo em áudio
+- [ ] Mini player
+- [ ] Continuar reprodução trocando de documento
+- [ ] Play/pause
+- [ ] Seek
+- [ ] Volume
+
+---
+
+# Segurança da aplicação
+
+- [ ] CSP restritiva
+- [ ] Tauri capabilities mínimas
+- [ ] Allowlist explícita de commands
+- [ ] Validação de todo path
+- [ ] Canonicalização de path
+- [ ] Proteção contra path traversal
+- [ ] Arquivos temporários seguros
+- [ ] Temp directory isolado
+- [ ] Limpeza de temporários
+- [ ] Limite de tamanho
+- [ ] Limite de memória
+- [ ] Timeout
+- [ ] Cancelamento
+- [ ] Parser fuzzing
+- [ ] Corpus de PDFs malformados
+- [ ] Isolamento de codecs quando necessário
+- [ ] Nunca executar attachment automaticamente
+- [ ] Nunca executar launch action automaticamente
+- [ ] JavaScript desativado por padrão
+- [ ] URLs externas com confirmação
+- [ ] Security warnings compreensíveis
+- [ ] Logs sem conteúdo sensível
+
+---
+
+# Privacidade
+
+O Seven Reader deve funcionar sem conta.
+
+Por padrão:
+
+- nenhum PDF é enviado para servidor;
+- OCR é local;
+- conversão é local quando tecnicamente possível;
+- pesquisa é local;
+- índices são locais;
+- certificados privados permanecem no dispositivo;
+- assinaturas salvas permanecem no dispositivo;
+- telemetria fica desativada ou estritamente opt-in;
+- recursos online devem informar claramente quando conteúdo será enviado.
 
 ---
 
 # Compatibilidade PDF
-
-O objetivo é suportar PDFs do mundo real, não apenas arquivos simples.
 
 - [ ] PDF 1.x
 - [ ] PDF 2.0
 - [ ] PDF/A
 - [ ] PDF/X
 - [ ] PDF/E
+- [ ] Tagged PDF
 - [ ] AcroForm
 - [ ] FDF
 - [ ] XFDF
-- [ ] Assinaturas digitais
-- [ ] Documentos protegidos
-- [ ] Fontes incorporadas
-- [ ] Imagens JBIG2
+- [ ] XFA quando possível
+- [ ] Digital signatures
+- [ ] Encryption
+- [ ] Embedded fonts
+- [ ] Type 1 fonts quando encontradas
+- [ ] TrueType
+- [ ] OpenType/CFF
+- [ ] JBIG2
 - [ ] JPEG2000
-- [ ] Transparência
-- [ ] Camadas
-- [ ] Anexos
-- [ ] Marcadores
+- [ ] ICC
+- [ ] Transparency
+- [ ] OCG/Layers
+- [ ] Attachments
+- [ ] Bookmarks
+- [ ] Named destinations
 - [ ] Links
-- [ ] Comentários
-- [ ] Metadados XMP
-- [ ] Documentos linearizados
-- [ ] Portfólios PDF quando tecnicamente viável
-- [ ] Conteúdo multimídia com execução segura e controlada
-
----
-
-# Salvamento e recuperação
-
-- [ ] Salvar
-- [ ] Salvar como
-- [ ] Salvar uma cópia
-- [ ] Autosave configurável
-- [ ] Recuperação após crash
-- [ ] Escrita atômica
-- [ ] Backup temporário
-- [ ] Detectar alteração externa
-- [ ] Avisar conflito
-- [ ] Preservar assinaturas quando a alteração permitir
-- [ ] Avisar quando uma operação invalidar assinatura
-- [ ] Histórico de desfazer/refazer durante a sessão
-
----
-
-# Processamento em lote
-
-A segunda janela de ferramentas deve permitir filas independentes da janela principal.
-
-- [ ] Converter vários arquivos
-- [ ] OCR em vários arquivos
-- [ ] Compactar vários arquivos
-- [ ] Aplicar senha
-- [ ] Remover metadados
-- [ ] Adicionar marca d'água
-- [ ] Inserir cabeçalho/rodapé
-- [ ] Renomear saída
-- [ ] Combinar
-- [ ] Dividir
-- [ ] Extrair páginas
-- [ ] Barra de progresso
-- [ ] Cancelar
-- [ ] Retry
-- [ ] Log por tarefa
-- [ ] Relatório final
-
----
-
-# Gerenciador de tarefas
-
-Operações demoradas nunca devem travar a interface.
-
-- [ ] Fila global
-- [ ] Prioridade
-- [ ] Concorrência limitada
-- [ ] Cancelamento seguro
-- [ ] Retry com backoff
-- [ ] Pausa
-- [ ] Progresso real
-- [ ] ETA quando possível
-- [ ] Persistência da fila
-- [ ] Retomar tarefas após reinício quando seguro
-- [ ] Notificação de conclusão
-- [ ] Registro de erros compreensível
-
----
-
-# Desempenho
-
-- [ ] Inicialização rápida
-- [ ] Lazy loading
-- [ ] Renderização por tiles
-- [ ] Cache de páginas
-- [ ] Pré-renderização limitada
-- [ ] Virtualização de miniaturas
-- [ ] Busca em background
-- [ ] OCR em background
-- [ ] Conversão em background
-- [ ] Limite de memória configurável
-- [ ] Liberação de páginas fora da viewport
-- [ ] Debounce de zoom
-- [ ] Cancelamento de renderizações obsoletas
-- [ ] Suporte a documentos com milhares de páginas
-- [ ] Suporte a arquivos grandes
-- [ ] Telemetria desativada por padrão
-
----
-
-# Segurança
-
-- [ ] CSP restritiva
-- [ ] Privilégios mínimos no Tauri
-- [ ] Allowlist explícita de comandos
-- [ ] Validação de paths
-- [ ] Proteção contra path traversal
-- [ ] Arquivos temporários com nomes seguros
-- [ ] Limpeza de temporários
-- [ ] Nunca executar anexos automaticamente
-- [ ] Nunca executar JavaScript de PDF automaticamente
-- [ ] Confirmação antes de abrir links externos
-- [ ] Sanitização de URLs
-- [ ] Limites de tamanho
-- [ ] Limites de memória
-- [ ] Timeouts
-- [ ] Proteção contra PDFs malformados
-- [ ] Fuzz testing do parser nativo
-- [ ] Isolamento de operações potencialmente perigosas
-
----
-
-# Privacidade
-
-O Seven Reader deve funcionar sem criar uma conta.
-
-Por padrão:
-
-- documentos não são enviados para servidores;
-- OCR é local;
-- conversões são locais sempre que tecnicamente possível;
-- assinaturas ficam no dispositivo;
-- certificados privados nunca deixam o sistema;
-- histórico é local;
-- telemetria não é obrigatória.
-
-Qualquer recurso online futuro deverá ser explicitamente opt-in.
+- [ ] Comments
+- [ ] XMP
+- [ ] Linearized PDF
+- [ ] PDF Portfolio
+- [ ] 3D U3D/PRC
+- [ ] Geospatial PDF
+- [ ] Multimedia com execução segura
+- [ ] MathML em tagged PDFs quando presente
 
 ---
 
@@ -1094,129 +2370,227 @@ Qualquer recurso online futuro deverá ser explicitamente opt-in.
 
 ## Aparência
 
-- [ ] Tema claro
-- [ ] Tema escuro
-- [ ] Seguir sistema
+- [ ] Claro
+- [ ] Escuro
+- [ ] Sistema
 - [ ] Densidade
 - [ ] Escala
-- [ ] Tamanho de fonte da interface
-- [ ] Animações
-- [ ] Ferramentas rápidas
-- [ ] Painéis laterais
+- [ ] Fonte UI
+- [ ] Reduced motion
+- [ ] Quick tools
+- [ ] Painéis
 - [ ] Barra global
-- [ ] Cor de destaque da identidade Seven
+- [ ] Cor de destaque Seven
 
 ## Documentos
 
 - [ ] Zoom padrão
-- [ ] Layout padrão
-- [ ] Rolagem padrão
-- [ ] Abrir na última página
+- [ ] Layout
+- [ ] Rolagem
+- [ ] Reabrir na última página
 - [ ] Restaurar abas
 - [ ] Mostrar miniaturas
 - [ ] Unidades
-- [ ] Suavização
 - [ ] Cache
+- [ ] Suavização
+- [ ] Overprint preview
+- [ ] Page display
 
 ## Segurança
 
-- [ ] Comportamento de links
-- [ ] JavaScript de PDF desativado por padrão
-- [ ] Conteúdo externo
-- [ ] Certificados confiáveis
-- [ ] Arquivos temporários
-- [ ] Limpeza de dados recentes
+- [ ] URLs externas
+- [ ] JavaScript
+- [ ] Attachments
+- [ ] Trusted locations
+- [ ] Trusted certificates
+- [ ] Protected view
+- [ ] Sandbox
+- [ ] Recent files
+- [ ] Limpeza de dados
 
 ## OCR
 
-- [ ] Idioma padrão
+- [ ] Idioma
 - [ ] Idiomas adicionais
-- [ ] Nível mínimo de confiança
-- [ ] Pré-processamento
-- [ ] OCR automático em scans
+- [ ] Auto rotate
+- [ ] Deskew
+- [ ] Confidence threshold
+- [ ] OCR automático em scan
+- [ ] Pasta de lote
 
 ## Conversão
 
 - [ ] Pasta padrão
-- [ ] Convenção de nomes
+- [ ] Nome
 - [ ] Sobrescrita
-- [ ] Qualidade de imagem
+- [ ] Preset
+- [ ] DPI
 - [ ] OCR automático
-- [ ] Abrir arquivo ao concluir
+- [ ] Abrir ao concluir
+
+## Assinaturas
+
+- [ ] Digital ID padrão
+- [ ] Timestamp server
+- [ ] Validation
+- [ ] Revocation
+- [ ] Trust
+- [ ] Aparência padrão
 
 ---
 
 # Atalhos de teclado
 
-- [ ] Abrir
-- [ ] Salvar
-- [ ] Salvar como
-- [ ] Imprimir
-- [ ] Fechar documento
-- [ ] Reabrir documento
-- [ ] Pesquisar
-- [ ] Próxima ocorrência
-- [ ] Ocorrência anterior
+## Navegação
+
+- [ ] Próxima página
+- [ ] Página anterior
+- [ ] Primeira
+- [ ] Última
+- [ ] Ir para
+- [ ] Próxima aba
+- [ ] Aba anterior
+- [ ] Próxima janela
+- [ ] Janela anterior
+
+## Visualização
+
+- [ ] Mão
+- [ ] Seleção
+- [ ] Marquee zoom
+- [ ] Dynamic zoom
 - [ ] Zoom +
 - [ ] Zoom -
 - [ ] Ajustar página
 - [ ] Ajustar largura
-- [ ] Página seguinte
-- [ ] Página anterior
-- [ ] Girar
-- [ ] Desfazer
-- [ ] Refazer
-- [ ] Comentário
-- [ ] Destaque
-- [ ] Ferramenta mão
-- [ ] Seleção
-- [ ] Tela cheia
-- [ ] Atalhos configuráveis
+- [ ] Reflow
+- [ ] Fullscreen
+
+## Edição
+
+- [ ] Undo
+- [ ] Redo
+- [ ] Edit text
+- [ ] Edit object
+- [ ] Crop
+- [ ] Link
+- [ ] Insert file
+- [ ] Insert blank page
+- [ ] Delete page
+- [ ] Redact
+
+## Comentários
+
+- [ ] Comment
+- [ ] Highlight
+- [ ] Underline
+- [ ] Strikethrough
+- [ ] Stamp
+- [ ] Drawing
+- [ ] Reply
+
+## Formulários
+
+- [ ] Edit/preview
+- [ ] Text field
+- [ ] Checkbox
+- [ ] Radio
+- [ ] List
+- [ ] Dropdown
+- [ ] Button
+- [ ] Signature
+- [ ] Barcode
+- [ ] Guides
+- [ ] Tab order
+
+## Acessibilidade
+
+- [ ] Reading preferences
+- [ ] Reflow
+- [ ] Read aloud
+- [ ] Pause
+- [ ] Stop
+- [ ] Reading Order
+
+Atalhos de uma tecla devem ser opcionais.
 
 ---
 
-# Integração com o sistema operacional
+# Integração com sistema operacional
 
 ## Windows
 
 - [ ] Instalador
 - [ ] Desinstalador
+- [ ] x64
+- [ ] ARM64 quando viável
 - [ ] Associação .pdf
-- [ ] Definir como leitor padrão
-- [ ] Abrir com
-- [ ] Ícone oficial
+- [ ] Definir como padrão
+- [ ] Open With
+- [ ] Recent files
+- [ ] Drag and drop
 - [ ] Impressão
 - [ ] Scanner
-- [ ] Certificados do Windows
-- [ ] Recent files
-- [ ] Notificações nativas
-- [ ] Atualização do aplicativo
+- [ ] WIA/TWAIN
+- [ ] Windows certificate store
+- [ ] Notificações
+- [ ] Atualização
+- [ ] Impressora virtual PDF quando tecnicamente implementável
 
 ## Linux
 
 - [ ] AppImage
 - [ ] DEB
-- [ ] RPM quando aplicável
-- [ ] Associação .pdf
+- [ ] RPM
+- [ ] x64
+- [ ] ARM64 quando viável
 - [ ] MIME application/pdf
-- [ ] Abrir com
-- [ ] Impressão via sistema
-- [ ] Scanner via SANE quando disponível
+- [ ] Associação
+- [ ] Open With
+- [ ] CUPS
+- [ ] SANE
 - [ ] Keyring
 - [ ] Notificações
-- [ ] Atualização do aplicativo
+- [ ] Atualização
 
 ## macOS
 
-- [ ] Bundle .app
+- [ ] .app
 - [ ] DMG
+- [ ] Apple Silicon
+- [ ] Intel quando suportado
 - [ ] Associação .pdf
-- [ ] Abrir com
-- [ ] Impressão
-- [ ] Scanner quando suportado
+- [ ] Open With
+- [ ] Printing
+- [ ] Scanner
 - [ ] Keychain
+- [ ] Certificados
 - [ ] Notificações
-- [ ] Atualização do aplicativo
+- [ ] Atualização
+
+---
+
+# Performance
+
+- [ ] Inicialização rápida
+- [ ] Lazy loading
+- [ ] Render por tile
+- [ ] Cache de páginas
+- [ ] Cache LRU
+- [ ] Pre-render limitado
+- [ ] Virtualização de thumbnails
+- [ ] Busca em worker
+- [ ] OCR em worker
+- [ ] Conversão em worker
+- [ ] Compressão em worker
+- [ ] Limite de memória
+- [ ] Liberar páginas fora da viewport
+- [ ] Cancelar renders obsoletos
+- [ ] Debounce de zoom
+- [ ] Abrir documentos grandes incrementalmente
+- [ ] Suporte a milhares de páginas
+- [ ] Suporte a arquivos de vários GB quando arquitetura permitir
+- [ ] Nenhuma operação pesada bloqueia a UI
 
 ---
 
@@ -1227,56 +2601,77 @@ Seven Reader
 ├── Presentation
 │   ├── Home
 │   ├── Document Workspace
+│   ├── Global Bar
 │   ├── All Tools
 │   ├── Quick Tools
 │   ├── Side Panels
 │   ├── Conversion Window
 │   ├── OCR Review
+│   ├── Compare Workspace
+│   ├── Forms Workspace
+│   ├── Print Production
+│   ├── Guided Actions
 │   ├── Batch Jobs
 │   └── Settings
 │
 ├── Application
-│   ├── OpenDocument
-│   ├── SaveDocument
-│   ├── RenderPage
+│   ├── Documents
+│   ├── Rendering
 │   ├── Search
-│   ├── Edit
-│   ├── Organize
-│   ├── Convert
+│   ├── Editing
+│   ├── Pages
+│   ├── Conversion
+│   ├── Creation
 │   ├── OCR
+│   ├── Scanning
+│   ├── Comments
 │   ├── Forms
 │   ├── Signatures
+│   ├── Certificates
 │   ├── Security
 │   ├── Redaction
+│   ├── Optimization
+│   ├── Comparison
+│   ├── Accessibility
 │   ├── Print
+│   ├── PrintProduction
+│   ├── Automation
 │   └── Jobs
 │
 ├── Domain
 │   ├── Document
 │   ├── Page
+│   ├── Object
 │   ├── Annotation
+│   ├── Bookmark
+│   ├── Layer
 │   ├── Form
 │   ├── Signature
-│   ├── Conversion
+│   ├── Certificate
 │   ├── OCR
+│   ├── Conversion
 │   ├── SecurityPolicy
+│   ├── Redaction
 │   └── Job
 │
 ├── Infrastructure
 │   ├── PdfEngine
+│   ├── RenderEngine
 │   ├── OcrEngine
-│   ├── ConversionEngine
-│   ├── Scanner
-│   ├── Printer
-│   ├── Certificates
+│   ├── ConversionAdapters
+│   ├── ScannerAdapters
+│   ├── PrinterAdapters
+│   ├── CertificateStores
+│   ├── Crypto
 │   ├── Filesystem
 │   ├── Cache
-│   ├── Index
-│   └── Updates
+│   ├── SearchIndex
+│   └── Updater
 │
 └── Native
     ├── Tauri Commands
     ├── Background Workers
+    ├── Sandboxed Workers
     ├── File Associations
     ├── Native Windows
     └── OS Integration
@@ -1286,107 +2681,139 @@ Seven Reader
 
 # Comunicação React ↔ Rust
 
-A fronteira entre frontend e backend deve ser fortemente tipada.
+A fronteira deve ser fortemente tipada.
 
-Exemplos de comandos:
+Exemplos:
 
 ```text
 open_document
 close_document
 render_page
+render_tile
 search_document
 get_document_metadata
+get_page_text
 save_document
 save_document_as
 insert_pages
 delete_pages
 rotate_pages
+crop_pages
 extract_pages
+split_document
 combine_documents
+edit_text
+edit_image
+edit_object
 run_ocr
 review_ocr_word
+scan_document
 convert_document
-compress_document
+optimize_document
+prepare_form
 sign_document
+certify_document
 validate_signatures
+encrypt_document
 sanitize_document
 apply_redactions
+compare_documents
+run_accessibility_check
+run_preflight
 print_document
+start_action
 start_batch_job
 cancel_job
+pause_job
+resume_job
 get_job_status
 ```
 
 Regras:
 
-- Não retornar blobs gigantes em JSON.
-- Usar caminhos controlados, handles ou streaming.
-- Validar todos os argumentos no Rust.
-- Nunca confiar em paths vindos diretamente da UI.
-- Operações demoradas retornam `job_id`.
-- Progresso é enviado por eventos.
-- Cancelamento deve ser cooperativo.
-- Erros nativos devem ser convertidos para tipos conhecidos.
+- não enviar blobs gigantes em JSON;
+- usar handles, temp files controlados ou streaming;
+- validar todos os argumentos no Rust;
+- canonicalizar paths;
+- nunca confiar em path vindo da UI;
+- jobs longos retornam `job_id`;
+- progresso via eventos;
+- cancelamento cooperativo;
+- erros tipados;
+- nenhuma panic atravessa a fronteira Tauri;
+- comandos privilegiados exigem capability explícita.
 
 ---
 
-# Estado e cache
-
-O frontend deve manter apenas estado de interface.
-
-Dados pesados pertencem ao backend.
+# Estado
 
 ## Frontend
 
+Somente estado de apresentação:
+
 - abas;
-- painel ativo;
 - seleção;
 - zoom;
-- ferramenta ativa;
+- página;
+- ferramenta;
+- painel;
 - preferências visuais;
-- status das tarefas.
+- estado resumido dos jobs.
 
 ## Backend
 
-- handles dos documentos;
-- cache de renderização;
-- índices de texto;
-- páginas;
+- handles;
+- objetos PDF;
+- cache;
+- render tiles;
+- text index;
+- OCR;
+- forms;
+- certificates;
+- signatures;
+- temp files;
 - jobs;
-- resultados OCR;
-- dados temporários;
-- certificados;
-- estruturas PDF.
+- queues;
+- recovery state.
 
 ---
 
 # Qualidade
 
-Antes de uma versão estável, o Seven Reader deve ser testado com:
+A suíte de compatibilidade deve conter PDFs:
 
-- PDFs pequenos
-- PDFs gigantes
-- PDFs com milhares de páginas
-- PDFs criptografados
-- PDFs assinados
-- PDFs corrompidos
-- PDFs parcialmente corrompidos
-- PDFs digitalizados
-- PDFs com OCR
-- PDFs com formulários
-- PDFs com fontes incomuns
-- PDFs com CJK
-- PDFs RTL
-- PDFs com transparência
-- PDFs com camadas
-- PDFs com anexos
-- PDFs com comentários
-- PDFs com links
-- PDFs com imagens enormes
-- PDFs com metadados
-- PDF/A
-- PDF/X
-- PDF 2.0
+- pequenos;
+- gigantes;
+- milhares de páginas;
+- corrompidos;
+- truncados;
+- criptografados;
+- assinados;
+- certificados;
+- com forms;
+- XFA;
+- com OCR;
+- scans;
+- CJK;
+- RTL;
+- MathML;
+- layers;
+- attachments;
+- 3D;
+- multimedia;
+- geospatial;
+- portfolios;
+- PDF/A;
+- PDF/X;
+- PDF/E;
+- PDF 2.0;
+- transparência;
+- spot colors;
+- fontes incomuns;
+- imagens enormes;
+- JavaScript malicioso;
+- decompression bombs;
+- objetos profundamente aninhados.
 
 ---
 
@@ -1394,79 +2821,108 @@ Antes de uma versão estável, o Seven Reader deve ser testado com:
 
 ## Rust
 
-- [ ] Unit tests
-- [ ] Integration tests
-- [ ] Property-based tests
-- [ ] Fuzz tests
-- [ ] Parser malformed input tests
-- [ ] Signature validation tests
-- [ ] Encryption tests
-- [ ] Save/reopen round-trip tests
-- [ ] OCR integration tests
-- [ ] Conversion integration tests
+- [ ] Unit
+- [ ] Integration
+- [ ] Round-trip save/reopen
+- [ ] Property-based
+- [ ] Fuzzing
+- [ ] Corpus malformed PDF
+- [ ] Encryption
+- [ ] Password permissions
+- [ ] Certificate encryption
+- [ ] Signature validation
+- [ ] Timestamp
+- [ ] OCR
+- [ ] Conversion
+- [ ] Redaction verification
+- [ ] Sanitization
+- [ ] Preflight
+- [ ] Print pipeline
 
 ## React
 
-- [ ] Unit tests
-- [ ] Component tests
-- [ ] Keyboard navigation tests
-- [ ] Accessibility tests
-- [ ] State transition tests
-- [ ] Error boundary tests
+- [ ] Unit
+- [ ] Component
+- [ ] Keyboard
+- [ ] Accessibility
+- [ ] Focus management
+- [ ] Error boundaries
+- [ ] State transitions
+- [ ] Multi-window
+- [ ] Job progress
 
 ## E2E
 
-- [ ] Abrir PDF
+- [ ] Abrir
+- [ ] Renderizar
+- [ ] Pesquisar
 - [ ] Editar
-- [ ] Salvar
-- [ ] Reabrir
+- [ ] Organizar
+- [ ] Combinar
+- [ ] Criar
 - [ ] Converter
+- [ ] Digitalizar
 - [ ] OCR
-- [ ] Organizar páginas
-- [ ] Preencher formulário
+- [ ] Corrigir OCR
+- [ ] Comentar
+- [ ] Preencher form
+- [ ] Criar form
 - [ ] Assinar
-- [ ] Validar assinatura
+- [ ] Certificar
+- [ ] Validar
+- [ ] Proteger
 - [ ] Redigir
+- [ ] Sanitizar
+- [ ] Compactar
+- [ ] Comparar
+- [ ] Acessibilidade
 - [ ] Imprimir
-- [ ] Recuperar após crash
+- [ ] Batch
+- [ ] Crash recovery
 
 ---
 
 # Performance targets
 
-As métricas exatas devem ser validadas em hardware real, mas o projeto deve perseguir:
+Os números finais devem ser medidos em hardware real.
 
-- abertura percebida imediata com carregamento progressivo;
-- primeira página renderizada antes do processamento completo do documento;
-- scroll sem travamentos;
-- zoom sem bloquear a interface;
-- processamento pesado fora da UI;
-- consumo de memória proporcional às páginas realmente em uso;
-- cancelamento rápido de tarefas;
-- nenhum congelamento da interface durante OCR, conversão ou compactação.
+Metas arquiteturais:
+
+- primeira página antes do processamento total;
+- scrolling fluido;
+- zoom não bloqueante;
+- cancelamento rápido;
+- tarefas pesadas fora da UI;
+- memória proporcional ao conteúdo ativo;
+- virtualização;
+- cache limitado;
+- recuperação de sessão;
+- nenhuma conversão/OCR/print/preflight congela a janela.
 
 ---
 
 # CI
 
-Cada Pull Request deve validar:
+Cada Pull Request deve executar pelo menos:
 
 ```text
 npm test
 npm run build
 cargo test --locked --manifest-path src-tauri/Cargo.toml
 cargo check --locked --manifest-path src-tauri/Cargo.toml
+cargo clippy --locked --manifest-path src-tauri/Cargo.toml -- -D warnings
 ```
 
 Além disso:
 
-- lint TypeScript;
+- TypeScript strict;
 - format check;
-- clippy;
-- testes E2E principais;
-- verificação de vulnerabilidades;
-- build Windows;
-- build Linux;
+- lint;
+- E2E crítico;
+- audit de dependências;
+- fuzz smoke tests;
+- Windows build;
+- Linux build;
 - artefatos de instalação.
 
 ---
@@ -1477,157 +2933,197 @@ Além disso:
 
 - Instalador nativo
 - x64
-- Associação de PDF
-- Ícone oficial
-- Atualização
+- associação .pdf
+- ícone oficial
+- updater
+- checksum
 
 ## Linux
 
 - AppImage
 - DEB
+- RPM quando disponível
 - x64
-- Associação de PDF
-- Atualização
+- associação .pdf
+- updater/checksum
 
 ## macOS
 
-Planejado após estabilização do núcleo desktop.
+Após estabilização do núcleo:
+
+- .app
+- DMG
+- Apple Silicon
+- assinatura/notarização
 
 ---
 
 # Roadmap
 
-## 0.1.0 — Fundação
+## 0.1 — Foundation
 
-- [ ] React 19 + TypeScript + Vite
-- [ ] Tauri 2 + Rust
+- [ ] React 19
+- [ ] TypeScript
+- [ ] Vite
+- [ ] Tauri 2
+- [ ] Rust
 - [ ] Design system
-- [ ] Identidade Seven Reader
-- [ ] Abrir PDF
-- [ ] Renderizar
-- [ ] Navegar
+- [ ] Identidade Seven
+- [ ] PDF engine abstraction
+- [ ] Open
+- [ ] Render
+- [ ] Search
+- [ ] Navigation
 - [ ] Zoom
-- [ ] Busca
-- [ ] Miniaturas
-- [ ] Marcadores
+- [ ] Thumbnails
+- [ ] Bookmarks
 - [ ] File association
 
-## 0.2.0 — Workspace profissional
+## 0.2 — Desktop workspace
 
-- [ ] Abas
-- [ ] Múltiplas janelas
-- [ ] Todas as ferramentas
+- [ ] Tabs
+- [ ] Multi-window
+- [ ] Global bar
+- [ ] All tools
 - [ ] Quick tools
-- [ ] Painéis personalizáveis
-- [ ] Comentários
-- [ ] Anotações
-- [ ] Impressão
+- [ ] Custom side panels
+- [ ] Context actions
+- [ ] Print
 
-## 0.3.0 — Organização
+## 0.3 — Pages & creation
 
-- [ ] Reordenar páginas
-- [ ] Inserir
-- [ ] Excluir
-- [ ] Extrair
-- [ ] Dividir
-- [ ] Combinar
-- [ ] Recortar
-- [ ] Rotacionar
+- [ ] Organize
+- [ ] Extract
+- [ ] Split
+- [ ] Combine
+- [ ] Create blank
+- [ ] Clipboard
+- [ ] Web
+- [ ] Portfolio
 
-## 0.4.0 — Edição
+## 0.4 — Editing
 
-- [ ] Texto
-- [ ] Imagens
-- [ ] Objetos
+- [ ] Text
+- [ ] Images
+- [ ] Objects
 - [ ] Links
-- [ ] Cabeçalhos
-- [ ] Rodapés
-- [ ] Marca d'água
-- [ ] Plano de fundo
+- [ ] Destinations
+- [ ] Headers/footers
+- [ ] Watermarks
+- [ ] Background
+- [ ] Bates
 
-## 0.5.0 — Conversão
+## 0.5 — Conversion
 
-- [ ] Janela dedicada
-- [ ] Fila
-- [ ] PDF para Office
-- [ ] Office para PDF
-- [ ] Imagens
+- [ ] Conversion window
+- [ ] Queue
+- [ ] Office
+- [ ] Images
 - [ ] HTML
-- [ ] Texto
-- [ ] Conversão em lote
+- [ ] Text
+- [ ] PostScript
+- [ ] Presets
+- [ ] Watch folders
 
-## 0.6.0 — OCR
+## 0.6 — Scan & OCR
 
-- [ ] OCR local
-- [ ] Detecção de scan
-- [ ] Texto pesquisável
-- [ ] Texto editável
-- [ ] Confidence score
-- [ ] Revisão palavra por palavra
-- [ ] Digitalização
+- [ ] Scanner
+- [ ] OCR
+- [ ] Batch OCR
+- [ ] Edit scanned PDF
+- [ ] Suspect review
+- [ ] Confidence review
+- [ ] PDF/A scan
 
-## 0.7.0 — Forms & Sign
+## 0.7 — Comments, forms & sign
 
-- [ ] Formulários
+- [ ] Comments
+- [ ] Stamps
+- [ ] Forms
+- [ ] Barcodes
+- [ ] Form calculations
 - [ ] Fill & Sign
-- [ ] Certificados
-- [ ] Assinaturas digitais
-- [ ] Validação
+- [ ] Digital IDs
+- [ ] Digital signatures
+- [ ] Certification
+- [ ] Validation
 
-## 0.8.0 — Segurança
+## 0.8 — Security
 
-- [ ] Senhas
-- [ ] Criptografia
-- [ ] Sanitização
-- [ ] Redação permanente
-- [ ] Certificados confiáveis
+- [ ] Password
+- [ ] Certificate encryption
+- [ ] Policies
+- [ ] Protected view
+- [ ] Sandbox
+- [ ] Redaction
+- [ ] Sanitize
 
-## 0.9.0 — Ferramentas profissionais
+## 0.9 — Professional
 
-- [ ] Compactação avançada
-- [ ] Comparação
-- [ ] Medição
-- [ ] Acessibilidade
-- [ ] Processamento em lote
-- [ ] PDF/A
+- [ ] Advanced optimizer
+- [ ] Compare
+- [ ] Accessibility
+- [ ] MathML
+- [ ] Layers
+- [ ] Geospatial
+- [ ] Guided actions
+- [ ] Print production
+- [ ] Preflight
+- [ ] Color management
 
-## 1.0.0 — Stable
+## 1.0 — Stable
 
 - [ ] Windows
 - [ ] Linux
 - [ ] Instaladores
-- [ ] Atualizador
-- [ ] Associação de PDF
-- [ ] Testes de carga
-- [ ] Testes de segurança
+- [ ] Updater
+- [ ] PDF default app
+- [ ] Crash recovery
+- [ ] Large-file tests
+- [ ] Security tests
 - [ ] Fuzzing
-- [ ] Recuperação de crash
-- [ ] Documentação completa
-- [ ] Compatibilidade validada com coleção ampla de PDFs reais
+- [ ] Compatibility corpus
+- [ ] Documentation
+
+## Pós-1.0
+
+- [ ] macOS
+- [ ] Smart tools opt-in
+- [ ] Translation
+- [ ] Document workspaces
+- [ ] Online e-sign workflow
+- [ ] Enterprise policies
+- [ ] Collaboration
 
 ---
 
 # Critérios para 1.0
 
-A versão 1.0 só deve ser considerada pronta quando:
+A versão 1.0 somente pode ser marcada como estável quando:
 
-- PDFs comuns e complexos abrirem corretamente;
-- a primeira página aparecer rapidamente;
-- a navegação permanecer fluida;
-- edições não corromperem o documento;
-- salvar e reabrir preservar as alterações;
-- formulários funcionarem;
-- assinaturas puderem ser validadas;
-- OCR produzir camada pesquisável;
-- a revisão OCR de baixa confiança funcionar;
-- conversões possuírem fila e progresso;
-- redação remover realmente o conteúdo;
-- documentos protegidos forem tratados corretamente;
-- Windows e Linux possuírem instaladores;
-- associação de `.pdf` funcionar;
-- crash recovery funcionar;
-- operações pesadas não travarem a UI;
-- a suíte de testes estiver verde.
+- PDFs simples e complexos abrem corretamente;
+- o arquivo não precisa ser totalmente processado para mostrar a primeira página;
+- zoom e scroll permanecem responsivos;
+- edição não rasteriza o documento inteiro;
+- salvar e reabrir preserva alterações;
+- salvar não corrompe estrutura;
+- forms comuns funcionam;
+- digital signatures são validadas;
+- OCR produz texto pesquisável;
+- revisão de suspeitas funciona;
+- conversão tem fila/progresso/cancelamento;
+- redação remove o conteúdo real;
+- sanitização remove conteúdo oculto selecionado;
+- documentos protegidos respeitam permissões;
+- sandbox está ativo para conteúdo não confiável;
+- Windows e Linux possuem instaladores;
+- associação .pdf funciona;
+- impressão básica e avançada foi validada;
+- crash recovery funciona;
+- operações pesadas não bloqueiam UI;
+- testes estão verdes;
+- fuzzing básico não encontra crash conhecido;
+- coleção de compatibilidade foi validada.
 
 ---
 
@@ -1636,38 +3132,44 @@ A versão 1.0 só deve ser considerada pronta quando:
 O Seven Reader não deve:
 
 - depender de navegador para abrir PDF;
-- renderizar páginas como simples screenshots quando não necessário;
-- transformar todo PDF em canvas destrutivo para permitir edição;
-- depender de serviços online para leitura;
-- enviar documentos para terceiros por padrão;
-- executar JavaScript embutido automaticamente;
+- usar o visualizador PDF do WebView como engine principal;
+- rasterizar todas as páginas para permitir edição;
+- depender de cloud para leitura;
+- depender de cloud para OCR básico;
+- enviar documentos sem consentimento explícito;
+- executar JavaScript automaticamente;
 - executar anexos automaticamente;
-- esconder erros de conversão;
-- informar sucesso quando o arquivo final estiver incompleto;
-- bloquear a interface durante operações longas.
+- executar launch actions automaticamente;
+- fingir suporte a um formato quando falta conversor;
+- esconder falhas de conversão;
+- retornar sucesso com saída incompleta;
+- bloquear a UI durante tarefas longas;
+- misturar toda a lógica de PDF dentro de componentes React.
 
 ---
 
 # Contribuição
 
-Issues e Pull Requests podem ser utilizados para:
+Issues e Pull Requests podem cobrir:
 
-- bugs;
-- compatibilidade PDF;
-- renderização;
-- performance;
+- compatibilidade;
+- rendering;
 - edição;
-- conversão;
+- páginas;
 - OCR;
-- formulários;
-- assinaturas;
-- segurança;
-- impressão;
-- acessibilidade;
-- interface;
-- instaladores.
+- conversão;
+- scan;
+- forms;
+- signatures;
+- security;
+- redaction;
+- accessibility;
+- print production;
+- performance;
+- UI;
+- installers.
 
-Toda alteração que mexa no núcleo PDF deve incluir teste de regressão.
+Toda alteração no núcleo PDF deve incluir regressão reproduzível.
 
 ---
 

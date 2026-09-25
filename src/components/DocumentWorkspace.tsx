@@ -740,7 +740,7 @@ export function DocumentWorkspace({
                   />
                 )}
                 {viewerTool === "select" && selectionRect && selectionRect.width > 0.002 && selectionRect.height > 0.002 && (
-                  <div className="selection-actions">
+                  <div className="selection-actions" onPointerDown={(event) => event.stopPropagation()} onPointerUp={(event) => event.stopPropagation()}>
                     <button disabled={!selectedText || selectionBusy} onClick={() => void copySelectedText()}>
                       <SevenIcon name="text" /> Copiar texto
                     </button>

@@ -95,6 +95,23 @@ export interface AdvancedSearchHit {
   occurrences: number;
 }
 
+export interface CatalogSummary {
+  id: string;
+  name: string;
+  createdAtUnix: number;
+  documentCount: number;
+  pageCount: number;
+}
+
+export interface CatalogHit {
+  catalogId: string;
+  documentPath: string;
+  documentName: string;
+  pageIndex: number;
+  excerpt: string;
+  occurrences: number;
+}
+
 export interface JobStart {
   jobId: string;
 }

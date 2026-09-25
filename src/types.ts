@@ -39,6 +39,7 @@ export interface DocumentSummary {
   encrypted: boolean;
   hasSignatures: boolean;
   hasForms: boolean;
+  dirty: boolean;
 }
 
 export interface RenderResult {

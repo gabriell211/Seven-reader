@@ -1,3 +1,4 @@
+use encoding_rs::WINDOWS_1252;
 use crate::{
     capabilities::bind_pdfium,
     error::SevenError,
@@ -291,6 +292,156 @@ pub fn create_blank_pdf(
     Ok(())
 }
 
+
+fn encode_pdf_text(text: &str) -> String {
+    let (encoded, _, _) = WINDOWS_1252.encode(text);
+    hex::encode_upper(encoded)
+}
+
+fn wrap_text_lines(text: &str, max_chars: usize) -> Vec<String> {
+    let mut lines = Vec::new();
+
+    for raw_line in text.replace("\r\n", "\n").replace('\r', "\n").split('\n') {
+        if raw_line.is_empty() {
+            lines.push(String::new());
+            continue;
+        }
+
+        let mut current = String::new();
+        for word in raw_line.split_whitespace() {
+            let additional = if current.is_empty() { word.len() } else { word.len() + 1 };
+            if current.len() + additional > max_chars && !current.is_empty() {
+                lines.push(current);
+                current = String::new();
+            }
+
+            if word.len() > max_chars {
+                if !current.is_empty() {
+                    lines.push(current);
+                    current = String::new();
+                }
+                let chars = word.chars().collect::<Vec<_>>();
+                for chunk in chars.chunks(max_chars.max(1)) {
+                    lines.push(chunk.iter().collect());
+                }
+                continue;
+            }
+
+            if !current.is_empty() {
+                current.push(' ');
+            }
+            current.push_str(word);
+        }
+
+        if !current.is_empty() {
+            lines.push(current);
+        }
+    }
+
+    if lines.is_empty() {
+        lines.push(String::new());
+    }
+    lines
+}
+
+pub fn create_pdf_from_text(
+    destination: &Path,
+    text: &str,
+    page_size: &str,
+    font_size: u16,
+) -> Result<(), SevenError> {
+    if text.chars().count() > 2_000_000 {
+        return Err(SevenError::OperationRejected(
+            "O texto excede o limite de 2 milhões de caracteres".into(),
+        ));
+    }
+
+    let font_size = font_size.clamp(8, 36);
+    let (width, height) = match page_size {
+        "a4" => (595.0_f64, 842.0_f64),
+        "letter" => (612.0, 792.0),
+        "legal" => (612.0, 1008.0),
+        _ => {
+            return Err(SevenError::OperationRejected(
+                "Tamanho de página não suportado".into(),
+            ))
+        }
+    };
+
+    let margin = 54.0_f64;
+    let leading = f64::from(font_size) * 1.35;
+    let usable_width = (width - margin * 2.0).max(72.0);
+    let usable_height = (height - margin * 2.0).max(72.0);
+    let max_chars = (usable_width / (f64::from(font_size) * 0.52)).floor().max(12.0) as usize;
+    let lines_per_page = (usable_height / leading).floor().max(1.0) as usize;
+    let lines = wrap_text_lines(text, max_chars);
+
+    let mut document = Document::with_version("1.7");
+    let pages_id = document.new_object_id();
+    let font_id = document.add_object(dictionary! {
+        "Type" => "Font",
+        "Subtype" => "Type1",
+        "BaseFont" => "Helvetica",
+        "Encoding" => "WinAnsiEncoding",
+    });
+    let mut kids = Vec::new();
+
+    for page_lines in lines.chunks(lines_per_page) {
+        let mut content = format!(
+            "BT\n/F1 {} Tf\n{:.2} {:.2} Td\n{:.2} TL\n",
+            font_size,
+            margin,
+            height - margin - f64::from(font_size),
+            leading,
+        );
+
+        for line in page_lines {
+            content.push('<');
+            content.push_str(&encode_pdf_text(line));
+            content.push_str("> Tj\nT*\n");
+        }
+        content.push_str("ET\n");
+
+        let content_id = document.add_object(Stream::new(dictionary! {}, content.into_bytes()));
+        let resources = dictionary! {
+            "Font" => dictionary! {
+                "F1" => font_id,
+            },
+        };
+        let page_id = document.add_object(dictionary! {
+            "Type" => "Page",
+            "Parent" => pages_id,
+            "MediaBox" => vec![0.into(), 0.into(), width.into(), height.into()],
+            "Resources" => resources,
+            "Contents" => content_id,
+        });
+        kids.push(Object::Reference(page_id));
+    }
+
+    document.objects.insert(
+        pages_id,
+        Object::Dictionary(dictionary! {
+            "Type" => "Pages",
+            "Kids" => kids.clone(),
+            "Count" => kids.len() as i64,
+        }),
+    );
+    let catalog_id = document.add_object(dictionary! {
+        "Type" => "Catalog",
+        "Pages" => pages_id,
+    });
+    document.trailer.set("Root", catalog_id);
+    document.compress();
+
+    let temp = destination.with_extension("seven-text.tmp.pdf");
+    document.save(&temp).map_err(|error| SevenError::Io(error.to_string()))?;
+    Document::load(&temp).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    if destination.exists() {
+        fs::remove_file(destination).map_err(|error| SevenError::Io(error.to_string()))?;
+    }
+    fs::rename(&temp, destination).map_err(|error| SevenError::Io(error.to_string()))?;
+    Ok(())
+}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]

@@ -83,6 +83,8 @@ import {
   sessionEditSetBackground,
   sessionFillFormFields,
   sessionCreateFormField,
+  sessionUpdateFormField,
+  sessionDeleteFormField,
   sessionAddPdfBookmark,
   sessionRenamePdfBookmark,
   sessionAddPdfAttachment,
@@ -129,6 +131,7 @@ import type {
   DocumentMetadata,
   DocumentSummary,
   FormFieldInfo,
+  FormFieldUpdate,
   FormValue,
   ImagePlacement,
   ImageObjectInfo,
@@ -1662,6 +1665,28 @@ export default function App() {
     } catch (error) { setNotice(errorMessage(error)); }
   };
 
+  const runUpdateFormField = async (update: FormFieldUpdate) => {
+    if (!document) return;
+    try {
+      const summary = await sessionUpdateFormField(document.id, update);
+      await acceptDocumentRevision(summary, `Campo "${update.name}" atualizado.`);
+      setFormFields(await listFormFields(summary.activePath));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runDeleteFormField = async (objectId: string) => {
+    if (!document) return;
+    try {
+      const summary = await sessionDeleteFormField(document.id, objectId);
+      await acceptDocumentRevision(summary, "Campo removido do AcroForm.");
+      setFormFields(await listFormFields(summary.activePath));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
   const createImagesPdf = async (inputs: string[], dpi: number) => {
     const destination = await save({
       title: "Criar PDF a partir de imagens",
@@ -2153,6 +2178,8 @@ export default function App() {
           onReload={() => void reloadFormFields()}
           onFill={(values) => void runFillForm(values)}
           onCreate={(field) => void runCreateFormField(field)}
+          onUpdate={(update) => void runUpdateFormField(update)}
+          onDelete={(objectId) => void runDeleteFormField(objectId)}
         />
       )}
       {ocrOpen && (

@@ -570,14 +570,20 @@ pub fn add_image(input: &Path, output: &Path, placement: ImagePlacement) -> Resu
         .set("Resources", resources);
 
     let radians = placement.rotation.to_radians();
-    let mut cos = radians.cos();
-    let mut sin = radians.sin();
-    if placement.mirror_x { cos = -cos; sin = -sin; }
-    let vertical = if placement.mirror_y { -1.0 } else { 1.0 };
-    let a = placement.width * cos;
-    let b = placement.width * sin;
-    let c_matrix = -placement.height * sin * vertical;
-    let d = placement.height * cos * vertical;
+    let cos = radians.cos();
+    let sin = radians.sin();
+    let sx = if placement.mirror_x { -1.0 } else { 1.0 };
+    let sy = if placement.mirror_y { -1.0 } else { 1.0 };
+    let a = sx * placement.width * cos;
+    let b = sx * placement.width * sin;
+    let c_matrix = -sy * placement.height * sin;
+    let d = sy * placement.height * cos;
+    let e = placement.x
+        + if placement.mirror_x { placement.width * cos } else { 0.0 }
+        + if placement.mirror_y { -placement.height * sin } else { 0.0 };
+    let f = placement.y
+        + if placement.mirror_x { placement.width * sin } else { 0.0 }
+        + if placement.mirror_y { placement.height * cos } else { 0.0 };
 
     append_content(
         &mut document,
@@ -588,7 +594,7 @@ pub fn add_image(input: &Path, output: &Path, placement: ImagePlacement) -> Resu
                 Operation::new("gs", vec![Object::Name(gs_name.into_bytes())]),
                 Operation::new("cm", vec![
                     a.into(), b.into(), c_matrix.into(), d.into(),
-                    placement.x.into(), placement.y.into(),
+                    e.into(), f.into(),
                 ]),
                 Operation::new("Do", vec![Object::Name(name.into_bytes())]),
                 Operation::new("Q", vec![]),

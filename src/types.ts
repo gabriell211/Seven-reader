@@ -40,6 +40,8 @@ export interface DocumentSummary {
   hasSignatures: boolean;
   hasForms: boolean;
   dirty: boolean;
+  canUndo: boolean;
+  canRedo: boolean;
 }
 
 export interface RenderResult {

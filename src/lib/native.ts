@@ -2,8 +2,14 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import type {
   Capabilities,
   DocumentSummary,
+  AccessibilityReport,
+  CompareReport,
+  DocumentMetadata,
   JobStart,
+  MetadataUpdate,
   RenderResult,
+  SanitizeOptions,
+  SanitizeReport,
   SearchHit,
 } from "../types";
 
@@ -104,6 +110,67 @@ export async function startOptimize(
   preset = "default",
 ): Promise<JobStart> {
   return invoke<JobStart>("start_optimize_pdf", { input, output, preset });
+}
+
+export async function getDocumentMetadata(path: string): Promise<DocumentMetadata> {
+  return invoke<DocumentMetadata>("get_document_metadata", { path });
+}
+
+export async function updateDocumentMetadata(
+  input: string,
+  output: string,
+  update: MetadataUpdate,
+): Promise<void> {
+  await invoke("update_document_metadata", { input, output, update });
+}
+
+export async function sanitizeDocument(
+  input: string,
+  output: string,
+  options: SanitizeOptions,
+): Promise<SanitizeReport> {
+  return invoke<SanitizeReport>("sanitize_document", { input, output, options });
+}
+
+export async function getAccessibilityReport(path: string): Promise<AccessibilityReport> {
+  return invoke<AccessibilityReport>("get_accessibility_report", { path });
+}
+
+export async function compareDocuments(left: string, right: string): Promise<CompareReport> {
+  return invoke<CompareReport>("compare_documents", { left, right });
+}
+
+export async function startEncryptPdf(
+  input: string,
+  output: string,
+  userPassword: string,
+  ownerPassword: string,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_encrypt_pdf", { input, output, userPassword, ownerPassword });
+}
+
+export async function startDecryptPdf(
+  input: string,
+  output: string,
+  password: string,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_decrypt_pdf", { input, output, password });
+}
+
+export async function startConvertToPdf(
+  input: string,
+  outputDirectory: string,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_convert_to_pdf", { input, outputDirectory });
+}
+
+export async function startExportPdf(
+  input: string,
+  output: string,
+  format: "png" | "jpeg" | "tiff" | "txt" | "ps",
+  dpi?: number,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_export_pdf", { input, output, format, dpi: dpi ?? null });
 }
 
 export async function cancelJob(jobId: string): Promise<void> {

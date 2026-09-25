@@ -6,31 +6,48 @@ import { Home } from "./components/Home";
 import { DocumentWorkspace } from "./components/DocumentWorkspace";
 import { PageOrganizerDialog, type PageOperation } from "./components/PageOrganizerDialog";
 import { CreatePdfDialog, type BlankPageSize } from "./components/CreatePdfDialog";
+import { ConversionDialog } from "./components/ConversionDialog";
+import { SecurityDialog } from "./components/SecurityDialog";
+import { PropertiesDialog } from "./components/PropertiesDialog";
+import { ReportDialog } from "./components/ReportDialog";
 import {
   cancelJob,
   closeDocument,
+  compareDocuments,
   createBlankDocument,
+  getAccessibilityReport,
   getCapabilities,
+  getDocumentMetadata,
   isNativeDesktop,
   openDocument,
   renderPage,
+  sanitizeDocument,
   saveCopy,
   searchDocument,
   startCombine,
+  startConvertToPdf,
+  startDecryptPdf,
+  startEncryptPdf,
+  startExportPdf,
   startExtractPages,
   startReorderPages,
   startRotatePages,
   startSplitPages,
   startOcr,
   startOptimize,
+  updateDocumentMetadata,
 } from "./lib/native";
 import { canRunTool } from "./data/tools";
 import type {
+  AccessibilityReport,
   Capabilities,
+  CompareReport,
+  DocumentMetadata,
   DocumentSummary,
   JobStatus,
   RecentDocument,
   RenderResult,
+  SanitizeOptions,
   SearchHit,
   ToolId,
 } from "./types";
@@ -81,6 +98,14 @@ export default function App() {
   const [notice, setNotice] = useState<string | null>(null);
   const [organizerOpen, setOrganizerOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [conversionOpen, setConversionOpen] = useState(false);
+  const [securityMode, setSecurityMode] = useState<"protect" | "sanitize" | null>(null);
+  const [propertiesOpen, setPropertiesOpen] = useState(false);
+  const [reportMode, setReportMode] = useState<"compare" | "accessibility" | null>(null);
+  const [metadata, setMetadata] = useState<DocumentMetadata | null>(null);
+  const [accessibilityReport, setAccessibilityReport] = useState<AccessibilityReport | null>(null);
+  const [compareReport, setCompareReport] = useState<CompareReport | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -242,6 +267,50 @@ export default function App() {
     }
 
     try {
+      if (tool === "convert" || tool === "export") {
+        setConversionOpen(true);
+        return;
+      }
+
+      if (tool === "protect") {
+        if (!document) {
+          setNotice("Abra um PDF para usar Proteção.");
+          return;
+        }
+        setSecurityMode("protect");
+        return;
+      }
+
+      if (tool === "sanitize") {
+        if (!document) {
+          setNotice("Abra um PDF para sanitizar.");
+          return;
+        }
+        setSecurityMode("sanitize");
+        return;
+      }
+
+      if (tool === "properties") {
+        if (!document) {
+          setNotice("Abra um PDF para ver as propriedades.");
+          return;
+        }
+        setMetadata(null);
+        setPropertiesOpen(true);
+        return;
+      }
+
+      if (tool === "compare" || tool === "accessibility") {
+        if (!document) {
+          setNotice("Abra um PDF primeiro.");
+          return;
+        }
+        setCompareReport(null);
+        setAccessibilityReport(null);
+        setReportMode(tool);
+        return;
+      }
+
       if (tool === "create") {
         setCreateDialogOpen(true);
         return;
@@ -372,12 +441,159 @@ export default function App() {
     }
   };
 
+
+  const runConvertToPdf = async (input: string, outputDirectory: string) => {
+    try {
+      const started = await startConvertToPdf(input, outputDirectory);
+      setConversionOpen(false);
+      setNotice(`Conversão iniciada · job ${started.jobId.slice(0, 8)}`);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runExport = async (
+    input: string,
+    output: string,
+    format: "png" | "jpeg" | "tiff" | "txt" | "ps",
+    dpi?: number,
+  ) => {
+    try {
+      const started = await startExportPdf(input, output, format, dpi);
+      setConversionOpen(false);
+      setNotice(`Exportação iniciada · job ${started.jobId.slice(0, 8)}`);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runEncrypt = async (output: string, userPassword: string, ownerPassword: string) => {
+    if (!document) return;
+    try {
+      const started = await startEncryptPdf(document.path, output, userPassword, ownerPassword);
+      setSecurityMode(null);
+      setNotice(`Criptografia iniciada · job ${started.jobId.slice(0, 8)}`);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runDecrypt = async (output: string, password: string) => {
+    if (!document) return;
+    try {
+      const started = await startDecryptPdf(document.path, output, password);
+      setSecurityMode(null);
+      setNotice(`Descriptografia iniciada · job ${started.jobId.slice(0, 8)}`);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runSanitize = async (output: string, options: SanitizeOptions) => {
+    if (!document) return;
+    try {
+      const report = await sanitizeDocument(document.path, output, options);
+      setSecurityMode(null);
+      setNotice(`Sanitização concluída · ${report.removedEntries} entrada(s) removida(s).`);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const loadMetadata = async () => {
+    if (!document || metadata) return;
+    try {
+      setReportLoading(true);
+      setMetadata(await getDocumentMetadata(document.path));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  const saveMetadata = async (output: string, update: { title: string; author: string; subject: string; keywords: string }) => {
+    if (!document) return;
+    try {
+      await updateDocumentMetadata(document.path, output, update);
+      setPropertiesOpen(false);
+      setNotice("Metadados salvos em uma nova cópia.");
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runAccessibility = async () => {
+    if (!document) return;
+    try {
+      setReportLoading(true);
+      setAccessibilityReport(await getAccessibilityReport(document.path));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  const runCompare = async (other: string) => {
+    if (!document) return;
+    try {
+      setReportLoading(true);
+      setCompareReport(await compareDocuments(document.path, other));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
   const status = (
     <>
       {notice && (
         <button className="global-notice" onClick={() => setNotice(null)} aria-label="Fechar aviso">
           {notice}
         </button>
+      )}
+      {conversionOpen && (
+        <ConversionDialog
+          capabilities={capabilities}
+          currentPdf={document?.path}
+          onClose={() => setConversionOpen(false)}
+          onConvertToPdf={(input, outputDirectory) => void runConvertToPdf(input, outputDirectory)}
+          onExport={(input, output, format, dpi) => void runExport(input, output, format, dpi)}
+        />
+      )}
+      {securityMode && document && (
+        <SecurityDialog
+          mode={securityMode}
+          currentPdf={document.path}
+          onClose={() => setSecurityMode(null)}
+          onEncrypt={(output, userPassword, ownerPassword) => void runEncrypt(output, userPassword, ownerPassword)}
+          onDecrypt={(output, password) => void runDecrypt(output, password)}
+          onSanitize={(output, options) => void runSanitize(output, options)}
+        />
+      )}
+      {propertiesOpen && document && (
+        <PropertiesDialog
+          path={document.path}
+          metadata={metadata}
+          loading={reportLoading}
+          onClose={() => setPropertiesOpen(false)}
+          onReload={() => void loadMetadata()}
+          onSave={(output, update) => void saveMetadata(output, update)}
+        />
+      )}
+      {reportMode && document && (
+        <ReportDialog
+          mode={reportMode}
+          currentPdf={document.path}
+          accessibility={accessibilityReport}
+          comparison={compareReport}
+          loading={reportLoading}
+          onClose={() => setReportMode(null)}
+          onAccessibility={() => void runAccessibility()}
+          onCompare={(other) => void runCompare(other)}
+        />
       )}
       {createDialogOpen && (
         <CreatePdfDialog

@@ -7,26 +7,29 @@ export interface ToolDefinition {
   description: string;
   icon: IconName;
   group: "Documento" | "Revisão" | "Segurança" | "Profissional" | "Avançado";
-  capability?: CapabilityKey;
+  capability?: CapabilityKey | CapabilityKey[];
   implemented: boolean;
 }
 
 export const tools: ToolDefinition[] = [
   { id: "edit", label: "Editar PDF", description: "Texto, imagens, objetos, links e conteúdo.", icon: "edit", group: "Documento", capability: "pdf_engine", implemented: false },
-  { id: "convert", label: "Converter", description: "PDF, Office, imagens, texto e formatos de publicação.", icon: "convert", group: "Documento", capability: "office", implemented: false },
+  { id: "convert", label: "Converter", description: "Office/ODF/HTML/TXT para PDF e PDF para imagem, texto ou PostScript.", icon: "convert", group: "Documento", capability: ["office", "ghostscript", "pdftotext"], implemented: true },
+  { id: "export", label: "Exportar PDF", description: "Exporte páginas para PNG, JPEG, TIFF, TXT ou PostScript.", icon: "open", group: "Documento", capability: ["ghostscript", "pdftotext"], implemented: true },
   { id: "create", label: "Criar PDF", description: "Crie um documento PDF em branco com tamanho e quantidade de páginas definidos.", icon: "create", group: "Documento", implemented: true },
   { id: "organize", label: "Organizar páginas", description: "Reordene, extraia, gire ou divida páginas com processamento local.", icon: "pages", group: "Documento", capability: "qpdf", implemented: true },
   { id: "combine", label: "Combinar arquivos", description: "Mescle PDFs usando processamento local.", icon: "merge", group: "Documento", capability: "qpdf", implemented: true },
+  { id: "properties", label: "Propriedades", description: "Inspecione e altere metadados documentais em uma cópia.", icon: "form", group: "Documento", implemented: true },
   { id: "comment", label: "Comentar", description: "Destaques, notas, desenho, carimbos e revisão.", icon: "comment", group: "Revisão", capability: "pdf_engine", implemented: false },
   { id: "fill-sign", label: "Preencher e assinar", description: "Campos, assinatura eletrônica e iniciais.", icon: "sign", group: "Revisão", capability: "pdf_engine", implemented: false },
   { id: "certificates", label: "Certificados", description: "IDs digitais, assinatura, certificação e validação.", icon: "certificate", group: "Segurança", capability: "certificates", implemented: false },
   { id: "scan-ocr", label: "Digitalizar e OCR", description: "OCR pesquisável local com rotação e deskew.", icon: "ocr", group: "Documento", capability: "ocr", implemented: true },
   { id: "forms", label: "Preparar formulário", description: "AcroForm, campos, validação e ordem de tabulação.", icon: "form", group: "Revisão", capability: "pdf_engine", implemented: false },
-  { id: "protect", label: "Proteger", description: "Senha, permissões, criptografia e políticas.", icon: "shield", group: "Segurança", capability: "qpdf", implemented: false },
+  { id: "protect", label: "Proteger", description: "Criptografia AES-256 e remoção de criptografia autorizada.", icon: "shield", group: "Segurança", capability: "qpdf", implemented: true },
+  { id: "sanitize", label: "Sanitizar", description: "Remova JavaScript, ações automáticas, anexos, XFA e metadados selecionados.", icon: "lock", group: "Segurança", implemented: true },
   { id: "redact", label: "Redigir", description: "Remoção permanente de conteúdo sensível.", icon: "redact", group: "Segurança", capability: "pdf_engine", implemented: false },
-  { id: "compare", label: "Comparar arquivos", description: "Diferenças visuais e estruturais entre versões.", icon: "compare", group: "Revisão", capability: "pdf_engine", implemented: false },
+  { id: "compare", label: "Comparar arquivos", description: "Compare texto normalizado página a página entre duas versões.", icon: "compare", group: "Revisão", capability: "pdf_engine", implemented: true },
   { id: "optimize", label: "Otimizar PDF", description: "Compressão local com presets de qualidade.", icon: "compress", group: "Profissional", capability: "ghostscript", implemented: true },
-  { id: "accessibility", label: "Acessibilidade", description: "Tags, ordem de leitura e verificação.", icon: "accessibility", group: "Profissional", capability: "pdf_engine", implemented: false },
+  { id: "accessibility", label: "Acessibilidade", description: "Auditoria de tags, idioma, título e estrutura básica.", icon: "accessibility", group: "Profissional", implemented: true },
   { id: "print-production", label: "Produção de impressão", description: "Preflight, cores, sangria e separações.", icon: "print", group: "Profissional", capability: "printing", implemented: false },
   { id: "automation", label: "Ações guiadas", description: "Fluxos repetíveis e processamento em lote.", icon: "automation", group: "Profissional", implemented: false },
   { id: "javascript", label: "JavaScript e ações PDF", description: "Inspeção controlada; execução automática desativada.", icon: "lock", group: "Avançado", capability: "pdf_engine", implemented: false },
@@ -47,5 +50,8 @@ export function canRunTool(
   const tool = tools.find((item) => item.id === id);
   if (!tool?.implemented) return false;
   if (!tool.capability) return true;
+  if (Array.isArray(tool.capability)) {
+    return tool.capability.some((capability) => Boolean(capabilities?.[capability]?.available));
+  }
   return Boolean(capabilities?.[tool.capability]?.available);
 }

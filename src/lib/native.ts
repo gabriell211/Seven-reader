@@ -25,6 +25,8 @@ import type {
   OcrWord,
   OverlayTextOptions,
   PdfActionInfo,
+  PrintPreflightReport,
+  PageBoxUpdate,
   RedactionArea,
   RedactionReport,
   RenderResult,
@@ -509,6 +511,17 @@ export async function inspectAdvancedPdf(path: string): Promise<AdvancedPdfRepor
 
 export async function listPdfActions(path: string): Promise<PdfActionInfo[]> {
   return invoke<PdfActionInfo[]>("list_pdf_actions", { path });
+}
+
+export async function getPrintPreflight(path: string): Promise<PrintPreflightReport> {
+  return invoke<PrintPreflightReport>("get_print_preflight", { path });
+}
+
+export async function sessionSetPageBoxes(
+  documentId: string,
+  update: PageBoxUpdate,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_set_page_boxes", { documentId, update });
 }
 
 export async function addPdfAttachment(

@@ -34,6 +34,9 @@ pub struct SanitizeOptions {
     pub remove_embedded_files: bool,
     pub remove_metadata: bool,
     pub remove_xfa: bool,
+    pub remove_annotations: bool,
+    pub remove_forms: bool,
+    pub remove_multimedia: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -186,10 +189,70 @@ fn scrub_dictionary(
     if options.remove_xfa {
         remove_key(dictionary, b"XFA", removed);
     }
+    if options.remove_multimedia {
+        for key in [b"RichMediaContent".as_slice(), b"RichMediaSettings", b"3DD", b"3DV", b"Rendition", b"Movie", b"Sound"] {
+            remove_key(dictionary, key, removed);
+        }
+    }
 
     for (_, value) in dictionary.iter_mut() {
         scrub_object(value, options, removed);
     }
+}
+
+fn remove_selected_annotations(
+    document: &mut Document,
+    options: &SanitizeOptions,
+    removed: &mut usize,
+) -> Result<(), SevenError> {
+    let page_ids = document.get_pages().values().copied().collect::<Vec<_>>();
+    for page_id in page_ids {
+        let annots = document
+            .get_object(page_id)
+            .ok()
+            .and_then(|object| object.as_dict().ok())
+            .and_then(|page| page.get(b"Annots").ok())
+            .and_then(|value| value.as_array().ok())
+            .cloned()
+            .unwrap_or_default();
+
+        let mut keep = Vec::with_capacity(annots.len());
+        for entry in annots {
+            let subtype = entry
+                .as_reference()
+                .ok()
+                .and_then(|id| document.get_object(id).ok())
+                .and_then(|object| object.as_dict().ok())
+                .and_then(|dictionary| dictionary.get(b"Subtype").ok())
+                .and_then(|value| value.as_name().ok())
+                .map(|name| name.to_vec())
+                .unwrap_or_default();
+
+            let is_widget = subtype.as_slice() == b"Widget";
+            let is_multimedia = matches!(
+                subtype.as_slice(),
+                b"RichMedia" | b"3D" | b"Movie" | b"Sound" | b"Screen"
+            );
+            let remove = (options.remove_forms && is_widget)
+                || (options.remove_multimedia && is_multimedia)
+                || (options.remove_annotations && !is_widget && !is_multimedia);
+
+            if remove {
+                *removed += 1;
+            } else {
+                keep.push(entry);
+            }
+        }
+
+        if let Ok(page) = document.get_object_mut(page_id).and_then(Object::as_dict_mut) {
+            if keep.is_empty() {
+                page.remove(b"Annots");
+            } else {
+                page.set("Annots", keep);
+            }
+        }
+    }
+    Ok(())
 }
 
 pub fn sanitize_document(
@@ -203,6 +266,8 @@ pub fn sanitize_document(
     for object in document.objects.values_mut() {
         scrub_object(object, &options, &mut removed);
     }
+
+    remove_selected_annotations(&mut document, &options, &mut removed)?;
 
     if let Ok(catalog) = document.catalog_mut() {
         if options.remove_javascript {
@@ -225,6 +290,16 @@ pub fn sanitize_document(
             if let Ok(form_object) = catalog.get_mut(b"AcroForm") {
                 if let Ok(form) = form_object.as_dict_mut() {
                     remove_key(form, b"XFA", &mut removed);
+                }
+            }
+        }
+        if options.remove_forms {
+            remove_key(catalog, b"AcroForm", &mut removed);
+        }
+        if options.remove_multimedia {
+            if let Ok(names_object) = catalog.get_mut(b"Names") {
+                if let Ok(names) = names_object.as_dict_mut() {
+                    remove_key(names, b"Renditions", &mut removed);
                 }
             }
         }

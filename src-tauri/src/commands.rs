@@ -638,6 +638,47 @@ pub fn session_create_form_field(
 }
 
 #[tauri::command]
+pub fn list_form_field_actions(
+    state: State<'_, AppState>,
+    document_id: String,
+) -> CommandResult<Vec<forms::FieldActionInfo>> {
+    let document = state
+        .documents
+        .lock()
+        .get(&document_id)
+        .cloned()
+        .ok_or_else(|| ErrorPayload::from(SevenError::DocumentNotOpen))?;
+    forms::list_field_actions(document.active_path()).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_set_form_field_action(
+    state: State<'_, AppState>,
+    document_id: String,
+    request: forms::FieldActionInput,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "field-action", move |input, output| {
+        forms::set_field_action(input, output, request)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_delete_form_field_action(
+    state: State<'_, AppState>,
+    document_id: String,
+    object_id: String,
+    trigger: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "delete-field-action", move |input, output| {
+        forms::delete_field_action(input, output, &object_id, &trigger)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn session_duplicate_form_field(
     state: State<'_, AppState>,
     document_id: String,

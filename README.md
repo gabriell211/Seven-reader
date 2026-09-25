@@ -42,7 +42,63 @@ A proposta não é ser somente um visualizador. O aplicativo deve cobrir o fluxo
 
 > **Status:** reconstrução completa a partir do zero. A identidade visual oficial do Seven Reader deve ser preservada. Interface, arquitetura, engine de PDF e fluxos internos serão refeitos.
 
-O Seven Reader é um produto independente. Referências de mercado servem somente para estudar fluxos de uso e cobertura funcional. Identidade, componentes visuais, ícones, ativos e implementação devem ser próprios.
+O Seven Reader é um produto independente. Referências de mercado servem para estudar fluxos de uso e cobertura funcional. Identidade, componentes visuais, ícones, ativos e implementação devem ser próprios.
+
+## Regra de paridade funcional
+
+Todas as ferramentas descritas neste README devem ser **implementadas de verdade e funcionar de ponta a ponta**.
+
+A referência funcional é o comportamento esperado de uma suíte desktop profissional de PDF no nível do Adobe Acrobat atual, incluindo quando aplicável:
+
+- abrir a ferramenta a partir do fluxo correto;
+- carregar o documento e o estado necessário;
+- exibir todas as opções relevantes;
+- permitir preview antes de ações destrutivas;
+- validar entradas e permissões;
+- executar a operação real sobre o PDF;
+- mostrar progresso em operações longas;
+- permitir cancelar quando tecnicamente seguro;
+- tratar erros de forma compreensível;
+- salvar a saída corretamente;
+- reabrir o arquivo gerado e preservar o resultado;
+- integrar a operação com undo/redo quando fizer sentido;
+- manter compatibilidade com outras ferramentas do Seven Reader;
+- manter comportamento consistente em Windows e Linux sempre que o sistema operacional permitir.
+
+Não são aceitos:
+
+- botões sem implementação;
+- telas demonstrativas;
+- placeholders;
+- mocks no build de produção;
+- ações que apenas alteram a interface sem alterar o PDF;
+- recursos marcados como disponíveis que dependem de uma engine ausente;
+- conversões falsas;
+- exportações incompletas apresentadas como sucesso;
+- OCR apenas visual sem camada de texto real;
+- redação que apenas desenha um retângulo sobre o conteúdo;
+- assinatura que apenas insere uma imagem quando o fluxo exige assinatura digital;
+- formulário visual sem persistência real no PDF.
+
+Se uma capacidade depender de biblioteca, codec, driver, scanner, certificado, conversor externo ou recurso específico do sistema operacional, o Seven Reader deve detectar essa capacidade em runtime e explicar claramente a indisponibilidade. A ferramenta não pode fingir que executou a operação.
+
+## Sem IA
+
+O Seven Reader **não terá recursos de inteligência artificial**.
+
+Não incluir:
+
+- assistente de IA;
+- chat com PDF;
+- resumo por IA;
+- edição por linguagem natural;
+- geração de conteúdo;
+- tradução por IA;
+- pesquisa semântica baseada em modelos;
+- recursos generativos;
+- chamadas para modelos locais ou remotos.
+
+OCR tradicional, reconhecimento de texto, regras determinísticas, indexação, comparação, automações e processamento de documentos continuam permitidos, pois fazem parte do mecanismo documental e não de uma camada de IA generativa.
 
 ---
 
@@ -400,7 +456,6 @@ Possíveis painéis:
 - Campos
 - Resultados de busca
 - Tarefas
-- Assistência inteligente opcional
 
 O usuário deve poder:
 
@@ -2229,60 +2284,6 @@ Toda operação pesada deve gerar um `job_id`.
 
 ---
 
-# Recursos inteligentes opcionais
-
-Estes recursos **não** fazem parte da dependência mínima para leitura/edição e devem ser opt-in.
-
-## Assistência em linguagem natural
-
-- [ ] Pesquisar no documento por linguagem natural
-- [ ] Resumir
-- [ ] Perguntas e respostas
-- [ ] Gerar outline
-- [ ] Reescrever texto selecionado
-- [ ] Substituir texto
-- [ ] Formatar texto
-- [ ] Highlight por comando
-- [ ] Reorganizar páginas por comando
-- [ ] Adicionar header/footer por comando
-- [ ] Adicionar watermark por comando
-- [ ] Mostrar alterações antes de aplicar
-- [ ] Nunca aplicar alteração destrutiva sem confirmação
-
-## Tradução
-
-- [ ] Detectar idioma
-- [ ] Traduzir conteúdo
-- [ ] Preservar original
-- [ ] Preview
-- [ ] Exportar versão traduzida
-
-## Coleções de documentos
-
-Opcional online ou local:
-
-- [ ] Criar workspace
-- [ ] Adicionar múltiplos arquivos
-- [ ] DOCX/PPTX/XLSX/TXT/RTF/PDF
-- [ ] URLs
-- [ ] Texto colado
-- [ ] Busca unificada
-- [ ] Citações para a origem
-- [ ] Compartilhar workspace quando backend estiver configurado
-
-## Resumo em áudio
-
-Opcional:
-
-- [ ] Gerar resumo em áudio
-- [ ] Mini player
-- [ ] Continuar reprodução trocando de documento
-- [ ] Play/pause
-- [ ] Seek
-- [ ] Volume
-
----
-
 # Segurança da aplicação
 
 - [ ] CSP restritiva
@@ -3088,9 +3089,6 @@ Após estabilização do núcleo:
 ## Pós-1.0
 
 - [ ] macOS
-- [ ] Smart tools opt-in
-- [ ] Translation
-- [ ] Document workspaces
 - [ ] Online e-sign workflow
 - [ ] Enterprise policies
 - [ ] Collaboration
@@ -3137,6 +3135,7 @@ O Seven Reader não deve:
 - depender de cloud para leitura;
 - depender de cloud para OCR básico;
 - enviar documentos sem consentimento explícito;
+- incluir recursos de inteligência artificial;
 - executar JavaScript automaticamente;
 - executar anexos automaticamente;
 - executar launch actions automaticamente;

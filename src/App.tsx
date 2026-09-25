@@ -34,6 +34,7 @@ import {
   getDocumentMetadata,
   inspectAdvancedPdf,
   isNativeDesktop,
+  listPdfFilesInFolder,
   listAnnotations,
   listFormFields,
   extractPdfAttachment,
@@ -331,6 +332,48 @@ export default function App() {
       filters: [{ name: "Documento PDF", extensions: ["pdf"] }],
     });
     if (typeof selected === "string") await openPath(selected);
+  };
+
+  const chooseFolder = async () => {
+    if (!native) return;
+    const selected = await open({
+      title: "Abrir pasta com PDFs",
+      multiple: false,
+      directory: true,
+    });
+    if (typeof selected !== "string") return;
+    try {
+      const paths = await listPdfFilesInFolder(selected, false, 500);
+      if (!paths.length) {
+        setNotice("Nenhum PDF encontrado nesta pasta.");
+        return;
+      }
+      setRecents((current) => {
+        const now = Date.now();
+        const byPath = new Map(current.map((item) => [item.path, item]));
+        paths.forEach((path, index) => {
+          const normalized = path.replace(/\\/g, "/");
+          const name = normalized.split("/").pop() || "Documento.pdf";
+          const existing = byPath.get(path);
+          byPath.set(path, {
+            path,
+            name,
+            pageCount: existing?.pageCount,
+            lastOpenedAt: existing?.lastOpenedAt ?? now - index,
+            pinned: existing?.pinned ?? false,
+            favorite: existing?.favorite ?? false,
+          });
+        });
+        const next = [...byPath.values()]
+          .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || b.lastOpenedAt - a.lastOpenedAt)
+          .slice(0, 100);
+        localStorage.setItem(RECENTS_KEY, JSON.stringify(next));
+        return next;
+      });
+      setNotice(`${paths.length} PDF(s) encontrados e adicionados à biblioteca local.`);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
   };
 
   const closeCurrent = async () => {
@@ -1295,6 +1338,12 @@ export default function App() {
         capabilities={capabilities}
         recents={recents}
         onOpen={() => void choosePdf()}
+        onOpenFolder={() => void chooseFolder()}
+        lastSessionPath={localStorage.getItem("seven-reader:last-document")}
+        onRecoverSession={() => {
+          const path = localStorage.getItem("seven-reader:last-document");
+          if (path) void openPath(path);
+        }}
         onOpenRecent={(path) => void openPath(path)}
         onClearRecent={() => {
           localStorage.removeItem(RECENTS_KEY);

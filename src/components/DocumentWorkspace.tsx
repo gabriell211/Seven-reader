@@ -45,11 +45,15 @@ interface WorkspaceProps {
   onNavigateForward: () => void;
   onQuickToolsPositionChange: (position: { x: number; y: number } | null) => void;
   onOpen: () => void;
+  onSave: () => void;
   onSaveAs: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
   onPrint: () => void;
   onRender: (page: number, zoom: number) => void;
   onSearch: (query: string) => void;
   onInk: (ink: InkAnnotationInput) => void;
+  onMarkup: (kind: "highlight" | "underline" | "strikeout", rect: NormalizedRect) => void;
   onAdvancedSearch: (options: AdvancedSearchOptions) => void;
   onTool: (tool: ToolId) => void;
   onSettings: () => void;
@@ -93,11 +97,15 @@ export function DocumentWorkspace({
   onNavigateForward,
   onQuickToolsPositionChange,
   onOpen,
+  onSave,
   onSaveAs,
+  onUndo,
+  onRedo,
   onPrint,
   onRender,
   onSearch,
   onInk,
+  onMarkup,
   onAdvancedSearch,
   onTool,
   onSettings,
@@ -138,6 +146,7 @@ export function DocumentWorkspace({
   const [toolbarPosition, setToolbarPosition] = useState(quickToolsPosition);
   const toolbarDragRef = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null);
   const drawingRef = useRef(false);
+  const [viewerTool, setViewerTool] = useState<"select" | "hand" | "draw" | "highlight" | "underline" | "strikeout">("select");
 
   useEffect(() => {
     const focus = () => searchRef.current?.focus();
@@ -183,7 +192,6 @@ export function DocumentWorkspace({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [viewerTool, selectedText, selectionRect, page, document.id, rendered?.width]);
-  const [viewerTool, setViewerTool] = useState<"select" | "hand" | "draw">("select");
 
   const filteredTools = useMemo(() => {
     const query = toolSearch.trim().toLocaleLowerCase("pt-BR");
@@ -259,10 +267,13 @@ export function DocumentWorkspace({
     if (id === "select") return setViewerTool("select");
     if (id === "hand") return setViewerTool("hand");
     if (id === "draw") return setViewerTool(viewerTool === "draw" ? "select" : "draw");
+    if (id === "highlight" || id === "underline" || id === "strikeout") {
+      return setViewerTool(viewerTool === id ? "select" : id);
+    }
     if (id === "text") return onTool("edit");
     if (id === "fill") return onTool("forms");
     if (id === "sign") return onTool("fill-sign");
-    if (id === "comment" || id === "highlight" || id === "underline" || id === "strikeout" || id === "eraser") {
+    if (id === "comment" || id === "eraser") {
       return onTool("comment");
     }
   };
@@ -358,8 +369,10 @@ export function DocumentWorkspace({
     }
   };
 
+  const isRectSelectionTool = viewerTool === "select" || viewerTool === "highlight" || viewerTool === "underline" || viewerTool === "strikeout";
+
   const beginSelection = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (viewerTool !== "select") return;
+    if (!isRectSelectionTool) return;
     const point = normalizedPoint(event.clientX, event.clientY);
     if (!point) return;
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -369,21 +382,28 @@ export function DocumentWorkspace({
   };
 
   const moveSelection = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (viewerTool !== "select" || !selectionStart) return;
+    if (!isRectSelectionTool || !selectionStart) return;
     const point = normalizedPoint(event.clientX, event.clientY);
     if (!point) return;
     setSelectionRect(rectFromPoints(selectionStart, point));
   };
 
   const finishSelection = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (viewerTool !== "select" || !selectionStart) return;
+    if (!isRectSelectionTool || !selectionStart) return;
     const point = normalizedPoint(event.clientX, event.clientY);
     const rect = point ? rectFromPoints(selectionStart, point) : selectionRect;
     setSelectionStart(null);
     try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* already released */ }
     if (rect) {
       setSelectionRect(rect);
-      void loadSelectionText(rect);
+      if (viewerTool === "select") {
+        void loadSelectionText(rect);
+      } else if (rect.width >= 0.002 && rect.height >= 0.002) {
+        onMarkup(viewerTool, rect);
+        setSelectionStart(null);
+        setSelectionRect(null);
+        setSelectedText("");
+      }
     }
   };
 
@@ -505,7 +525,7 @@ export function DocumentWorkspace({
             >
               <button className="tab-select" onClick={() => onSelectTab(tab)} title={tab.path}>
                 <span className="tab-file-icon">PDF</span>
-                <span className="tab-title">{tab.name}</span>
+                <span className="tab-title">{tab.name}{tab.dirty && <i className="tab-dirty" title="Alterações não salvas" />}</span>
               </button>
               <button className="tab-close" aria-label={`Fechar ${tab.name}`} onClick={() => onCloseTab(tab.id)}>
                 <SevenIcon name="close" />
@@ -544,6 +564,9 @@ export function DocumentWorkspace({
         })}
         <div className="global-divider" />
         <button className="global-action compact" onClick={onOpen}><SevenIcon name="open" /><span>Abrir</span></button>
+        <button className="global-action compact" disabled={!document.canUndo} onClick={onUndo}><SevenIcon name="undo" /><span>Desfazer</span></button>
+        <button className="global-action compact" disabled={!document.canRedo} onClick={onRedo}><SevenIcon name="redo" /><span>Refazer</span></button>
+        <button className="global-action compact" disabled={!document.dirty} onClick={onSave}><SevenIcon name="save" /><span>Salvar</span></button>
         <button className="global-action compact" onClick={onSaveAs}><SevenIcon name="save" /><span>Salvar como</span></button>
         <button
           className="global-action compact"
@@ -676,7 +699,14 @@ export function DocumentWorkspace({
           <div className="document-canvas">
             {rendered ? (
               <div
-                className={viewerTool === "draw" ? "rendered-page drawing-active" : viewerTool === "select" ? "rendered-page selection-active" : "rendered-page"}
+                className={[
+                  "rendered-page",
+                  viewerTool === "draw" ? "drawing-active" : "",
+                  isRectSelectionTool ? "selection-active" : "",
+                  viewerTool === "highlight" ? "markup-highlight" : "",
+                  viewerTool === "underline" ? "markup-underline" : "",
+                  viewerTool === "strikeout" ? "markup-strikeout" : "",
+                ].filter(Boolean).join(" ")}
                 style={{ width: rendered.width }}
                 ref={pageRef}
                 onPointerDown={(event) => {
@@ -697,9 +727,9 @@ export function DocumentWorkspace({
                 }}
               >
                 <img src={nativeAssetUrl(rendered.cachePath)} alt={`Página ${page + 1}`} draggable={false} />
-                {viewerTool === "select" && selectionRect && (
+                {isRectSelectionTool && selectionRect && (
                   <div
-                    className="selection-rect"
+                    className={`selection-rect selection-rect--${viewerTool}`}
                     style={{
                       left: `${selectionRect.x * 100}%`,
                       top: `${selectionRect.y * 100}%`,
@@ -759,7 +789,7 @@ export function DocumentWorkspace({
             {quickTools.map((id) => (
               <button
                 key={id}
-                className={(id === "select" && viewerTool === "select") || (id === "hand" && viewerTool === "hand") || (id === "draw" && viewerTool === "draw") ? "active" : ""}
+                className={(id === viewerTool) ? "active" : ""}
                 aria-label={quickToolLabel(id)}
                 title={quickToolLabel(id)}
                 onClick={() => runQuickTool(id)}

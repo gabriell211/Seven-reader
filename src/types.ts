@@ -22,6 +22,7 @@ export type Capabilities = Record<CapabilityKey, Capability>;
 
 export interface RecentDocument {
   path: string;
+  activePath: string;
   name: string;
   pageCount?: number;
   lastOpenedAt: number;

@@ -100,6 +100,9 @@ svg { width: 20px; height: 20px; }
 .capability-panel > p { margin: 0 0 17px; color: var(--muted); font-size: 12px; line-height: 1.55; }
 .capability-row { padding: 9px 0; display: flex; justify-content: space-between; border-top: 1px solid #efeff3; font-size: 12px; }
 .status-ok { color: #23845b; } .status-muted { color: #9698a0; }
+.library-tabs { margin: -2px 0 8px; padding: 3px; display: inline-flex; gap: 2px; border-radius: 9px; background: #f1f1f4; }
+.library-tabs button { min-height: 29px; padding: 0 10px; border: 0; border-radius: 7px; color: #777984; background: transparent; cursor: pointer; font-size: 10px; font-weight: 700; }
+.library-tabs button.active { color: #5633bd; background: white; box-shadow: 0 1px 5px rgba(35,31,50,.09); }
 .recent-list { display: grid; }
 .recent-row { min-height: 56px; padding: 6px 7px; border-top: 1px solid #efeff3; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; align-items: center; }
 .recent-open { min-width: 0; padding: 0; border: 0; display: grid; grid-template-columns: 38px minmax(0,1fr); gap: 10px; align-items: center; text-align: left; background: transparent; cursor: pointer; }

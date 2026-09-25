@@ -1507,6 +1507,12 @@ pub fn create_form_field(
 }
 
 #[tauri::command]
+pub fn list_pdf_actions(path: String) -> CommandResult<Vec<advanced::PdfActionInfo>> {
+    let input = pdf::validate_pdf_path(&path).map_err(ErrorPayload::from)?;
+    advanced::list_actions(&input).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn get_document_metadata(
     path: String,
 ) -> CommandResult<document_ops::DocumentMetadata> {

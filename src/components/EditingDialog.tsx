@@ -9,6 +9,7 @@ import type {
   TextPlacement,
 } from "../types";
 import { SevenIcon } from "./SevenIcon";
+import { getImageDimensions } from "../lib/native";
 
 type EditMode = "add-text" | "replace-text" | "image" | "link" | "overlay" | "background";
 
@@ -61,6 +62,7 @@ export function EditingDialog({
   const [cropRight, setCropRight] = useState(0);
   const [cropBottom, setCropBottom] = useState(0);
   const [lockAspect, setLockAspect] = useState(true);
+  const [imageAspect, setImageAspect] = useState<number | null>(null);
   const [target, setTarget] = useState("");
   const [internalLink, setInternalLink] = useState(false);
   const [targetPage, setTargetPage] = useState(1);
@@ -86,7 +88,19 @@ export function EditingDialog({
       directory: false,
       filters: [{ name: "Imagem", extensions: ["png", "jpg", "jpeg", "tif", "tiff", "bmp", "webp"] }],
     });
-    if (typeof selected === "string") setImagePath(selected);
+    if (typeof selected === "string") {
+      setImagePath(selected);
+      try {
+        const [pixelWidth, pixelHeight] = await getImageDimensions(selected);
+        if (pixelWidth > 0 && pixelHeight > 0) {
+          const aspect = pixelWidth / pixelHeight;
+          setImageAspect(aspect);
+          setHeight(Math.max(1, width / aspect));
+        }
+      } catch {
+        setImageAspect(null);
+      }
+    }
   };
 
   const replaceExistingImage = async (resourceName: string) => {
@@ -103,8 +117,16 @@ export function EditingDialog({
     <div className="rect-grid">
       <label className="workflow-field"><span>X</span><input type="number" value={x} onChange={(e) => setX(Number(e.target.value))} /></label>
       <label className="workflow-field"><span>Y</span><input type="number" value={y} onChange={(e) => setY(Number(e.target.value))} /></label>
-      <label className="workflow-field"><span>Largura</span><input type="number" min={1} value={width} onChange={(e) => setWidth(Number(e.target.value))} /></label>
-      <label className="workflow-field"><span>Altura</span><input type="number" min={1} value={height} onChange={(e) => setHeight(Number(e.target.value))} /></label>
+      <label className="workflow-field"><span>Largura</span><input type="number" min={1} value={width} onChange={(e) => {
+        const next = Number(e.target.value);
+        setWidth(next);
+        if (lockAspect && imageAspect) setHeight(Math.max(1, next / imageAspect));
+      }} /></label>
+      <label className="workflow-field"><span>Altura</span><input type="number" min={1} value={height} onChange={(e) => {
+        const next = Number(e.target.value);
+        setHeight(next);
+        if (lockAspect && imageAspect) setWidth(Math.max(1, next * imageAspect));
+      }} /></label>
     </div>
   );
 
@@ -236,7 +258,11 @@ export function EditingDialog({
                 <div className="three-column-fields">
                   <label className="workflow-field"><span>Rotação</span><input type="number" min={-360} max={360} value={imageRotation} onChange={(e) => setImageRotation(Number(e.target.value))} /></label>
                   <label className="workflow-field"><span>Opacidade</span><input type="number" min={0} max={1} step={0.05} value={imageOpacity} onChange={(e) => setImageOpacity(Math.max(0, Math.min(1, Number(e.target.value))))} /></label>
-                  <label className="toggle-row compact-toggle"><input type="checkbox" checked={lockAspect} onChange={(e) => setLockAspect(e.target.checked)} /><span><strong>Manter proporção</strong><small>Evita distorção manual.</small></span></label>
+                  <label className="toggle-row compact-toggle"><input type="checkbox" checked={lockAspect} disabled={!imageAspect} onChange={(e) => {
+                    const enabled = e.target.checked;
+                    setLockAspect(enabled);
+                    if (enabled && imageAspect) setHeight(Math.max(1, width / imageAspect));
+                  }} /><span><strong>Manter proporção</strong><small>{imageAspect ? `Proporção ${imageAspect.toFixed(3)}:1` : "Selecione uma imagem para detectar a proporção."}</small></span></label>
                 </div>
 
                 <div className="two-column-fields">

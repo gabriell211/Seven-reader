@@ -506,10 +506,12 @@ export interface RedactionReport {
 
 export interface BookmarkInfo {
   objectId: string;
+  parentObjectId?: string;
   title: string;
   depth: number;
   pageIndex?: number;
   open: boolean;
+  hasChildren: boolean;
 }
 
 export interface BookmarkInput {

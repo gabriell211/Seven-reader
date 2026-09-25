@@ -875,3 +875,19 @@ svg { width: 20px; height: 20px; }
 .attachment-row-actions { display:grid; gap:4px; }
 .attachment-row-actions button { min-height:28px; padding:0 8px; border:1px solid #dedde4; border-radius:7px; background:white; cursor:pointer; font-size:8.3px; }
 @media (max-width:760px) { .bookmark-row { grid-template-columns:20px 18px 1fr; } .bookmark-actions { grid-column:1/-1; justify-content:flex-start; } .attachment-row { grid-template-columns:34px 1fr; } .attachment-row-actions { grid-column:1/-1; grid-template-columns:repeat(3,1fr); } .attachment-edit-fields { grid-template-columns:1fr; } }
+
+.layer-list { display:grid; gap:7px; }
+.layer-row { min-height:104px; padding:10px; border:1px solid #e2e1e7; border-radius:11px; display:grid; grid-template-columns:36px minmax(0,1fr) auto; gap:10px; align-items:center; background:white; }
+.layer-glyph { width:34px; height:34px; border-radius:9px; display:grid; place-items:center; color:#6745c7; background:#f0ebff; }
+.layer-glyph svg { width:16px; }
+.layer-editor { min-width:0; display:grid; gap:6px; }
+.layer-editor > input { min-width:0; height:31px; padding:0 8px; border:1px solid #dfdee4; border-radius:7px; background:#fbfbfd; font-size:9.5px; font-weight:700; }
+.layer-editor > small { color:#90929a; font-size:8px; }
+.layer-selects { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; }
+.layer-selects label { display:grid; gap:2px; color:#858790; font-size:7.5px; font-weight:700; text-transform:uppercase; }
+.layer-selects select { min-width:0; height:29px; padding:0 5px; border:1px solid #dfdee4; border-radius:7px; background:white; color:#555760; font-size:8.5px; text-transform:none; }
+.layer-row-actions { display:grid; gap:5px; justify-items:stretch; min-width:118px; }
+.layer-row-actions > button { min-height:29px; padding:0 8px; border:1px solid #dfdee4; border-radius:7px; background:white; cursor:pointer; font-size:8.3px; }
+.layer-lock { min-height:28px; padding:0 7px; border:1px solid #e5e4e9; border-radius:7px; display:flex; gap:5px; align-items:center; font-size:8.2px; }
+.layer-lock input { accent-color:var(--violet); }
+@media (max-width:760px) { .layer-row { grid-template-columns:34px 1fr; margin-left:0 !important; } .layer-row-actions { grid-column:1/-1; grid-template-columns:repeat(3,1fr); } .layer-selects { grid-template-columns:1fr; } }

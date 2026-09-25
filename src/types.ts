@@ -528,6 +528,34 @@ export interface LayerInfo {
   intent: string[];
 }
 
+export interface OptimizationAudit {
+  fileSize: number;
+  objectCount: number;
+  streamBytes: number;
+  imageStreamBytes: number;
+  fontStreamBytes: number;
+  embeddedFileBytes: number;
+  pageContentBytes: number;
+  otherStreamBytes: number;
+  imageCount: number;
+  fontCount: number;
+  embeddedFileCount: number;
+}
+
+export interface OptimizeOptions {
+  compatibility: "1.4" | "1.5" | "1.6" | "1.7" | "2.0";
+  colorDpi: number;
+  grayscaleDpi: number;
+  monochromeDpi: number;
+  downsample: "bicubic" | "average" | "subsample";
+  colorCompression: "jpeg" | "flate";
+  grayscaleCompression: "jpeg" | "flate";
+  jpegQuality: number;
+  embedFonts: boolean;
+  subsetFonts: boolean;
+  linearize: boolean;
+}
+
 export interface PagePreflight {
   pageIndex: number;
   widthPt: number;

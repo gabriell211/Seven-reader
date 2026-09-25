@@ -4,6 +4,8 @@ import type {
   DocumentSummary,
   AccessibilityReport,
   AdvancedPdfReport,
+  AdvancedSearchHit,
+  AdvancedSearchOptions,
   AnnotationInfo,
   AnnotationInput,
   CompareReport,
@@ -64,6 +66,13 @@ export async function renderPage(
 
 export async function searchDocument(documentId: string, query: string): Promise<SearchHit[]> {
   return invoke<SearchHit[]>("search_document", { documentId, query });
+}
+
+export async function searchDocumentAdvanced(
+  documentId: string,
+  options: AdvancedSearchOptions,
+): Promise<AdvancedSearchHit[]> {
+  return invoke<AdvancedSearchHit[]>("search_document_advanced", { documentId, options });
 }
 
 export async function saveCopy(documentId: string, destination: string): Promise<void> {

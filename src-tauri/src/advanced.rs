@@ -14,6 +14,11 @@ pub struct BookmarkInfo {
     pub page_index: Option<usize>,
     pub open: bool,
     pub has_children: bool,
+    pub bold: bool,
+    pub italic: bool,
+    pub color: [f64; 3],
+    pub action_type: String,
+    pub action_target: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -21,6 +26,19 @@ pub struct BookmarkInfo {
 pub struct BookmarkInput {
     pub title: String,
     pub page_index: usize,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BookmarkUpdate {
+    pub object_id: String,
+    pub title: String,
+    pub action_type: String,
+    pub target_page: Option<usize>,
+    pub target: String,
+    pub bold: bool,
+    pub italic: bool,
+    pub color: [f64; 3],
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -133,6 +151,60 @@ fn bookmark_target(document: &Document, dictionary: &Dictionary) -> Option<usize
     None
 }
 
+fn bookmark_style(dictionary: &Dictionary) -> (bool, bool, [f64; 3]) {
+    let flags = dictionary
+        .get(b"F")
+        .ok()
+        .and_then(|value| value.as_i64().ok())
+        .unwrap_or(0);
+    let color = dictionary
+        .get(b"C")
+        .ok()
+        .and_then(|value| value.as_array().ok())
+        .and_then(|values| {
+            if values.len() < 3 { return None; }
+            let component = |value: &Object| match value {
+                Object::Integer(value) => Some(*value as f64),
+                Object::Real(value) => Some(f64::from(*value)),
+                _ => None,
+            };
+            Some([
+                component(&values[0])?,
+                component(&values[1])?,
+                component(&values[2])?,
+            ])
+        })
+        .unwrap_or([0.0, 0.0, 0.0]);
+    (flags & 2 != 0, flags & 1 != 0, color)
+}
+
+fn bookmark_action_info(document: &Document, dictionary: &Dictionary) -> (String, String) {
+    if let Ok(Object::Array(_)) = dictionary.get(b"Dest") {
+        return ("goto".into(), bookmark_target(document, dictionary)
+            .map(|page| format!("{}", page + 1))
+            .unwrap_or_default());
+    }
+    let action = match dictionary.get(b"A") {
+        Ok(Object::Dictionary(action)) => Some(action),
+        Ok(Object::Reference(id)) => document.get_object(*id).ok().and_then(|value| value.as_dict().ok()),
+        _ => None,
+    };
+    let Some(action) = action else { return ("none".into(), String::new()) };
+    let kind = action
+        .get(b"S")
+        .ok()
+        .and_then(|value| value.as_name().ok())
+        .unwrap_or_default();
+    match kind {
+        b"GoTo" => ("goto".into(), bookmark_target(document, dictionary)
+            .map(|page| format!("{}", page + 1))
+            .unwrap_or_default()),
+        b"URI" => ("uri".into(), action.get(b"URI").ok().map(object_text).unwrap_or_default()),
+        b"GoToR" => ("file".into(), action.get(b"F").ok().map(object_text).unwrap_or_default()),
+        _ => (String::from_utf8_lossy(kind).to_lowercase(), String::new()),
+    }
+}
+
 fn walk_bookmarks(
     document: &Document,
     first: Option<ObjectId>,
@@ -148,6 +220,8 @@ fn walk_bookmarks(
         }
         let Ok(dictionary) = document.get_object(id).and_then(Object::as_dict) else { break };
         let child = dictionary.get(b"First").ok().and_then(|value| value.as_reference().ok());
+        let (bold, italic, color) = bookmark_style(dictionary);
+        let (action_type, action_target) = bookmark_action_info(document, dictionary);
         output.push(BookmarkInfo {
             object_id: id_string(id),
             parent_object_id: parent.map(id_string),
@@ -156,6 +230,11 @@ fn walk_bookmarks(
             page_index: bookmark_target(document, dictionary),
             open: dictionary.get(b"Count").ok().and_then(|value| value.as_i64().ok()).unwrap_or(0) >= 0,
             has_children: child.is_some(),
+            bold,
+            italic,
+            color,
+            action_type,
+            action_target,
         });
         if child.is_some() {
             walk_bookmarks(document, child, Some(id), depth + 1, output, visited);
@@ -1187,6 +1266,255 @@ pub fn move_bookmark(
 
     recompute_outline_counts(&mut document)?;
     atomic_save(document, output)
+}
+
+pub fn set_all_bookmarks_open(
+    input: &Path,
+    output: &Path,
+    open: bool,
+) -> Result<(), SevenError> {
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let root = outlines_id(&document)?;
+    let mut stack = outline_children(&document, root);
+    let mut changed = 0usize;
+    while let Some(id) = stack.pop() {
+        let children = outline_children(&document, id);
+        stack.extend(children.iter().copied());
+        if children.is_empty() {
+            continue;
+        }
+        let descendants = outline_descendant_count(&document, id, &mut HashSet::new());
+        document
+            .get_object_mut(id)
+            .map_err(|error| SevenError::Operation(error.to_string()))?
+            .as_dict_mut()
+            .map_err(|error| SevenError::Operation(error.to_string()))?
+            .set("Count", if open { descendants } else { -descendants });
+        changed += 1;
+    }
+    if changed == 0 {
+        return Err(SevenError::OperationRejected("Não há grupos de marcadores para alterar".into()));
+    }
+    atomic_save(document, output)
+}
+
+pub fn update_bookmark(
+    input: &Path,
+    output: &Path,
+    update: BookmarkUpdate,
+) -> Result<(), SevenError> {
+    if update.title.trim().is_empty() || update.title.chars().count() > 500 {
+        return Err(SevenError::OperationRejected("Título do marcador inválido".into()));
+    }
+    if update.color.iter().any(|component| !(0.0..=1.0).contains(component)) {
+        return Err(SevenError::OperationRejected("Cor do marcador deve ficar entre 0 e 1".into()));
+    }
+
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let id = parse_id(&update.object_id)?;
+    let action = match update.action_type.as_str() {
+        "goto" => {
+            let page_index = update.target_page.ok_or_else(|| SevenError::OperationRejected("Página de destino ausente".into()))?;
+            let page_id = document
+                .get_pages()
+                .get(&((page_index + 1) as u32))
+                .copied()
+                .ok_or_else(|| SevenError::OperationRejected("Página de destino não existe".into()))?;
+            Some(dictionary! {
+                "S" => "GoTo",
+                "D" => vec![Object::Reference(page_id), Object::Name(b"Fit".to_vec())],
+            })
+        }
+        "uri" => {
+            let target = update.target.trim();
+            if !(target.starts_with("https://") || target.starts_with("http://")) || target.len() > 4096 {
+                return Err(SevenError::OperationRejected("URL do marcador deve usar HTTP ou HTTPS".into()));
+            }
+            Some(dictionary! {
+                "S" => "URI",
+                "URI" => Object::string_literal(target),
+            })
+        }
+        "named" => {
+            let target = update.target.trim();
+            if target.is_empty() || target.chars().count() > 500 {
+                return Err(SevenError::OperationRejected("Destino nomeado inválido".into()));
+            }
+            let dictionary = document
+                .get_object_mut(id)
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .as_dict_mut()
+                .map_err(|error| SevenError::Operation(error.to_string()))?;
+            dictionary.set("Title", Object::string_literal(update.title.trim()));
+            dictionary.remove(b"A");
+            dictionary.set("Dest", Object::Name(target.as_bytes().to_vec()));
+            dictionary.set("F", (if update.italic { 1i64 } else { 0 }) | (if update.bold { 2i64 } else { 0 }));
+            dictionary.set("C", vec![update.color[0].into(), update.color[1].into(), update.color[2].into()]);
+            return atomic_save(document, output);
+        }
+        "none" => None,
+        _ => return Err(SevenError::OperationRejected("Ação de marcador inválida".into())),
+    };
+
+    let dictionary = document
+        .get_object_mut(id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    dictionary.set("Title", Object::string_literal(update.title.trim()));
+    dictionary.remove(b"Dest");
+    if let Some(action) = action {
+        dictionary.set("A", Object::Dictionary(action));
+    } else {
+        dictionary.remove(b"A");
+    }
+    dictionary.set("F", (if update.italic { 1i64 } else { 0 }) | (if update.bold { 2i64 } else { 0 }));
+    dictionary.set("C", vec![update.color[0].into(), update.color[1].into(), update.color[2].into()]);
+    atomic_save(document, output)
+}
+
+fn struct_heading_entries(
+    document: &Document,
+    object: &Object,
+    output: &mut Vec<(usize, String, usize)>,
+    visited: &mut HashSet<ObjectId>,
+) {
+    let resolved = match object {
+        Object::Reference(id) => {
+            if !visited.insert(*id) { return; }
+            document.get_object(*id).ok()
+        }
+        other => Some(other),
+    };
+    let Some(Object::Dictionary(dictionary)) = resolved else { return };
+
+    let role = dictionary.get(b"S").ok().and_then(|value| value.as_name().ok()).unwrap_or_default();
+    let depth = match role {
+        b"H1" => Some(0),
+        b"H2" => Some(1),
+        b"H3" => Some(2),
+        b"H4" => Some(3),
+        b"H5" => Some(4),
+        b"H6" => Some(5),
+        _ => None,
+    };
+    if let Some(depth) = depth {
+        let title = [b"T".as_slice(), b"ActualText".as_slice(), b"Alt".as_slice()]
+            .into_iter()
+            .find_map(|key| dictionary.get(key).ok().map(object_text))
+            .unwrap_or_default();
+        let page_index = dictionary
+            .get(b"Pg")
+            .ok()
+            .and_then(|value| value.as_reference().ok())
+            .and_then(|page_id| page_index_for_id(document, page_id));
+        if let Some(page_index) = page_index {
+            if !title.trim().is_empty() {
+                output.push((page_index, title.trim().to_owned(), depth));
+            }
+        }
+    }
+
+    if let Ok(kids) = dictionary.get(b"K") {
+        match kids {
+            Object::Array(values) => {
+                for value in values {
+                    struct_heading_entries(document, value, output, visited);
+                }
+            }
+            Object::Reference(_) | Object::Dictionary(_) => {
+                struct_heading_entries(document, kids, output, visited);
+            }
+            _ => {}
+        }
+    }
+}
+
+pub fn generate_bookmarks_from_structure(
+    input: &Path,
+    output: &Path,
+) -> Result<usize, SevenError> {
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let struct_root = document
+        .catalog()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .get(b"StructTreeRoot")
+        .map_err(|_| SevenError::OperationRejected("O PDF não possui StructTreeRoot para gerar marcadores".into()))?
+        .clone();
+
+    let mut headings = Vec::new();
+    struct_heading_entries(&document, &struct_root, &mut headings, &mut HashSet::new());
+    if headings.is_empty() {
+        return Err(SevenError::OperationRejected(
+            "Nenhum heading H1–H6 com texto e página foi encontrado na estrutura Tagged PDF".into(),
+        ));
+    }
+
+    // Replace only when there is no existing outline, avoiding accidental destructive merges.
+    if !bookmark_list(&document).is_empty() {
+        return Err(SevenError::OperationRejected(
+            "O documento já possui marcadores. Remova ou edite-os antes de gerar a partir da estrutura".into(),
+        ));
+    }
+
+    let root_id = document
+        .trailer
+        .get(b"Root")
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_reference()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    let outlines_id = document.add_object(dictionary! { "Type" => "Outlines", "Count" => 0 });
+    document
+        .get_object_mut(root_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .set("Outlines", outlines_id);
+
+    let pages = document.get_pages();
+    let mut parents: Vec<ObjectId> = vec![outlines_id];
+    let mut last_at_depth: Vec<Option<ObjectId>> = vec![None; 7];
+    let mut created = 0usize;
+
+    for (page_index, title, depth) in headings {
+        let normalized_depth = depth.min(5);
+        while parents.len() <= normalized_depth + 1 {
+            let parent = last_at_depth[parents.len() - 1].unwrap_or(outlines_id);
+            parents.push(parent);
+        }
+        parents.truncate(normalized_depth + 1);
+        let parent = *parents.last().unwrap_or(&outlines_id);
+        let page_id = pages
+            .get(&((page_index + 1) as u32))
+            .copied()
+            .ok_or_else(|| SevenError::OperationRejected("Página estrutural não existe".into()))?;
+        let after = document
+            .get_object(parent)
+            .ok()
+            .and_then(|object| object.as_dict().ok())
+            .and_then(|dictionary| dictionary.get(b"Last").ok())
+            .and_then(|value| value.as_reference().ok());
+        let item_id = document.add_object(dictionary! {
+            "Title" => Object::string_literal(title),
+            "Parent" => parent,
+            "A" => dictionary! {
+                "S" => "GoTo",
+                "D" => vec![Object::Reference(page_id), Object::Name(b"Fit".to_vec())],
+            },
+        });
+        insert_outline_after(&mut document, item_id, parent, after)?;
+        last_at_depth[normalized_depth] = Some(item_id);
+        if parents.len() == normalized_depth + 1 {
+            parents.push(item_id);
+        } else {
+            parents[normalized_depth + 1] = item_id;
+        }
+        created += 1;
+    }
+
+    recompute_outline_counts(&mut document)?;
+    atomic_save(document, output)?;
+    Ok(created)
 }
 
 pub fn add_bookmark(input: &Path, output: &Path, bookmark: BookmarkInput) -> Result<(), SevenError> {

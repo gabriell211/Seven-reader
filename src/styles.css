@@ -788,3 +788,15 @@ svg { width: 20px; height: 20px; }
 .form-edit-heading strong { font-size:10.5px; }
 .form-edit-heading small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#8a8c95; font:8px ui-monospace,SFMono-Regular,Consolas,monospace; }
 .form-edit-actions { display:flex; justify-content:space-between; gap:9px; align-items:center; flex-wrap:wrap; }
+
+.form-data-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+.form-data-grid > button { min-height:88px; padding:12px; border:1px solid #e1e0e6; border-radius:12px; display:grid; grid-template-columns:36px minmax(0,1fr); gap:10px; align-items:center; text-align:left; background:white; cursor:pointer; }
+.form-data-grid > button:hover:not(:disabled) { border-color:#cfc4f4; background:#fbf9ff; }
+.form-data-grid > button > span { width:34px; height:34px; border-radius:9px; display:grid; place-items:center; color:#6947cc; background:#f0ebff; }
+.form-data-grid > button > span svg { width:16px; }
+.form-data-grid > button > div { min-width:0; display:grid; gap:3px; }
+.form-data-grid strong { font-size:10.5px; }
+.form-data-grid small { color:#8d8f98; font-size:8.5px; line-height:1.4; }
+.form-data-grid .danger-card { border-color:#eed8dc; background:#fffafa; }
+.form-data-grid .danger-card > span { color:#b04f5d; background:#fff0f2; }
+@media (max-width:680px) { .form-data-grid { grid-template-columns:1fr; } }

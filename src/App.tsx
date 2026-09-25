@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { message, open, save } from "@tauri-apps/plugin-dialog";
 import { SplashScreen } from "./components/SplashScreen";
 import { Home } from "./components/Home";
@@ -117,6 +118,8 @@ import type {
 } from "./types";
 
 const RECENTS_KEY = "seven-reader:recents:v1";
+const TASKS_KEY = "seven-reader:tasks:v1";
+const RECENT_TOOLS_KEY = "seven-reader:recent-tools:v1";
 
 const emptyCapabilities: Capabilities = {
   pdf_engine: { available: false },
@@ -151,6 +154,31 @@ function loadRecents(): RecentDocument[] {
   }
 }
 
+function loadTaskHistory(): JobStatus[] {
+  try {
+    const raw = localStorage.getItem(TASKS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.slice(0, 50).map((job: JobStatus) =>
+      job.state === "queued" || job.state === "running"
+        ? { ...job, state: "cancelled" as const, stage: "Interrompido ao encerrar a sessão" }
+        : job
+    );
+  } catch {
+    return [];
+  }
+}
+
+function loadRecentTools(): ToolId[] {
+  try {
+    const raw = localStorage.getItem(RECENT_TOOLS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.slice(0, 8) : [];
+  } catch {
+    return [];
+  }
+}
+
 export default function App() {
   const native = isNativeDesktop();
   const [splash, setSplash] = useState(true);
@@ -168,6 +196,8 @@ export default function App() {
   const [searchHits, setSearchHits] = useState<SearchHit[]>([]);
   const [advancedSearchHits, setAdvancedSearchHits] = useState<AdvancedSearchHit[]>([]);
   const [jobs, setJobs] = useState<Record<string, JobStatus>>({});
+  const [taskHistory, setTaskHistory] = useState<JobStatus[]>(loadTaskHistory);
+  const [recentTools, setRecentTools] = useState<ToolId[]>(loadRecentTools);
   const [notice, setNotice] = useState<string | null>(null);
   const [organizerOpen, setOrganizerOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -236,6 +266,11 @@ export default function App() {
     let dispose: (() => void) | undefined;
     void listen<JobStatus>("seven://job", ({ payload }) => {
       setJobs((current) => ({ ...current, [payload.id]: payload }));
+      setTaskHistory((current) => {
+        const next = [payload, ...current.filter((job) => job.id !== payload.id)].slice(0, 50);
+        localStorage.setItem(TASKS_KEY, JSON.stringify(next));
+        return next;
+      });
       if (payload.state === "completed") setNotice("Operação concluída com sucesso.");
       if (payload.state === "failed") setNotice(payload.error ?? "A operação falhou.");
       if (payload.state === "cancelled") setNotice("Operação cancelada.");
@@ -389,6 +424,22 @@ export default function App() {
       await message(text, { title: "Seven Reader", kind: "error" });
     }
   };
+
+  useEffect(() => {
+    if (!native) return;
+    let unlisten: (() => void) | undefined;
+    void getCurrentWebviewWindow().onDragDropEvent((event) => {
+      if (event.payload.type !== "drop") return;
+      const paths = event.payload.paths.filter((path) => /\.pdf$/i.test(path));
+      if (!paths.length) return;
+      void (async () => {
+        for (const path of paths) {
+          await openPath(path);
+        }
+      })();
+    }).then((dispose) => { unlisten = dispose; });
+    return () => unlisten?.();
+  }, [native, openTabs, settings.defaultZoom]);
 
   const choosePdf = async () => {
     if (!native) return;
@@ -659,6 +710,12 @@ export default function App() {
       setNotice("Esta ferramenta ainda não está habilitada porque sua implementação real não está disponível.");
       return;
     }
+
+    setRecentTools((current) => {
+      const next = [tool, ...current.filter((id) => id !== tool)].slice(0, 8);
+      localStorage.setItem(RECENT_TOOLS_KEY, JSON.stringify(next));
+      return next;
+    });
 
     try {
       if (["bookmarks","attachments","layers","portfolio","articles","rich-media","three-d","geospatial"].includes(tool)) {
@@ -1642,6 +1699,8 @@ export default function App() {
         native={native}
         capabilities={capabilities}
         recents={recents}
+        recentTools={recentTools}
+        taskHistory={taskHistory}
         onOpen={() => void choosePdf()}
         onOpenFolder={() => void chooseFolder()}
         lastSessionPath={localStorage.getItem("seven-reader:last-document")}

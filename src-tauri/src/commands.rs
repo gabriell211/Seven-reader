@@ -10,6 +10,7 @@ use crate::{
     editing,
     pdf,
     redaction,
+    search,
     signatures,
     state::{AppState, JobStatus},
 };
@@ -78,6 +79,30 @@ pub async fn search_document(
         resource_dir: state.resource_dir.clone(),
     };
     tauri::async_runtime::spawn_blocking(move || pdf::search_document(&state_snapshot, &document, &query))
+        .await
+        .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
+        .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub async fn search_document_advanced(
+    state: State<'_, AppState>,
+    document_id: String,
+    options: search::AdvancedSearchOptions,
+) -> CommandResult<Vec<search::AdvancedSearchHit>> {
+    let document = state
+        .documents
+        .lock()
+        .get(&document_id)
+        .cloned()
+        .ok_or_else(|| ErrorPayload::from(SevenError::DocumentNotOpen))?;
+    let snapshot = AppState {
+        documents: state.documents.clone(),
+        jobs: state.jobs.clone(),
+        cache_dir: state.cache_dir.clone(),
+        resource_dir: state.resource_dir.clone(),
+    };
+    tauri::async_runtime::spawn_blocking(move || search::search(&snapshot, &document, options))
         .await
         .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
         .map_err(ErrorPayload::from)

@@ -42,7 +42,7 @@ export const tools: ToolDefinition[] = [
   { id: "catalog", label: "Índices e catálogo", description: "Índice local persistente com texto por página e pesquisa em coleções.", icon: "search", group: "Avançado", implemented: true },
   { id: "rich-media", label: "Rich Media", description: "Detecte Rich Media/áudio/vídeo e mantenha execução automática bloqueada.", icon: "attachment", group: "Avançado", capability: "pdf_engine", implemented: true },
   { id: "three-d", label: "3D", description: "Detecte anotações/streams 3D U3D/PRC sem ativação automática.", icon: "layers", group: "Avançado", capability: "pdf_engine", implemented: true },
-  { id: "shared-review", label: "Revisão compartilhada", description: "Importação e exportação de comentários.", icon: "comment", group: "Avançado", capability: "pdf_engine", implemented: false },
+  { id: "shared-review", label: "Revisão compartilhada", description: "Importe e exporte comentários em XFDF interoperável com histórico Desfazer/Refazer.", icon: "comment", group: "Avançado", capability: "pdf_engine", implemented: true },
   { id: "geospatial", label: "Geoespacial", description: "Detecte Measure/VP/GPTS/LPTS e metadados espaciais preservados.", icon: "pages", group: "Avançado", capability: "pdf_engine", implemented: true },
 ];
 

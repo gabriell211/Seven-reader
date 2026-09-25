@@ -76,6 +76,7 @@ pub fn run() {
             commands::session_edit_remove_link,
             commands::session_edit_add_link,
             commands::list_managed_pdf_elements,
+            commands::session_set_page_labels,
             commands::session_edit_update_overlay_text,
             commands::session_edit_update_background,
             commands::session_edit_remove_managed_element,

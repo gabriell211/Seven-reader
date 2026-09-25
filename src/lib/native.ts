@@ -25,6 +25,8 @@ import type {
   ImageObjectInfo,
   InkAnnotationInput,
   LinkPlacement,
+  LinkInfo,
+  LinkUpdate,
   MetadataUpdate,
   NewFormField,
   NormalizedRect,
@@ -262,6 +264,29 @@ export async function sessionEditAddImage(
   placement: ImagePlacement,
 ): Promise<DocumentSummary> {
   return invoke<DocumentSummary>("session_edit_add_image", { documentId, placement });
+}
+
+export async function listPdfLinks(
+  documentId: string,
+): Promise<LinkInfo[]> {
+  return invoke<LinkInfo[]>("list_pdf_links", { documentId });
+}
+
+export async function sessionEditUpdateLink(
+  documentId: string,
+  update: LinkUpdate,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_edit_update_link", { documentId, update });
+}
+
+export async function sessionEditRemoveLink(
+  documentId: string,
+  pageIndex: number,
+  objectId: string,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_edit_remove_link", {
+    documentId, pageIndex, objectId,
+  });
 }
 
 export async function sessionEditAddLink(

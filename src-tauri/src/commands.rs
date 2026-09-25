@@ -15,8 +15,23 @@ use crate::{
     signatures,
     state::{AppState, JobStatus},
 };
+use serde::Serialize;
 use std::{fs, process::Command, sync::atomic::Ordering};
 use tauri::{AppHandle, State};
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionReplaceTextResult {
+    pub document: pdf::DocumentSummary,
+    pub report: editing::ReplaceTextReport,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionFormFillResult {
+    pub document: pdf::DocumentSummary,
+    pub changed: usize,
+}
 
 #[tauri::command]
 pub fn get_capabilities(state: State<'_, AppState>) -> capabilities::Capabilities {
@@ -283,6 +298,113 @@ pub fn session_add_markup(
         prepared.expected_revision,
         prepared.output,
     )
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_edit_add_text(
+    state: State<'_, AppState>,
+    document_id: String,
+    placement: editing::TextPlacement,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "add-text", move |input, output| {
+        editing::add_text(input, output, placement)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_edit_replace_text(
+    state: State<'_, AppState>,
+    document_id: String,
+    find: String,
+    replacement: String,
+    all_pages: bool,
+    page_index: usize,
+) -> CommandResult<SessionReplaceTextResult> {
+    session::apply_revision(&state, &document_id, "replace-text", move |input, output| {
+        editing::replace_text(input, output, &find, &replacement, all_pages, page_index)
+    })
+    .map(|(document, report)| SessionReplaceTextResult { document, report })
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_edit_add_image(
+    state: State<'_, AppState>,
+    document_id: String,
+    placement: editing::ImagePlacement,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "add-image", move |input, output| {
+        editing::add_image(input, output, placement)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_edit_add_link(
+    state: State<'_, AppState>,
+    document_id: String,
+    link: editing::LinkPlacement,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "add-link", move |input, output| {
+        editing::add_link(input, output, link)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_edit_overlay_text(
+    state: State<'_, AppState>,
+    document_id: String,
+    options: editing::OverlayTextOptions,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "overlay", move |input, output| {
+        editing::add_overlay_text(input, output, options)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_edit_set_background(
+    state: State<'_, AppState>,
+    document_id: String,
+    options: editing::BackgroundOptions,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "background", move |input, output| {
+        editing::set_background(input, output, options)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_fill_form_fields(
+    state: State<'_, AppState>,
+    document_id: String,
+    values: Vec<forms::FormValue>,
+) -> CommandResult<SessionFormFillResult> {
+    session::apply_revision(&state, &document_id, "fill-form", move |input, output| {
+        forms::fill_fields(input, output, values)
+    })
+    .map(|(document, changed)| SessionFormFillResult { document, changed })
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_create_form_field(
+    state: State<'_, AppState>,
+    document_id: String,
+    field: forms::NewFormField,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "create-field", move |input, output| {
+        forms::create_field(input, output, field)
+    })
+    .map(|(summary, _)| summary)
     .map_err(ErrorPayload::from)
 }
 

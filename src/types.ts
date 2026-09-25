@@ -301,6 +301,22 @@ export interface ReplaceTextReport {
   unsupportedTextOperators: number;
 }
 
+export interface RedactionArea {
+  pageIndex: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  sourceText?: string;
+}
+
+export interface RedactionReport {
+  areasApplied: number;
+  objectsRemoved: number;
+  annotationsRemoved: number;
+  output: string;
+}
+
 export type ToolId =
   | "edit" | "convert" | "create" | "organize" | "combine" | "comment"
   | "fill-sign" | "certificates" | "scan-ocr" | "forms" | "protect"

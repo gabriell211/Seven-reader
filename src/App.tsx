@@ -15,6 +15,7 @@ import { CommentsDialog } from "./components/CommentsDialog";
 import { FormsDialog } from "./components/FormsDialog";
 import { SignatureDialog } from "./components/SignatureDialog";
 import { EditingDialog } from "./components/EditingDialog";
+import { RedactionDialog } from "./components/RedactionDialog";
 import {
   addAnnotation,
   cancelJob,
@@ -33,6 +34,8 @@ import {
   renderPage,
   deleteAnnotation,
   fillFormFields,
+  findRedactionMatches,
+  applyRedactions,
   editAddImage,
   editAddLink,
   editAddText,
@@ -80,6 +83,7 @@ import type {
   OcrWord,
   OverlayTextOptions,
   RecentDocument,
+  RedactionArea,
   RenderResult,
   SanitizeOptions,
   SearchHit,
@@ -159,6 +163,9 @@ export default function App() {
   const [signatureValidation, setSignatureValidation] = useState<SignatureValidationReport | null>(null);
   const [signatureLoading, setSignatureLoading] = useState(false);
   const [editingOpen, setEditingOpen] = useState(false);
+  const [redactionOpen, setRedactionOpen] = useState(false);
+  const [redactionMatches, setRedactionMatches] = useState<RedactionArea[]>([]);
+  const [redactionLoading, setRedactionLoading] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -320,6 +327,16 @@ export default function App() {
     }
 
     try {
+      if (tool === "redact") {
+        if (!document) {
+          setNotice("Abra um PDF para redigir conteúdo.");
+          return;
+        }
+        setRedactionMatches([]);
+        setRedactionOpen(true);
+        return;
+      }
+
       if (tool === "edit") {
         if (!document) {
           setNotice("Abra um PDF para editar.");
@@ -465,6 +482,34 @@ export default function App() {
 
 
 
+
+
+  const searchRedactions = async (query: string, matchCase: boolean, wholeWord: boolean) => {
+    if (!document) return;
+    try {
+      setRedactionLoading(true);
+      setRedactionMatches(await findRedactionMatches(document.path, query, matchCase, wholeWord));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    } finally {
+      setRedactionLoading(false);
+    }
+  };
+
+  const runRedactions = async (output: string, areas: RedactionArea[]) => {
+    if (!document) return;
+    try {
+      setRedactionLoading(true);
+      const report = await applyRedactions(document.path, output, areas);
+      setRedactionOpen(false);
+      setNotice(`${report.areasApplied} área(s) redigida(s); ${report.objectsRemoved} objeto(s) removido(s).`);
+      await openPath(output);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    } finally {
+      setRedactionLoading(false);
+    }
+  };
 
   const saveEditedAndOpen = async (operation: () => Promise<void>, output: string, messageText: string) => {
     try {
@@ -841,6 +886,17 @@ export default function App() {
         <button className="global-notice" onClick={() => setNotice(null)} aria-label="Fechar aviso">
           {notice}
         </button>
+      )}
+      {redactionOpen && document && (
+        <RedactionDialog
+          documentPath={document.path}
+          pageIndex={page}
+          matches={redactionMatches}
+          loading={redactionLoading}
+          onClose={() => setRedactionOpen(false)}
+          onSearch={(query, matchCase, wholeWord) => void searchRedactions(query, matchCase, wholeWord)}
+          onApply={(output, areas) => void runRedactions(output, areas)}
+        />
       )}
       {editingOpen && document && (
         <EditingDialog

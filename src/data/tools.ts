@@ -26,7 +26,7 @@ export const tools: ToolDefinition[] = [
   { id: "forms", label: "Preparar formulário", description: "Ler, preencher e criar campos AcroForm persistentes no documento.", icon: "form", group: "Revisão", implemented: true },
   { id: "protect", label: "Proteger", description: "Criptografia AES-256 e remoção de criptografia autorizada.", icon: "shield", group: "Segurança", capability: "qpdf", implemented: true },
   { id: "sanitize", label: "Sanitizar", description: "Remova JavaScript, ações automáticas, anexos, XFA e metadados selecionados.", icon: "lock", group: "Segurança", implemented: true },
-  { id: "redact", label: "Redigir", description: "Remoção permanente de conteúdo sensível.", icon: "redact", group: "Segurança", capability: "pdf_engine", implemented: false },
+  { id: "redact", label: "Redigir", description: "Remova permanentemente objetos e anotações por área ou busca textual.", icon: "redact", group: "Segurança", capability: "pdf_engine", implemented: true },
   { id: "compare", label: "Comparar arquivos", description: "Compare texto normalizado página a página entre duas versões.", icon: "compare", group: "Revisão", capability: "pdf_engine", implemented: true },
   { id: "optimize", label: "Otimizar PDF", description: "Compressão local com presets de qualidade.", icon: "compress", group: "Profissional", capability: "ghostscript", implemented: true },
   { id: "accessibility", label: "Acessibilidade", description: "Auditoria de tags, idioma, título e estrutura básica.", icon: "accessibility", group: "Profissional", implemented: true },

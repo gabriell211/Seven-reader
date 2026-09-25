@@ -18,6 +18,8 @@ import type {
   OcrOptions,
   OcrWord,
   OverlayTextOptions,
+  RedactionArea,
+  RedactionReport,
   RenderResult,
   ReplaceTextReport,
   SanitizeOptions,
@@ -154,6 +156,25 @@ export async function startOptimize(
   preset = "default",
 ): Promise<JobStart> {
   return invoke<JobStart>("start_optimize_pdf", { input, output, preset });
+}
+
+export async function findRedactionMatches(
+  input: string,
+  query: string,
+  matchCase: boolean,
+  wholeWord: boolean,
+): Promise<RedactionArea[]> {
+  return invoke<RedactionArea[]>("find_redaction_matches", {
+    input, query, matchCase, wholeWord,
+  });
+}
+
+export async function applyRedactions(
+  input: string,
+  output: string,
+  areas: RedactionArea[],
+): Promise<RedactionReport> {
+  return invoke<RedactionReport>("apply_redactions", { input, output, areas });
 }
 
 export async function editAddText(

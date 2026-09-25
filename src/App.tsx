@@ -62,6 +62,13 @@ import {
   sanitizeDocument,
   scanPageToPdf,
   saveCopy,
+  saveDocument,
+  undoDocument,
+  redoDocument,
+  sessionAddAnnotation,
+  sessionDeleteAnnotation,
+  sessionAddInk,
+  sessionAddMarkup,
   searchDocument,
   searchDocumentAdvanced,
   startCombine,
@@ -294,6 +301,24 @@ export default function App() {
       if (modifier && event.shiftKey && event.key.toLowerCase() === "s") {
         event.preventDefault();
         void saveAs();
+      }
+      if (modifier && !event.shiftKey && event.key.toLowerCase() === "s" && document) {
+        event.preventDefault();
+        void saveCurrent();
+      }
+      if (modifier && !event.shiftKey && event.key.toLowerCase() === "z" && document) {
+        const target = event.target as HTMLElement | null;
+        if (!target?.matches("input, textarea, [contenteditable='true']")) {
+          event.preventDefault();
+          void undoCurrent();
+        }
+      }
+      if (modifier && document && (event.key.toLowerCase() === "y" || (event.shiftKey && event.key.toLowerCase() === "z"))) {
+        const target = event.target as HTMLElement | null;
+        if (!target?.matches("input, textarea, [contenteditable='true']")) {
+          event.preventDefault();
+          void redoCurrent();
+        }
       }
       if (modifier && event.key.toLowerCase() === "f") {
         event.preventDefault();
@@ -713,6 +738,50 @@ export default function App() {
     }
   };
 
+  const acceptDocumentRevision = async (
+    summary: DocumentSummary,
+    successMessage: string,
+  ) => {
+    setDocument(summary);
+    setOpenTabs((current) => current.map((tab) => tab.id === summary.id ? summary : tab));
+    const targetWidth = Math.max(900, Math.min(6000, Math.round(1400 * (zoom / 100))));
+    const next = await renderPage(summary.id, page, targetWidth);
+    setRendered(next);
+    setNotice(successMessage);
+  };
+
+  const saveCurrent = async () => {
+    if (!document) return;
+    try {
+      const summary = await saveDocument(document.id);
+      await acceptDocumentRevision(summary, summary.dirty ? "Documento salvo." : "Documento já estava salvo.");
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const undoCurrent = async () => {
+    if (!document) return;
+    try {
+      const summary = await undoDocument(document.id);
+      await acceptDocumentRevision(summary, "Alteração desfeita.");
+      await reloadAnnotations();
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const redoCurrent = async () => {
+    if (!document) return;
+    try {
+      const summary = await redoDocument(document.id);
+      await acceptDocumentRevision(summary, "Alteração refeita.");
+      await reloadAnnotations();
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
   const saveAs = async () => {
     if (!document) return;
     const destination = await save({
@@ -1112,42 +1181,23 @@ export default function App() {
     }
   };
 
-  const runAddAnnotation = async (output: string, annotation: AnnotationInput) => {
+  const runAddAnnotation = async (annotation: AnnotationInput) => {
     if (!document) return;
     try {
-      await addAnnotation(document.path, output, annotation);
-      setCommentsOpen(false);
-      setNotice("Comentário persistido no PDF.");
-      await openPath(output);
+      const summary = await sessionAddAnnotation(document.id, annotation);
+      await acceptDocumentRevision(summary, "Comentário adicionado à sessão.");
+      await reloadAnnotations();
     } catch (error) {
       setNotice(errorMessage(error));
     }
   };
 
-  const runInkAnnotation = async (ink: InkAnnotationInput) => {
-    if (!document) return;
-    const output = await save({
-      title: "Salvar PDF com desenho",
-      defaultPath: document.name.replace(/\.pdf$/i, "-desenho.pdf"),
-      filters: [{ name: "Documento PDF", extensions: ["pdf"] }],
-    });
-    if (!output) return;
-    try {
-      await addInkAnnotation(document.path, output, ink);
-      setNotice("Desenho gravado como anotação Ink do PDF.");
-      await openPath(output, { page, zoom });
-    } catch (error) {
-      setNotice(errorMessage(error));
-    }
-  };
-
-  const runDeleteAnnotation = async (output: string, objectId: string) => {
+  const runDeleteAnnotation = async (objectId: string) => {
     if (!document) return;
     try {
-      await deleteAnnotation(document.path, output, objectId);
-      setCommentsOpen(false);
-      setNotice("Comentário removido da cópia.");
-      await openPath(output);
+      const summary = await sessionDeleteAnnotation(document.id, objectId);
+      await acceptDocumentRevision(summary, "Comentário removido da sessão.");
+      await reloadAnnotations();
     } catch (error) {
       setNotice(errorMessage(error));
     }
@@ -1629,8 +1679,8 @@ export default function App() {
           loading={annotationsLoading}
           onClose={() => setCommentsOpen(false)}
           onReload={() => void reloadAnnotations()}
-          onAdd={(output, annotation) => void runAddAnnotation(output, annotation)}
-          onDelete={(output, objectId) => void runDeleteAnnotation(output, objectId)}
+          onAdd={(annotation) => void runAddAnnotation(annotation)}
+          onDelete={(objectId) => void runDeleteAnnotation(objectId)}
         />
       )}
       {formsOpen && document && (
@@ -1767,11 +1817,15 @@ export default function App() {
           onNavigateForward={() => void navigateHistory(1)}
           onQuickToolsPositionChange={(position) => setSettings((current) => ({ ...current, quickToolsPosition: position }))}
           onOpen={() => void choosePdf()}
+          onSave={() => void saveCurrent()}
           onSaveAs={() => void saveAs()}
+          onUndo={() => void undoCurrent()}
+          onRedo={() => void redoCurrent()}
           onPrint={() => void runPrint()}
           onRender={(nextPage, nextZoom) => void render(nextPage, nextZoom)}
           onSearch={(query) => void runSearch(query)}
           onInk={(ink) => void runInkAnnotation(ink)}
+          onMarkup={(kind, rect) => void runMarkupAnnotation(kind, rect)}
           onAdvancedSearch={(options) => void runAdvancedSearch(options)}
           onTool={(tool) => void selectTool(tool)}
           onSettings={() => setSettingsOpen(true)}

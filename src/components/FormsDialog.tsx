@@ -47,6 +47,16 @@ export function FormsDialog({ pageIndex, fields, loading, onClose, onReload, onF
   const [defaultValue, setDefaultValue] = useState("");
   const [optionsText, setOptionsText] = useState("");
   const [editingId, setEditingId] = useState("");
+  const [borderEnabled, setBorderEnabled] = useState(true);
+  const [borderColor, setBorderColor] = useState("#6f6f78");
+  const [fillEnabled, setFillEnabled] = useState(true);
+  const [fillColor, setFillColor] = useState("#ffffff");
+  const [borderWidth, setBorderWidth] = useState(1);
+  const [borderStyle, setBorderStyle] = useState<"S" | "D" | "B" | "I" | "U">("S");
+  const [fieldFontSize, setFieldFontSize] = useState(10);
+  const [textColor, setTextColor] = useState("#000000");
+  const [fieldRotation, setFieldRotation] = useState<0 | 90 | 180 | 270>(0);
+  const [visibility, setVisibility] = useState<"visible" | "visible-no-print" | "hidden" | "hidden-printable">("visible");
   const [duplicatePageStart, setDuplicatePageStart] = useState(pageIndex + 1);
   const [duplicatePageEnd, setDuplicatePageEnd] = useState(pageIndex + 1);
   const [duplicateRows, setDuplicateRows] = useState(1);
@@ -65,6 +75,33 @@ export function FormsDialog({ pageIndex, fields, loading, onClose, onReload, onF
     () => fields.map((field) => ({ name: field.name, value: values[field.name] ?? "" })),
     [fields, values],
   );
+
+  const hexToRgb = (hex: string): [number, number, number] => {
+    const value = hex.replace("#", "").padEnd(6, "0").slice(0, 6);
+    return [
+      parseInt(value.slice(0, 2), 16) / 255,
+      parseInt(value.slice(2, 4), 16) / 255,
+      parseInt(value.slice(4, 6), 16) / 255,
+    ];
+  };
+
+  const rgbToHex = (rgb?: [number, number, number]): string => {
+    if (!rgb) return "#000000";
+    return `#${rgb.map((component) =>
+      Math.max(0, Math.min(255, Math.round(component * 255))).toString(16).padStart(2, "0")
+    ).join("")}`;
+  };
+
+  const appearancePayload = () => ({
+    borderColor: borderEnabled ? hexToRgb(borderColor) : undefined,
+    fillColor: fillEnabled ? hexToRgb(fillColor) : undefined,
+    borderWidth,
+    borderStyle,
+    fontSize: fieldFontSize,
+    textColor: hexToRgb(textColor),
+    rotation: fieldRotation,
+    visibility,
+  });
 
   const submitFill = () => {
     onFill(fillValues);
@@ -86,6 +123,7 @@ export function FormsDialog({ pageIndex, fields, loading, onClose, onReload, onF
       tooltip,
       defaultValue,
       options: optionsText.split("\n").map((value) => value.trim()).filter(Boolean),
+      ...appearancePayload(),
     });
   };
 
@@ -120,6 +158,16 @@ export function FormsDialog({ pageIndex, fields, loading, onClose, onReload, onF
     setMultiline(field.multiline);
     setMaxLength(field.maxLength ?? "");
     setOptionsText(field.options.join("\n"));
+    setBorderEnabled(Boolean(field.borderColor));
+    setBorderColor(rgbToHex(field.borderColor ?? [0.44, 0.44, 0.47]));
+    setFillEnabled(Boolean(field.fillColor));
+    setFillColor(rgbToHex(field.fillColor ?? [1, 1, 1]));
+    setBorderWidth(field.borderWidth);
+    setBorderStyle(field.borderStyle);
+    setFieldFontSize(field.fontSize);
+    setTextColor(rgbToHex(field.textColor));
+    setFieldRotation(field.rotation);
+    setVisibility(field.visibility);
     if (field.rect) {
       const [x1, y1, x2, y2] = field.rect;
       setX(x1);
@@ -161,6 +209,7 @@ export function FormsDialog({ pageIndex, fields, loading, onClose, onReload, onF
       width,
       height,
       options: optionsText.split("\n").map((value) => value.trim()).filter(Boolean),
+      ...appearancePayload(),
     });
   };
 
@@ -217,6 +266,25 @@ export function FormsDialog({ pageIndex, fields, loading, onClose, onReload, onF
                 <label className="toggle-row"><input type="checkbox" checked={multiline} disabled={fieldType !== "text"} onChange={(event) => setMultiline(event.target.checked)} /><span><strong>Multilinha</strong><small>Somente campos de texto.</small></span></label>
               </div>
               {fieldType === "text" && <label className="workflow-field"><span>Máximo de caracteres</span><input type="number" min={1} max={1000000} value={maxLength} onChange={(event) => setMaxLength(event.target.value ? Math.max(1, Number(event.target.value)) : "")} placeholder="Sem limite" /></label>}
+              <section className="field-appearance-box">
+                <div className="section-mini-title">Aparência</div>
+                <div className="two-column-fields">
+                  <label className="toggle-row"><input type="checkbox" checked={borderEnabled} onChange={(event) => setBorderEnabled(event.target.checked)} /><span><strong>Borda</strong></span></label>
+                  <label className="toggle-row"><input type="checkbox" checked={fillEnabled} onChange={(event) => setFillEnabled(event.target.checked)} /><span><strong>Preenchimento</strong></span></label>
+                </div>
+                <div className="four-column-fields">
+                  <label className="workflow-field"><span>Cor da borda</span><input type="color" disabled={!borderEnabled} value={borderColor} onChange={(event) => setBorderColor(event.target.value)} /></label>
+                  <label className="workflow-field"><span>Cor de fundo</span><input type="color" disabled={!fillEnabled} value={fillColor} onChange={(event) => setFillColor(event.target.value)} /></label>
+                  <label className="workflow-field"><span>Espessura</span><input type="number" min={0} max={20} step={0.25} value={borderWidth} onChange={(event) => setBorderWidth(Math.max(0, Math.min(20, Number(event.target.value) || 0)))} /></label>
+                  <label className="workflow-field"><span>Estilo</span><select value={borderStyle} onChange={(event) => setBorderStyle(event.target.value as typeof borderStyle)}><option value="S">Sólida</option><option value="D">Tracejada</option><option value="B">Beveled</option><option value="I">Inset</option><option value="U">Sublinhada</option></select></label>
+                </div>
+                <div className="four-column-fields">
+                  <label className="workflow-field"><span>Fonte</span><input type="number" min={1} max={200} value={fieldFontSize} onChange={(event) => setFieldFontSize(Math.max(1, Math.min(200, Number(event.target.value) || 10)))} /></label>
+                  <label className="workflow-field"><span>Cor do texto</span><input type="color" value={textColor} onChange={(event) => setTextColor(event.target.value)} /></label>
+                  <label className="workflow-field"><span>Rotação</span><select value={fieldRotation} onChange={(event) => setFieldRotation(Number(event.target.value) as 0 | 90 | 180 | 270)}><option value={0}>0°</option><option value={90}>90°</option><option value={180}>180°</option><option value={270}>270°</option></select></label>
+                  <label className="workflow-field"><span>Visibilidade</span><select value={visibility} onChange={(event) => setVisibility(event.target.value as typeof visibility)}><option value="visible">Visível e imprime</option><option value="visible-no-print">Visível, não imprime</option><option value="hidden">Oculto</option><option value="hidden-printable">Oculto, imprimível</option></select></label>
+                </div>
+              </section>
               <button className="primary-button workflow-submit" disabled={!name.trim() || width <= 0 || height <= 0} onClick={submitCreate}><SevenIcon name="form" /> Criar campo na página {pageIndex + 1}</button>
             </>
           ) : tab === "edit" ? (
@@ -257,6 +325,25 @@ export function FormsDialog({ pageIndex, fields, loading, onClose, onReload, onF
                   </div>
                   <label className="workflow-field"><span>Máximo de caracteres</span><input type="number" min={1} max={1000000} value={maxLength} onChange={(event) => setMaxLength(event.target.value ? Math.max(1, Number(event.target.value)) : "")} placeholder="Sem limite" /></label>
                   <label className="workflow-field"><span>Opções (choice), uma por linha</span><textarea rows={4} value={optionsText} onChange={(event) => setOptionsText(event.target.value)} /></label>
+                  <section className="field-appearance-box">
+                    <div className="section-mini-title">Aparência</div>
+                    <div className="two-column-fields">
+                      <label className="toggle-row"><input type="checkbox" checked={borderEnabled} onChange={(event) => setBorderEnabled(event.target.checked)} /><span><strong>Borda</strong></span></label>
+                      <label className="toggle-row"><input type="checkbox" checked={fillEnabled} onChange={(event) => setFillEnabled(event.target.checked)} /><span><strong>Preenchimento</strong></span></label>
+                    </div>
+                    <div className="four-column-fields">
+                      <label className="workflow-field"><span>Cor da borda</span><input type="color" disabled={!borderEnabled} value={borderColor} onChange={(event) => setBorderColor(event.target.value)} /></label>
+                      <label className="workflow-field"><span>Cor de fundo</span><input type="color" disabled={!fillEnabled} value={fillColor} onChange={(event) => setFillColor(event.target.value)} /></label>
+                      <label className="workflow-field"><span>Espessura</span><input type="number" min={0} max={20} step={0.25} value={borderWidth} onChange={(event) => setBorderWidth(Math.max(0, Math.min(20, Number(event.target.value) || 0)))} /></label>
+                      <label className="workflow-field"><span>Estilo</span><select value={borderStyle} onChange={(event) => setBorderStyle(event.target.value as typeof borderStyle)}><option value="S">Sólida</option><option value="D">Tracejada</option><option value="B">Beveled</option><option value="I">Inset</option><option value="U">Sublinhada</option></select></label>
+                    </div>
+                    <div className="four-column-fields">
+                      <label className="workflow-field"><span>Fonte</span><input type="number" min={1} max={200} value={fieldFontSize} onChange={(event) => setFieldFontSize(Math.max(1, Math.min(200, Number(event.target.value) || 10)))} /></label>
+                      <label className="workflow-field"><span>Cor do texto</span><input type="color" value={textColor} onChange={(event) => setTextColor(event.target.value)} /></label>
+                      <label className="workflow-field"><span>Rotação</span><select value={fieldRotation} onChange={(event) => setFieldRotation(Number(event.target.value) as 0 | 90 | 180 | 270)}><option value={0}>0°</option><option value={90}>90°</option><option value={180}>180°</option><option value={270}>270°</option></select></label>
+                      <label className="workflow-field"><span>Visibilidade</span><select value={visibility} onChange={(event) => setVisibility(event.target.value as typeof visibility)}><option value="visible">Visível e imprime</option><option value="visible-no-print">Visível, não imprime</option><option value="hidden">Oculto</option><option value="hidden-printable">Oculto, imprimível</option></select></label>
+                    </div>
+                  </section>
                   <section className="form-duplicate-box">
                     <div className="section-mini-title">Duplicar campo</div>
                     <div className="two-column-fields">

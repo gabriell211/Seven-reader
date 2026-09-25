@@ -110,11 +110,31 @@ pub struct OverlayTextOptions {
     pub kind: String,
     pub text: String,
     pub prefix: String,
+    pub suffix: String,
     pub start_number: u64,
     pub digits: u8,
     pub font_size: f64,
     pub page_start: usize,
     pub page_end: Option<usize>,
+    pub parity: String,
+    pub position: String,
+    pub margin_x: f64,
+    pub margin_y: f64,
+    pub rotation: f64,
+    pub opacity: f64,
+    pub image_path: Option<String>,
+    pub image_scale: f64,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PageLabelOptions {
+    pub page_start: usize,
+    pub page_end: Option<usize>,
+    pub style: String,
+    pub prefix: String,
+    pub suffix: String,
+    pub start_number: u64,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

@@ -418,7 +418,7 @@ export default function App() {
     setRendered(null);
 
     try {
-      const security = await inspectAdvancedPdf(summary.path);
+      const security = await inspectAdvancedPdf(summary.activePath);
       const reasons = [
         security.hasJavascript && "JavaScript",
         security.hasLaunchActions && "Launch actions",

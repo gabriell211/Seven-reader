@@ -508,3 +508,24 @@ svg { width: 20px; height: 20px; }
   .operation-tabs--pages { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .three-column-fields { grid-template-columns: 1fr; }
 }
+
+.create-dialog--wide { width: min(900px,100%); }
+.create-source-tabs { padding: 12px 18px; border-bottom: 1px solid #ecebf0; display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); gap: 5px; }
+.create-source-tabs button { min-height: 38px; padding: 0 10px; border: 1px solid transparent; border-radius: 9px; color: #747680; background: transparent; cursor: pointer; font-size: 10px; font-weight: 750; }
+.create-source-tabs button:hover { background: #f2f0f8; }
+.create-source-tabs button.active { color: #5633bd; border-color: #d8cff5; background: #eee9ff; }
+.document-textarea { min-height: 280px; padding: 14px; resize: vertical; border: 1px solid #d9d8df; border-radius: 11px; background: white; font: 12px/1.55 "Segoe UI Variable Text","Segoe UI",sans-serif; }
+.clipboard-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.compact-feature { min-height: 120px; }
+.selected-path { padding: 11px 12px; border: 1px solid #e2e1e7; border-radius: 10px; display: grid; gap: 4px; background: white; }
+.selected-path strong { font-size: 9px; color: #777984; text-transform: uppercase; letter-spacing: .06em; }
+.selected-path span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; }
+.capability-inline { padding: 12px; border: 1px solid #e4d9d9; border-radius: 11px; display: grid; grid-template-columns: 28px 1fr; gap: 9px; align-items: center; color: #8f515d; background: #fff7f8; }
+.capability-inline.ok { color: #26745a; border-color: #cae8da; background: #f4fbf7; }
+.capability-inline svg { width: 20px; }
+.capability-inline > div { display: grid; gap: 2px; }
+.capability-inline strong { font-size: 10.5px; }
+.capability-inline small { color: #858790; font-size: 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 760px) {
+  .create-source-tabs { grid-template-columns: repeat(3,minmax(0,1fr)); }
+}

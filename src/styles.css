@@ -631,3 +631,13 @@ svg { width: 20px; height: 20px; }
 .selection-actions button:disabled { opacity: .4; cursor: default; }
 .selection-actions button svg { width: 12px; }
 .selection-actions small { padding: 0 7px; color: #8d8f98; font-size: 8px; }
+
+.tab-title { display: flex; align-items: center; gap: 6px; }
+.tab-dirty { flex: 0 0 7px; width: 7px; height: 7px; border-radius: 50%; background: var(--violet); box-shadow: 0 0 0 2px rgba(112,67,239,.10); }
+.global-action:disabled { opacity: .38; cursor: default; }
+.selection-rect--highlight { border-color: rgba(206,150,0,.95); background: rgba(255,216,74,.28); }
+.selection-rect--underline { border: 0; border-bottom: 3px solid rgba(112,67,239,.9); background: rgba(112,67,239,.05); }
+.selection-rect--strikeout { border: 0; background:
+  linear-gradient(to bottom, transparent calc(50% - 1px), rgba(177,46,67,.9) calc(50% - 1px), rgba(177,46,67,.9) calc(50% + 1px), transparent calc(50% + 1px)),
+  rgba(177,46,67,.04); }
+.markup-highlight, .markup-underline, .markup-strikeout { cursor: crosshair; }

@@ -19,6 +19,19 @@ pub struct OpenDocument {
     pub has_signatures: bool,
     pub has_forms: bool,
     pub revision: u64,
+    pub working_path: Option<PathBuf>,
+    pub undo_stack: Vec<Option<PathBuf>>,
+    pub redo_stack: Vec<Option<PathBuf>>,
+}
+
+impl OpenDocument {
+    pub fn active_path(&self) -> &std::path::Path {
+        self.working_path.as_deref().unwrap_or(&self.path)
+    }
+
+    pub fn is_dirty(&self) -> bool {
+        self.working_path.is_some()
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]

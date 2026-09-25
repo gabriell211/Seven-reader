@@ -417,7 +417,8 @@ fn layer_list(document: &Document) -> Vec<LayerInfo> {
     let base_on = default
         .and_then(|dictionary| dictionary.get(b"BaseState").ok())
         .and_then(|object| object.as_name().ok())
-        .is_none_or(|name| name != b"OFF");
+        .map(|name| name != b"OFF")
+        .unwrap_or(true);
 
     let mut depths = HashMap::new();
     if let Some(order) = default.and_then(|dictionary| dictionary.get(b"Order").ok()) {
@@ -1245,35 +1246,175 @@ pub fn rename_bookmark(input: &Path, output: &Path, object_id: &str, title: &str
     atomic_save(document, output)
 }
 
-pub fn set_layer_visibility(input: &Path, output: &Path, object_id: &str, visible: bool) -> Result<(), SevenError> {
-    let mut document = Document::load(input).map_err(|e| SevenError::PdfOpen(e.to_string()))?;
-    let target = parse_id(object_id)?;
-    let root_id = document.trailer.get(b"Root").map_err(|e| SevenError::Operation(e.to_string()))?.as_reference().map_err(|e| SevenError::Operation(e.to_string()))?;
-    let oc_id = document.get_object(root_id).map_err(|e| SevenError::Operation(e.to_string()))?.as_dict().map_err(|e| SevenError::Operation(e.to_string()))?.get(b"OCProperties").map_err(|_| SevenError::OperationRejected("Documento sem OCGs".into()))?.as_reference().map_err(|e| SevenError::Operation(e.to_string()))?;
-    let default_id = {
-        let oc = document.get_object(oc_id).map_err(|e| SevenError::Operation(e.to_string()))?.as_dict().map_err(|e| SevenError::Operation(e.to_string()))?;
-        match oc.get(b"D") {
-            Ok(Object::Reference(id)) => Some(*id),
-            _ => None,
+fn ensure_oc_config_ids(document: &mut Document) -> Result<(ObjectId, ObjectId), SevenError> {
+    let root_id = document
+        .trailer
+        .get(b"Root")
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_reference()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+
+    let existing_oc = document
+        .get_object(root_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .get(b"OCProperties")
+        .map_err(|_| SevenError::OperationRejected("Documento sem OCGs".into()))?
+        .clone();
+
+    let oc_id = match existing_oc {
+        Object::Reference(id) => id,
+        Object::Dictionary(dictionary) => {
+            let id = document.add_object(dictionary);
+            document
+                .get_object_mut(root_id)
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .as_dict_mut()
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .set("OCProperties", id);
+            id
+        }
+        _ => return Err(SevenError::Operation("OCProperties inválido".into())),
+    };
+
+    let existing_default = document
+        .get_object(oc_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .get(b"D")
+        .ok()
+        .cloned();
+
+    let default_id = match existing_default {
+        Some(Object::Reference(id)) => id,
+        Some(Object::Dictionary(dictionary)) => {
+            let id = document.add_object(dictionary);
+            document
+                .get_object_mut(oc_id)
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .as_dict_mut()
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .set("D", id);
+            id
+        }
+        _ => {
+            let id = document.add_object(dictionary! { "BaseState" => "ON" });
+            document
+                .get_object_mut(oc_id)
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .as_dict_mut()
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .set("D", id);
+            id
         }
     };
-    if let Some(default_id) = default_id {
-        let d = document.get_object_mut(default_id).map_err(|e| SevenError::Operation(e.to_string()))?.as_dict_mut().map_err(|e| SevenError::Operation(e.to_string()))?;
-        set_visibility_arrays(d, target, visible);
-    } else {
-        let oc = document.get_object_mut(oc_id).map_err(|e| SevenError::Operation(e.to_string()))?.as_dict_mut().map_err(|e| SevenError::Operation(e.to_string()))?;
-        let d = match oc.get_mut(b"D") {
-            Ok(Object::Dictionary(d)) => d,
-            _ => {
-                oc.set("D", Dictionary::new());
-                match oc.get_mut(b"D") {
-                    Ok(Object::Dictionary(d)) => d,
-                    _ => return Err(SevenError::Operation("Falha no estado OCG".into())),
-                }
-            }
-        };
-        set_visibility_arrays(d, target, visible);
+
+    Ok((oc_id, default_id))
+}
+
+fn set_usage_state(
+    usage: &mut Dictionary,
+    category_key: &str,
+    state_key: &str,
+    state: &str,
+) -> Result<(), SevenError> {
+    if !matches!(state, "on" | "off" | "unchanged") {
+        return Err(SevenError::OperationRejected("Override de camada inválido".into()));
     }
+    let mut category = usage
+        .get(category_key.as_bytes())
+        .ok()
+        .and_then(|object| object.as_dict().ok())
+        .cloned()
+        .unwrap_or_default();
+    if state == "unchanged" {
+        category.remove(state_key.as_bytes());
+    } else {
+        category.set(
+            state_key,
+            Object::Name(state.to_ascii_uppercase().into_bytes()),
+        );
+    }
+    if category.is_empty() {
+        usage.remove(category_key.as_bytes());
+    } else {
+        usage.set(category_key, category);
+    }
+    Ok(())
+}
+
+pub fn update_layer_properties(
+    input: &Path,
+    output: &Path,
+    update: LayerPropertiesUpdate,
+) -> Result<(), SevenError> {
+    let name = update.name.trim();
+    if name.is_empty() || name.chars().count() > 500 {
+        return Err(SevenError::OperationRejected("Nome da camada inválido".into()));
+    }
+    let target = parse_id(&update.object_id)?;
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let (_, default_id) = ensure_oc_config_ids(&mut document)?;
+
+    {
+        let layer = document
+            .get_object_mut(target)
+            .map_err(|_| SevenError::OperationRejected("OCG não encontrada".into()))?
+            .as_dict_mut()
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+        layer.set("Name", Object::string_literal(name));
+        let mut usage = layer
+            .get(b"Usage")
+            .ok()
+            .and_then(|object| object.as_dict().ok())
+            .cloned()
+            .unwrap_or_default();
+        set_usage_state(&mut usage, "View", "ViewState", &update.view_state)?;
+        set_usage_state(&mut usage, "Print", "PrintState", &update.print_state)?;
+        set_usage_state(&mut usage, "Export", "ExportState", &update.export_state)?;
+        if usage.is_empty() {
+            layer.remove(b"Usage");
+        } else {
+            layer.set("Usage", usage);
+        }
+    }
+
+    let default = document
+        .get_object_mut(default_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    let mut locked = default
+        .get(b"Locked")
+        .ok()
+        .and_then(|object| object.as_array().ok())
+        .cloned()
+        .unwrap_or_default();
+    locked.retain(|value| value.as_reference().ok() != Some(target));
+    if update.locked {
+        locked.push(Object::Reference(target));
+    }
+    if locked.is_empty() {
+        default.remove(b"Locked");
+    } else {
+        default.set("Locked", locked);
+    }
+
+    atomic_save(document, output)
+}
+
+pub fn set_layer_visibility(input: &Path, output: &Path, object_id: &str, visible: bool) -> Result<(), SevenError> {
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let target = parse_id(object_id)?;
+    let (_, default_id) = ensure_oc_config_ids(&mut document)?;
+    let default = document
+        .get_object_mut(default_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    set_visibility_arrays(default, target, visible);
     atomic_save(document, output)
 }
 

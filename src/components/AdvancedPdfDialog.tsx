@@ -14,6 +14,9 @@ interface AdvancedPdfDialogProps {
   onReload: () => void;
   onAddBookmark: (title: string, pageIndex: number) => void;
   onRenameBookmark: (objectId: string, title: string) => void;
+  onDeleteBookmark: (objectId: string) => void;
+  onMoveBookmark: (objectId: string, direction: "up" | "down" | "indent" | "outdent") => void;
+  onSetBookmarkOpen: (objectId: string, open: boolean) => void;
   onAddAttachment: (filePath: string, displayName: string, description: string) => void;
   onUpdateAttachment: (objectId: string, name: string, description: string) => void;
   onRemoveAttachment: (objectId: string) => void;
@@ -37,6 +40,9 @@ export function AdvancedPdfDialog({
   onReload,
   onAddBookmark,
   onRenameBookmark,
+  onDeleteBookmark,
+  onMoveBookmark,
+  onSetBookmarkOpen,
   onAddAttachment,
   onUpdateAttachment,
   onRemoveAttachment,
@@ -124,10 +130,23 @@ export function AdvancedPdfDialog({
             </div>
             <div className="structure-list">
               {report.bookmarks.map((bookmark)=>(
-                <div className="structure-row" key={bookmark.objectId} style={{paddingLeft:12+bookmark.depth*18}}>
+                <div className="bookmark-row" key={bookmark.objectId} style={{paddingLeft:12+bookmark.depth*18}}>
+                  <button className="bookmark-expand" disabled={!bookmark.hasChildren} onClick={()=>bookmark.hasChildren&&onSetBookmarkOpen(bookmark.objectId,!bookmark.open)} title={bookmark.open?"Recolher":"Expandir"}>
+                    {bookmark.hasChildren ? (bookmark.open ? "▾" : "▸") : "·"}
+                  </button>
                   <SevenIcon name="bookmark"/>
-                  <div><input value={rename[bookmark.objectId]??bookmark.title} onChange={(e)=>setRename(c=>({...c,[bookmark.objectId]:e.target.value}))}/><small>{bookmark.pageIndex!==undefined?`Página ${bookmark.pageIndex+1}`:"Destino não resolvido"} · {bookmark.open?"expandido":"recolhido"}</small></div>
-                  <button onClick={()=>onRenameBookmark(bookmark.objectId,rename[bookmark.objectId]??bookmark.title)}>Salvar nome</button>
+                  <div className="bookmark-main">
+                    <input value={rename[bookmark.objectId]??bookmark.title} onChange={(e)=>setRename(current=>({...current,[bookmark.objectId]:e.target.value}))}/>
+                    <small>{bookmark.pageIndex!==undefined?`Página ${bookmark.pageIndex+1}`:"Destino não resolvido"} · nível {bookmark.depth+1}</small>
+                  </div>
+                  <div className="bookmark-actions">
+                    <button title="Subir" onClick={()=>onMoveBookmark(bookmark.objectId,"up")}>↑</button>
+                    <button title="Descer" onClick={()=>onMoveBookmark(bookmark.objectId,"down")}>↓</button>
+                    <button title="Tornar filho do marcador anterior" onClick={()=>onMoveBookmark(bookmark.objectId,"indent")}>→</button>
+                    <button title="Subir um nível" disabled={!bookmark.parentObjectId} onClick={()=>onMoveBookmark(bookmark.objectId,"outdent")}>←</button>
+                    <button title="Salvar nome" onClick={()=>onRenameBookmark(bookmark.objectId,rename[bookmark.objectId]??bookmark.title)}>Salvar</button>
+                    <button className="danger-quiet" title="Excluir marcador e filhos" onClick={()=>onDeleteBookmark(bookmark.objectId)}>Excluir</button>
+                  </div>
                 </div>
               ))}
               {report.bookmarks.length===0&&<div className="empty-panel">Nenhum marcador no outline.</div>}

@@ -401,6 +401,51 @@ export interface LayerInfo {
   intent: string[];
 }
 
+export interface PagePreflight {
+  pageIndex: number;
+  widthPt: number;
+  heightPt: number;
+  mediaBox: [number, number, number, number];
+  cropBox?: [number, number, number, number];
+  trimBox?: [number, number, number, number];
+  bleedBox?: [number, number, number, number];
+  artBox?: [number, number, number, number];
+  rotation: number;
+  annotations: number;
+}
+
+export interface FontPreflight {
+  objectId: string;
+  name: string;
+  subtype: string;
+  embedded: boolean;
+  subset: boolean;
+}
+
+export interface PrintPreflightReport {
+  pdfVersion: string;
+  pageCount: number;
+  hasOutputIntent: boolean;
+  usesDeviceRgb: boolean;
+  usesDeviceCmyk: boolean;
+  usesDeviceGray: boolean;
+  usesIcc: boolean;
+  hasTransparency: boolean;
+  hasOverprint: boolean;
+  spotColors: string[];
+  fonts: FontPreflight[];
+  pages: PagePreflight[];
+  warnings: string[];
+}
+
+export interface PageBoxUpdate {
+  pageStart: number;
+  pageEnd: number;
+  trimInsetPt: number;
+  bleedInsetPt: number;
+  cropToTrim: boolean;
+}
+
 export interface PdfActionInfo {
   objectId: string;
   actionType: string;

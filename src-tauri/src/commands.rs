@@ -109,6 +109,61 @@ pub async fn search_document_advanced(
 }
 
 #[tauri::command]
+pub async fn extract_text_in_rect(
+    state: State<'_, AppState>,
+    document_id: String,
+    page_index: usize,
+    rect: pdf::NormalizedRect,
+) -> CommandResult<pdf::TextSelectionResult> {
+    let document = state
+        .documents
+        .lock()
+        .get(&document_id)
+        .cloned()
+        .ok_or_else(|| ErrorPayload::from(SevenError::DocumentNotOpen))?;
+    let snapshot = AppState {
+        documents: state.documents.clone(),
+        jobs: state.jobs.clone(),
+        cache_dir: state.cache_dir.clone(),
+        resource_dir: state.resource_dir.clone(),
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        pdf::extract_text_in_rect(&snapshot, &document, page_index, rect)
+    })
+    .await
+    .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub async fn crop_page_selection(
+    state: State<'_, AppState>,
+    document_id: String,
+    page_index: usize,
+    target_width: u16,
+    rect: pdf::NormalizedRect,
+) -> CommandResult<String> {
+    let document = state
+        .documents
+        .lock()
+        .get(&document_id)
+        .cloned()
+        .ok_or_else(|| ErrorPayload::from(SevenError::DocumentNotOpen))?;
+    let snapshot = AppState {
+        documents: state.documents.clone(),
+        jobs: state.jobs.clone(),
+        cache_dir: state.cache_dir.clone(),
+        resource_dir: state.resource_dir.clone(),
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        pdf::crop_rendered_page(&snapshot, &document, page_index, target_width, rect)
+    })
+    .await
+    .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn save_document_as(
     state: State<'_, AppState>,
     document_id: String,
@@ -131,6 +186,18 @@ pub fn create_blank_document(
 ) -> CommandResult<()> {
     let output = jobs::validated_output(&destination, "pdf").map_err(ErrorPayload::from)?;
     pdf::create_blank_pdf(&output, &page_size, page_count).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn create_pdf_from_clipboard_image(
+    destination: String,
+    rgba: Vec<u8>,
+    width: u32,
+    height: u32,
+    dpi: u16,
+) -> CommandResult<()> {
+    let output = jobs::validated_output(&destination, "pdf").map_err(ErrorPayload::from)?;
+    pdf::create_pdf_from_rgba(&output, rgba, width, height, dpi).map_err(ErrorPayload::from)
 }
 
 #[tauri::command]

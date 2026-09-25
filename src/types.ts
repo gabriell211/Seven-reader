@@ -401,6 +401,14 @@ export interface LayerInfo {
   intent: string[];
 }
 
+export interface PdfActionInfo {
+  objectId: string;
+  actionType: string;
+  target: string;
+  blocked: boolean;
+  automatic: boolean;
+}
+
 export interface AdvancedPdfReport {
   bookmarks: BookmarkInfo[];
   attachments: AttachmentInfo[];

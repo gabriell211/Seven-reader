@@ -47,6 +47,7 @@ import {
   openDocument,
   printDocument,
   renderPage,
+  restoreDocumentSession,
   revealInFileManager,
   deleteAnnotation,
   findRedactionMatches,
@@ -369,10 +370,16 @@ export default function App() {
   }, [document, page, zoom, openTabs, closedTabs]);
 
   useEffect(() => {
-    if (!native) return;
+    if (!native || !openTabs.length) return;
     const session = openTabs.map((tab) => {
       const view = tabViews[tab.id] ?? (tab.id === document?.id ? { page, zoom } : { page: 0, zoom: settings.defaultZoom });
-      return { path: tab.path, page: view.page, zoom: view.zoom };
+      return {
+        path: tab.path,
+        activePath: tab.activePath,
+        dirty: tab.dirty,
+        page: view.page,
+        zoom: view.zoom,
+      };
     });
     localStorage.setItem(SESSION_KEY, JSON.stringify(session));
   }, [native, openTabs, tabViews, document?.id, page, zoom, settings.defaultZoom]);
@@ -494,21 +501,60 @@ export default function App() {
       const raw = localStorage.getItem(SESSION_KEY);
       const parsed = raw ? JSON.parse(raw) : [];
       const session = Array.isArray(parsed)
-        ? parsed.filter((item): item is { path: string; page: number; zoom: number } =>
-            item && typeof item.path === "string" && typeof item.page === "number" && typeof item.zoom === "number")
+        ? parsed.filter((item): item is {
+            path: string;
+            activePath?: string;
+            dirty?: boolean;
+            page: number;
+            zoom: number;
+          } =>
+            item
+            && typeof item.path === "string"
+            && typeof item.page === "number"
+            && typeof item.zoom === "number")
         : [];
+
       if (!session.length) {
         const path = localStorage.getItem("seven-reader:last-document");
         if (path) await openPath(path);
         return;
       }
+
+      let restored = 0;
+      let failed = 0;
       for (const item of session.slice(0, 20)) {
-        await openPath(item.path, {
-          page: Math.max(0, Math.trunc(item.page)),
-          zoom: Math.max(25, Math.min(400, item.zoom)),
-        });
+        try {
+          const view = {
+            page: Math.max(0, Math.trunc(item.page)),
+            zoom: Math.max(25, Math.min(400, item.zoom)),
+          };
+          const summary =
+            item.dirty && item.activePath && item.activePath !== item.path
+              ? await restoreDocumentSession(item.path, item.activePath)
+              : await openDocument(item.path);
+
+          setOpenTabs((current) => current.some((tab) => tab.path === summary.path)
+            ? current
+            : [...current, summary]);
+          setTabViews((current) => ({ ...current, [summary.id]: view }));
+          rememberRecent(summary);
+          localStorage.setItem("seven-reader:last-document", summary.path);
+          await activateDocument(summary, view);
+          restored += 1;
+        } catch {
+          failed += 1;
+        }
       }
-      setNotice(`Sessão restaurada · ${session.length} documento(s).`);
+
+      if (restored) {
+        setNotice(
+          failed
+            ? `Sessão recuperada · ${restored} documento(s); ${failed} não puderam ser restaurados.`
+            : `Sessão recuperada · ${restored} documento(s).`,
+        );
+      } else if (failed) {
+        setNotice("Nenhum documento da sessão anterior pôde ser restaurado.");
+      }
     } catch (error) {
       setNotice(`Não foi possível restaurar toda a sessão: ${errorMessage(error)}`);
     }
@@ -603,6 +649,7 @@ export default function App() {
 
     const remaining = openTabs.filter((tab) => !ids.includes(tab.id));
     setOpenTabs(remaining);
+    if (!remaining.length) localStorage.removeItem(SESSION_KEY);
     setTabViews((current) => {
       const next = { ...current };
       ids.forEach((id) => delete next[id]);
@@ -678,10 +725,28 @@ export default function App() {
       }
 
       if (prompt.scope === "quit") {
+        if (settings.reopenLastDocument && openTabs.length) {
+          const cleanSession = openTabs.map((tab) => {
+            const view = tabViews[tab.id] ?? {
+              page: document?.id === tab.id ? page : 0,
+              zoom: document?.id === tab.id ? zoom : settings.defaultZoom,
+            };
+            return {
+              path: tab.path,
+              activePath: tab.path,
+              dirty: false,
+              page: view.page,
+              zoom: view.zoom,
+            };
+          });
+          localStorage.setItem(SESSION_KEY, JSON.stringify(cleanSession));
+        } else {
+          localStorage.removeItem(SESSION_KEY);
+        }
+
         for (const tab of openTabs) {
           try { await closeDocument(tab.id); } catch { /* continue cleanup */ }
         }
-        localStorage.removeItem(SESSION_KEY);
         setClosePrompt(null);
         await getCurrentWebviewWindow().destroy();
         return;

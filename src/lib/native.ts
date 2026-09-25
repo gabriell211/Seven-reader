@@ -28,6 +28,7 @@ import type {
   LinkInfo,
   LinkUpdate,
   MetadataUpdate,
+  NamedDestinationInfo,
   NewFormField,
   NormalizedRect,
   OcrOptions,
@@ -264,6 +265,30 @@ export async function sessionEditAddImage(
   placement: ImagePlacement,
 ): Promise<DocumentSummary> {
   return invoke<DocumentSummary>("session_edit_add_image", { documentId, placement });
+}
+
+export async function listPdfNamedDestinations(
+  documentId: string,
+): Promise<NamedDestinationInfo[]> {
+  return invoke<NamedDestinationInfo[]>("list_pdf_named_destinations", { documentId });
+}
+
+export async function sessionUpsertPdfNamedDestination(
+  documentId: string,
+  oldName: string | undefined,
+  name: string,
+  pageIndex: number,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_upsert_pdf_named_destination", {
+    documentId, oldName: oldName ?? null, name, pageIndex,
+  });
+}
+
+export async function sessionRemovePdfNamedDestination(
+  documentId: string,
+  name: string,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_remove_pdf_named_destination", { documentId, name });
 }
 
 export async function listPdfLinks(

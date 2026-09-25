@@ -19,6 +19,14 @@ pub struct FormFieldInfo {
     pub page_index: Option<usize>,
     pub rect: Option<[f64; 4]>,
     pub options: Vec<String>,
+    pub border_color: Option<[f64; 3]>,
+    pub fill_color: Option<[f64; 3]>,
+    pub border_width: f64,
+    pub border_style: String,
+    pub font_size: f64,
+    pub text_color: [f64; 3],
+    pub rotation: i32,
+    pub visibility: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -63,6 +71,14 @@ pub struct FormFieldUpdate {
     pub width: f64,
     pub height: f64,
     pub options: Vec<String>,
+    pub border_color: Option<[f64; 3]>,
+    pub fill_color: Option<[f64; 3]>,
+    pub border_width: f64,
+    pub border_style: String,
+    pub font_size: f64,
+    pub text_color: [f64; 3],
+    pub rotation: i32,
+    pub visibility: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -166,6 +182,118 @@ fn field_options(dictionary: &Dictionary) -> Vec<String> {
     values.iter().map(object_text).filter(|value| !value.is_empty()).collect()
 }
 
+fn color_array(object: Option<&Object>) -> Option<[f64; 3]> {
+    let values = object?.as_array().ok()?;
+    if values.len() < 3 { return None; }
+    let component = |value: &Object| -> Option<f64> {
+        match value {
+            Object::Integer(value) => Some(*value as f64),
+            Object::Real(value) => Some(f64::from(*value)),
+            _ => None,
+        }
+    };
+    Some([
+        component(&values[0])?,
+        component(&values[1])?,
+        component(&values[2])?,
+    ])
+}
+
+fn appearance_info(dictionary: &Dictionary) -> (
+    Option<[f64; 3]>,
+    Option<[f64; 3]>,
+    f64,
+    String,
+    f64,
+    [f64; 3],
+    i32,
+    String,
+) {
+    let mk = dictionary
+        .get(b"MK")
+        .ok()
+        .and_then(|object| object.as_dict().ok());
+    let bs = dictionary
+        .get(b"BS")
+        .ok()
+        .and_then(|object| object.as_dict().ok());
+
+    let border_color = mk.and_then(|value| color_array(value.get(b"BC").ok()));
+    let fill_color = mk.and_then(|value| color_array(value.get(b"BG").ok()));
+    let rotation = mk
+        .and_then(|value| value.get(b"R").ok())
+        .and_then(|value| value.as_i64().ok())
+        .unwrap_or(0) as i32;
+    let border_width = bs
+        .and_then(|value| value.get(b"W").ok())
+        .and_then(|value| match value {
+            Object::Integer(value) => Some(*value as f64),
+            Object::Real(value) => Some(f64::from(*value)),
+            _ => None,
+        })
+        .unwrap_or(1.0);
+    let border_style = bs
+        .and_then(|value| value.get(b"S").ok())
+        .and_then(|value| value.as_name().ok())
+        .map(|name| String::from_utf8_lossy(name).into_owned())
+        .unwrap_or_else(|| "S".into());
+
+    let da = dictionary.get(b"DA").ok().map(object_text).unwrap_or_default();
+    let font_regex = regex::Regex::new(r"(?P<size>-?\d+(?:\.\d+)?)\s+Tf").ok();
+    let rgb_regex = regex::Regex::new(r"(?P<r>-?\d+(?:\.\d+)?)\s+(?P<g>-?\d+(?:\.\d+)?)\s+(?P<b>-?\d+(?:\.\d+)?)\s+rg").ok();
+    let gray_regex = regex::Regex::new(r"(?P<g>-?\d+(?:\.\d+)?)\s+g").ok();
+    let font_size = font_regex
+        .as_ref()
+        .and_then(|regex| regex.captures(&da))
+        .and_then(|captures| captures.name("size"))
+        .and_then(|value| value.as_str().parse::<f64>().ok())
+        .unwrap_or(10.0);
+    let text_color = rgb_regex
+        .as_ref()
+        .and_then(|regex| regex.captures(&da))
+        .and_then(|captures| {
+            Some([
+                captures.name("r")?.as_str().parse().ok()?,
+                captures.name("g")?.as_str().parse().ok()?,
+                captures.name("b")?.as_str().parse().ok()?,
+            ])
+        })
+        .or_else(|| {
+            gray_regex
+                .as_ref()
+                .and_then(|regex| regex.captures(&da))
+                .and_then(|captures| captures.name("g"))
+                .and_then(|value| value.as_str().parse::<f64>().ok())
+                .map(|gray| [gray, gray, gray])
+        })
+        .unwrap_or([0.0, 0.0, 0.0]);
+
+    let annotation_flags = dictionary
+        .get(b"F")
+        .ok()
+        .and_then(|value| value.as_i64().ok())
+        .unwrap_or(4);
+    let hidden = annotation_flags & 2 != 0 || annotation_flags & 32 != 0;
+    let printable = annotation_flags & 4 != 0;
+    let visibility = match (hidden, printable) {
+        (false, true) => "visible",
+        (false, false) => "visible-no-print",
+        (true, true) => "hidden-printable",
+        (true, false) => "hidden",
+    }.to_owned();
+
+    (
+        border_color,
+        fill_color,
+        border_width,
+        border_style,
+        font_size,
+        text_color,
+        rotation,
+        visibility,
+    )
+}
+
 fn form_id(document: &Document) -> Option<ObjectId> {
     document.catalog().ok()?.get(b"AcroForm").ok()?.as_reference().ok()
 }
@@ -211,6 +339,14 @@ pub fn list_fields(path: &Path) -> Result<Vec<FormFieldInfo>, SevenError> {
             page_index: field_page_index(&document, dictionary),
             rect: rect_value(dictionary),
             options: field_options(dictionary),
+            border_color: appearance_info(dictionary).0,
+            fill_color: appearance_info(dictionary).1,
+            border_width: appearance_info(dictionary).2,
+            border_style: appearance_info(dictionary).3,
+            font_size: appearance_info(dictionary).4,
+            text_color: appearance_info(dictionary).5,
+            rotation: appearance_info(dictionary).6,
+            visibility: appearance_info(dictionary).7,
         });
     }
     Ok(fields)
@@ -473,6 +609,71 @@ pub fn update_field(
             );
         }
     }
+
+    for component in update.text_color
+        .iter()
+        .chain(update.border_color.iter().flatten())
+        .chain(update.fill_color.iter().flatten())
+    {
+        if !(0.0..=1.0).contains(component) {
+            return Err(SevenError::OperationRejected("Componentes de cor devem ficar entre 0 e 1".into()));
+        }
+    }
+    if !(0.0..=20.0).contains(&update.border_width) {
+        return Err(SevenError::OperationRejected("Espessura da borda inválida".into()));
+    }
+    if !(1.0..=200.0).contains(&update.font_size) {
+        return Err(SevenError::OperationRejected("Tamanho da fonte inválido".into()));
+    }
+    if !matches!(update.border_style.as_str(), "S" | "D" | "B" | "I" | "U") {
+        return Err(SevenError::OperationRejected("Estilo de borda inválido".into()));
+    }
+    if !matches!(update.rotation, 0 | 90 | 180 | 270) {
+        return Err(SevenError::OperationRejected("Rotação deve ser 0, 90, 180 ou 270".into()));
+    }
+
+    let mut mk = field
+        .get(b"MK")
+        .ok()
+        .and_then(|object| object.as_dict().ok())
+        .cloned()
+        .unwrap_or_default();
+    match update.border_color {
+        Some(color) => mk.set("BC", vec![color[0].into(), color[1].into(), color[2].into()]),
+        None => { mk.remove(b"BC"); }
+    }
+    match update.fill_color {
+        Some(color) => mk.set("BG", vec![color[0].into(), color[1].into(), color[2].into()]),
+        None => { mk.remove(b"BG"); }
+    }
+    mk.set("R", i64::from(update.rotation));
+    field.set("MK", mk);
+    field.set("BS", dictionary! {
+        "Type" => "Border",
+        "W" => update.border_width,
+        "S" => Object::Name(update.border_style.as_bytes().to_vec()),
+    });
+    field.set(
+        "DA",
+        Object::string_literal(format!(
+            "/Helv {:.2} Tf {:.4} {:.4} {:.4} rg",
+            update.font_size,
+            update.text_color[0],
+            update.text_color[1],
+            update.text_color[2],
+        )),
+    );
+
+    let mut annotation_flags = field.get(b"F").ok().and_then(|value| value.as_i64().ok()).unwrap_or(0);
+    annotation_flags &= !(2i64 | 4i64 | 32i64);
+    match update.visibility.as_str() {
+        "visible" => annotation_flags |= 4,
+        "visible-no-print" => {}
+        "hidden" => annotation_flags |= 2,
+        "hidden-printable" => annotation_flags |= 2 | 4,
+        _ => return Err(SevenError::OperationRejected("Visibilidade inválida".into())),
+    }
+    field.set("F", annotation_flags);
 
     if let Some(acroform_id) = form_id(&document) {
         if let Ok(acroform) = document.get_object_mut(acroform_id).and_then(Object::as_dict_mut) {

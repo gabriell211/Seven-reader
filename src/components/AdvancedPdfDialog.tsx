@@ -23,6 +23,8 @@ interface AdvancedPdfDialogProps {
   onExtractAttachment: (objectId: string, destination: string) => void;
   onLayerVisibility: (objectId: string, visible: boolean) => void;
   onUpdateLayer: (update: LayerPropertiesUpdate) => void;
+  onApplyLayerOverrides: (context: "view" | "print" | "export") => void;
+  onResetLayerVisibility: () => void;
 }
 
 function fileSize(value?: number): string {
@@ -50,6 +52,8 @@ export function AdvancedPdfDialog({
   onExtractAttachment,
   onLayerVisibility,
   onUpdateLayer,
+  onApplyLayerOverrides,
+  onResetLayerVisibility,
 }: AdvancedPdfDialogProps) {
   const [tab, setTab] = useState<AdvancedTab>(initialTab);
   const [bookmarkTitle, setBookmarkTitle] = useState("");
@@ -189,6 +193,12 @@ export function AdvancedPdfDialog({
 
           {!loading && report && tab==="layers" && <>
             <div className="organizer-note"><SevenIcon name="layers"/><span>Alterar visibilidade grava o estado inicial ON/OFF da OCG na sessão atual; conteúdo da layer é preservado e a ação pode ser desfeita.</span></div>
+            <div className="layer-context-toolbar">
+              <button onClick={()=>onApplyLayerOverrides("view")}>Aplicar View</button>
+              <button onClick={()=>onApplyLayerOverrides("print")}>Aplicar Print</button>
+              <button onClick={()=>onApplyLayerOverrides("export")}>Aplicar Export</button>
+              <button onClick={onResetLayerVisibility}>Reset ao BaseState</button>
+            </div>
             <div className="layer-list">
               {report.layers.map((layer)=>{
                 const edit=layerEdits[layer.objectId]??{

@@ -123,6 +123,14 @@ export async function startOcrAdvanced(
   return invoke<JobStart>("start_ocr_advanced", { input, output, options });
 }
 
+export async function startBatchOcr(
+  inputs: string[],
+  outputDirectory: string,
+  options: OcrOptions,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_batch_ocr", { inputs, outputDirectory, options });
+}
+
 export async function reviewOcrPage(
   documentId: string,
   pageIndex: number,
@@ -451,6 +459,14 @@ export async function startConvertToPdf(
 ): Promise<JobStart> {
   return invoke<JobStart>("start_convert_to_pdf", { input, outputDirectory });
 }
+
+export async function startBatchConvertToPdf(
+  inputs: string[],
+  outputDirectory: string,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_batch_convert_to_pdf", { inputs, outputDirectory });
+}
+
 
 export async function startExportPdf(
   input: string,

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { save } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import type { Capabilities, OcrOptions, OcrWord } from "../types";
 import { SevenIcon } from "./SevenIcon";
 
@@ -12,6 +12,7 @@ interface OcrDialogProps {
   loadingReview: boolean;
   onClose: () => void;
   onRunOcr: (output: string, options: OcrOptions) => void;
+  onRunBatchOcr: (inputs: string[], outputDirectory: string, options: OcrOptions) => void;
   onReview: (language: string, threshold: number) => void;
   onScan: (output: string, dpi: number) => void;
 }
@@ -25,6 +26,7 @@ export function OcrDialog({
   loadingReview,
   onClose,
   onRunOcr,
+  onRunBatchOcr,
   onReview,
   onScan,
 }: OcrDialogProps) {
@@ -42,6 +44,20 @@ export function OcrDialog({
     const output = await save({ title: "Salvar PDF com OCR", defaultPath: documentPath.replace(/\.pdf$/i, "-ocr.pdf"), filters: [{ name: "Documento PDF", extensions: ["pdf"] }] });
     if (!output) return;
     onRunOcr(output, { language, deskew, rotatePages, outputType, mode });
+  };
+
+  const runBatchOcr = async () => {
+    const selected = await open({
+      title: "Selecionar PDFs para OCR em lote",
+      multiple: true,
+      directory: false,
+      filters: [{ name: "Documentos PDF", extensions: ["pdf"] }],
+    });
+    const inputs = Array.isArray(selected) ? selected : typeof selected === "string" ? [selected] : [];
+    if (!inputs.length) return;
+    const outputDirectory = await open({ title: "Pasta de saída do OCR", directory: true, multiple: false });
+    if (typeof outputDirectory !== "string") return;
+    onRunBatchOcr(inputs, outputDirectory, { language, deskew, rotatePages, outputType, mode });
   };
 
   const scan = async () => {
@@ -68,7 +84,10 @@ export function OcrDialog({
               </div>
               <label className="toggle-row"><input type="checkbox" checked={deskew} onChange={(event) => setDeskew(event.target.checked)} /><span><strong>Corrigir inclinação</strong><small>Deskew antes do reconhecimento.</small></span></label>
               <label className="toggle-row"><input type="checkbox" checked={rotatePages} onChange={(event) => setRotatePages(event.target.checked)} /><span><strong>Detectar rotação</strong><small>Corrige orientação automaticamente.</small></span></label>
-              <button className="primary-button workflow-submit" disabled={!capabilities?.ocr.available || !documentPath} onClick={() => void runOcr()}><SevenIcon name="ocr" /> Executar OCR</button>
+              <div className="workflow-submit-group">
+                <button className="secondary-light-button" disabled={!capabilities?.ocr.available} onClick={() => void runBatchOcr()}><SevenIcon name="pages" /> OCR em vários arquivos</button>
+                <button className="primary-button" disabled={!capabilities?.ocr.available || !documentPath} onClick={() => void runOcr()}><SevenIcon name="ocr" /> Executar neste PDF</button>
+              </div>
             </>
           )}
           {tab === "review" && (
@@ -83,7 +102,7 @@ export function OcrDialog({
           {tab === "scan" && (
             <>
               <label className="workflow-field"><span>Resolução do scanner</span><div className="range-row"><input type="range" min={75} max={600} step={25} value={scanDpi} onChange={(event) => setScanDpi(Number(event.target.value))} /><strong>{scanDpi} DPI</strong></div></label>
-              <div className="organizer-note"><SevenIcon name="scan" /><span>Linux usa SANE/scanimage. Em outros sistemas o botão permanece bloqueado até o adaptador nativo correspondente estar disponível.</span></div>
+              <div className="organizer-note"><SevenIcon name="scan" /><span>Linux usa SANE/scanimage. Windows usa WIA quando o driver do scanner está disponível. A captura é local.</span></div>
               <button className="primary-button workflow-submit" disabled={!capabilities?.scanner.available} onClick={() => void scan()}><SevenIcon name="scan" /> Digitalizar uma página</button>
             </>
           )}

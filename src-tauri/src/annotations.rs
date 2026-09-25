@@ -16,7 +16,7 @@ pub struct AnnotationInput {
     pub height: f64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InkAnnotationInput {
     pub page_index: usize,

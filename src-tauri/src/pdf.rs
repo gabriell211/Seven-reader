@@ -23,6 +23,8 @@ pub struct DocumentSummary {
     pub has_signatures: bool,
     pub has_forms: bool,
     pub dirty: bool,
+    pub can_undo: bool,
+    pub can_redo: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -157,6 +159,8 @@ pub fn summary(document: &OpenDocument) -> DocumentSummary {
         has_signatures: document.has_signatures,
         has_forms: document.has_forms,
         dirty: document.is_dirty(),
+        can_undo: !document.undo_stack.is_empty(),
+        can_redo: !document.redo_stack.is_empty(),
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::error::SevenError;
+use crate::{error::SevenError, pdf::NormalizedRect};
 use lopdf::{dictionary, Dictionary, Document, Object};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
@@ -133,6 +133,68 @@ fn inherited_box(document: &Document, mut id: (u32, u16), key: &[u8]) -> Option<
         id = dictionary.get(b"Parent").ok()?.as_reference().ok()?;
     }
     None
+}
+
+pub fn add_markup_annotation_normalized(
+    input: &Path,
+    output: &Path,
+    page_index: usize,
+    kind: &str,
+    author: &str,
+    rect: NormalizedRect,
+) -> Result<(), SevenError> {
+    if !matches!(kind, "highlight" | "underline" | "strikeout") {
+        return Err(SevenError::OperationRejected(
+            "Marcação visual não suportada".into(),
+        ));
+    }
+    if author.chars().count() > 256 {
+        return Err(SevenError::OperationRejected("Autor excede o limite permitido".into()));
+    }
+    let rect = rect.validated()?;
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let page_id = page_id(&document, page_index)?;
+    let media = inherited_box(&document, page_id, b"CropBox")
+        .or_else(|| inherited_box(&document, page_id, b"MediaBox"))
+        .unwrap_or([0.0, 0.0, 612.0, 792.0]);
+    let page_width = (media[2] - media[0]).abs().max(1.0);
+    let page_height = (media[3] - media[1]).abs().max(1.0);
+
+    let x1 = media[0] + f64::from(rect.x) * page_width;
+    let x2 = media[0] + f64::from(rect.x + rect.width) * page_width;
+    let y2 = media[1] + (1.0 - f64::from(rect.y)) * page_height;
+    let y1 = media[1] + (1.0 - f64::from(rect.y + rect.height)) * page_height;
+    let subtype = annotation_subtype(kind)?;
+
+    let contents = match kind {
+        "highlight" => "Destaque",
+        "underline" => "Sublinhado",
+        _ => "Tachado",
+    };
+    let mut dictionary = dictionary! {
+        "Type" => "Annot",
+        "Subtype" => subtype,
+        "Rect" => vec![x1.into(), y1.into(), x2.into(), y2.into()],
+        "QuadPoints" => vec![
+            x1.into(), y2.into(),
+            x2.into(), y2.into(),
+            x1.into(), y1.into(),
+            x2.into(), y1.into(),
+        ],
+        "Contents" => Object::string_literal(contents),
+        "T" => Object::string_literal(author),
+        "F" => 4,
+        "C" => vec![0.96.into(), 0.78.into(), 0.18.into()],
+        "CA" => 0.38,
+    };
+    if kind != "highlight" {
+        dictionary.set("C", vec![0.44.into(), 0.26.into(), 0.94.into()]);
+        dictionary.set("CA", 0.9);
+    }
+
+    let annotation_id = document.add_object(dictionary);
+    append_page_annotation(&mut document, page_id, annotation_id)?;
+    atomic_save(document, output)
 }
 
 pub fn add_ink_annotation(

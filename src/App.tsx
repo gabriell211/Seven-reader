@@ -2694,6 +2694,7 @@ export default function App() {
       )}
       {organizerOpen && (
         <PageOrganizerDialog
+          documentId={document?.id ?? ""}
           fileName={document?.name ?? "Selecionar PDF"}
           pageCount={document?.pageCount}
           onClose={() => setOrganizerOpen(false)}

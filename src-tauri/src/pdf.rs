@@ -15,6 +15,7 @@ use std::{fs, path::{Path, PathBuf}};
 pub struct DocumentSummary {
     pub id: String,
     pub path: String,
+    pub active_path: String,
     pub name: String,
     pub page_count: usize,
     pub file_size: u64,
@@ -151,6 +152,7 @@ pub fn summary(document: &OpenDocument) -> DocumentSummary {
     DocumentSummary {
         id: document.id.clone(),
         path: document.path.to_string_lossy().into_owned(),
+        active_path: document.active_path().to_string_lossy().into_owned(),
         name: document.name.clone(),
         page_count: document.page_count,
         file_size: document.file_size,

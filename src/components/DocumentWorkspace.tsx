@@ -10,6 +10,9 @@ interface WorkspaceProps {
   document: DocumentSummary;
   tabs: DocumentSummary[];
   rendered: RenderResult | null;
+  canReopenClosed: boolean;
+  canNavigateBack: boolean;
+  canNavigateForward: boolean;
   capabilities: Capabilities | null;
   searchHits: SearchHit[];
   page: number;
@@ -17,6 +20,11 @@ interface WorkspaceProps {
   onHome: () => void;
   onSelectTab: (document: DocumentSummary) => void;
   onCloseTab: (documentId: string) => void;
+  onCloseOtherTabs: (documentId: string) => void;
+  onReopenClosed: () => void;
+  onReorderTabs: (sourceId: string, targetId: string) => void;
+  onNavigateBack: () => void;
+  onNavigateForward: () => void;
   onOpen: () => void;
   onSaveAs: () => void;
   onPrint: () => void;
@@ -42,6 +50,9 @@ export function DocumentWorkspace({
   document,
   tabs,
   rendered,
+  canReopenClosed,
+  canNavigateBack,
+  canNavigateForward,
   capabilities,
   searchHits,
   page,
@@ -49,6 +60,11 @@ export function DocumentWorkspace({
   onHome,
   onSelectTab,
   onCloseTab,
+  onCloseOtherTabs,
+  onReopenClosed,
+  onReorderTabs,
+  onNavigateBack,
+  onNavigateForward,
   onOpen,
   onSaveAs,
   onPrint,
@@ -65,13 +81,28 @@ export function DocumentWorkspace({
   const [leftPanel, setLeftPanel] = useState<"thumbs" | "search" | null>("thumbs");
   const [search, setSearch] = useState("");
   const [toolSearch, setToolSearch] = useState("");
+  const [pageInput, setPageInput] = useState(String(page + 1));
+  const [draggedTab, setDraggedTab] = useState<string | null>(null);
+  const [tabMenu, setTabMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const stageRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const focus = () => searchRef.current?.focus();
     window.addEventListener("seven:focus-search", focus);
     return () => window.removeEventListener("seven:focus-search", focus);
   }, []);
+  useEffect(() => setPageInput(String(page + 1)), [page]);
+  useEffect(() => {
+    if (!tabMenu) return;
+    const close = () => setTabMenu(null);
+    window.addEventListener("click", close);
+    window.addEventListener("blur", close);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("blur", close);
+    };
+  }, [tabMenu]);
   const [viewerTool, setViewerTool] = useState<"select" | "hand">("select");
 
   const pageLabel = useMemo(() => `${page + 1} / ${document.pageCount}`, [page, document.pageCount]);
@@ -90,6 +121,32 @@ export function DocumentWorkspace({
     onRender(page, next);
   };
 
+  const goToPage = () => {
+    const requested = Number(pageInput);
+    if (!Number.isFinite(requested)) {
+      setPageInput(String(page + 1));
+      return;
+    }
+    const target = Math.max(1, Math.min(document.pageCount, Math.trunc(requested))) - 1;
+    onRender(target, zoom);
+  };
+
+  const fitView = (mode: "page" | "width" | "actual") => {
+    if (mode === "actual") {
+      onRender(page, 100);
+      return;
+    }
+    if (!rendered || !stageRef.current) return;
+    const scale = Math.max(0.01, zoom / 100);
+    const baseWidth = rendered.width / scale;
+    const baseHeight = rendered.height / scale;
+    const availableWidth = Math.max(320, stageRef.current.clientWidth - 96);
+    const availableHeight = Math.max(320, stageRef.current.clientHeight - 132);
+    const widthZoom = (availableWidth / baseWidth) * 100;
+    const pageZoom = Math.min(widthZoom, (availableHeight / baseHeight) * 100);
+    onRender(page, Math.max(25, Math.min(400, mode === "width" ? widthZoom : pageZoom)));
+  };
+
   const submitSearch = () => {
     onSearch(search);
     setLeftPanel("search");
@@ -106,6 +163,19 @@ export function DocumentWorkspace({
               className={tab.id === document.id ? "document-tab active" : "document-tab"}
               role="tab"
               aria-selected={tab.id === document.id}
+              draggable
+              onDragStart={() => setDraggedTab(tab.id)}
+              onDragEnd={() => setDraggedTab(null)}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                if (draggedTab) onReorderTabs(draggedTab, tab.id);
+                setDraggedTab(null);
+              }}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                setTabMenu({ id: tab.id, x: event.clientX, y: event.clientY });
+              }}
             >
               <button className="tab-select" onClick={() => onSelectTab(tab)} title={tab.path}>
                 <span className="tab-file-icon">PDF</span>
@@ -116,6 +186,9 @@ export function DocumentWorkspace({
               </button>
             </div>
           ))}
+          <button className="tab-add" onClick={onOpen} aria-label="Abrir outro PDF" title="Abrir outro PDF">
+            <SevenIcon name="create" />
+          </button>
         </div>
         <div className="topbar-spacer" />
         <label className="workspace-search">
@@ -208,10 +281,10 @@ export function DocumentWorkspace({
           </aside>
         )}
 
-        <main className="document-stage">
+        <main className="document-stage" ref={stageRef}>
           <div className="document-canvas">
             {rendered ? (
-              <div className="rendered-page" style={{ width: rendered.width * (zoom / 100) }}>
+              <div className="rendered-page" style={{ width: rendered.width }}>
                 <img src={nativeAssetUrl(rendered.cachePath)} alt={`Página ${page + 1}`} draggable={false} />
               </div>
             ) : (
@@ -224,21 +297,47 @@ export function DocumentWorkspace({
             <button className={viewerTool === "hand" ? "active" : ""} aria-label="Mão" onClick={() => setViewerTool("hand")}><SevenIcon name="hand" /></button>
             <span />
             <button aria-label="Comentário" onClick={() => onTool("comment")}><SevenIcon name="comment" /></button>
-            <button aria-label="Destaque" disabled><SevenIcon name="highlight" /></button>
+            <button aria-label="Destaque" onClick={() => onTool("comment")} title="Abrir comentários e marcações"><SevenIcon name="highlight" /></button>
             <button aria-label="Desenho" disabled><SevenIcon name="draw" /></button>
-            <button aria-label="Assinatura" disabled><SevenIcon name="sign" /></button>
+            <button aria-label="Assinatura" onClick={() => onTool("fill-sign")}><SevenIcon name="sign" /></button>
           </div>
 
           <div className="view-controls">
+            <button aria-label="Voltar à visualização anterior" disabled={!canNavigateBack} onClick={onNavigateBack}><SevenIcon name="history" /></button>
+            <button aria-label="Avançar à visualização seguinte" disabled={!canNavigateForward} onClick={onNavigateForward}><SevenIcon name="chevronRight" /></button>
+            <i />
+            <button aria-label="Primeira página" disabled={page === 0} onClick={() => onRender(0, zoom)}><span className="edge-page">«</span></button>
             <button aria-label="Página anterior" disabled={page === 0} onClick={() => onRender(page - 1, zoom)}><SevenIcon name="chevronLeft" /></button>
-            <span className="page-indicator">{pageLabel}</span>
+            <label className="page-jump" title={`${document.pageCount} páginas`}>
+              <input
+                value={pageInput}
+                onChange={(event) => setPageInput(event.target.value.replace(/[^0-9]/g, ""))}
+                onKeyDown={(event) => event.key === "Enter" && goToPage()}
+                onBlur={goToPage}
+                aria-label="Ir para página"
+              />
+              <span>/ {document.pageCount}</span>
+            </label>
             <button aria-label="Próxima página" disabled={page >= document.pageCount - 1} onClick={() => onRender(page + 1, zoom)}><SevenIcon name="chevronRight" /></button>
+            <button aria-label="Última página" disabled={page >= document.pageCount - 1} onClick={() => onRender(document.pageCount - 1, zoom)}><span className="edge-page">»</span></button>
+            <i />
+            <button className="view-mode-button" onClick={() => fitView("page")} title="Ajustar página">Página</button>
+            <button className="view-mode-button" onClick={() => fitView("width")} title="Ajustar largura">Largura</button>
+            <button className="view-mode-button" onClick={() => fitView("actual")} title="Tamanho real">1:1</button>
             <i />
             <button aria-label="Diminuir zoom" onClick={() => changeZoom(-10)}><SevenIcon name="zoomOut" /></button>
-            <span className="zoom-label">{zoom}%</span>
+            <span className="zoom-label">{Math.round(zoom)}%</span>
             <button aria-label="Aumentar zoom" onClick={() => changeZoom(10)}><SevenIcon name="zoomIn" /></button>
           </div>
         </main>
+
+        {tabMenu && (
+          <div className="tab-context-menu" style={{ left: tabMenu.x, top: tabMenu.y }} onClick={(event) => event.stopPropagation()}>
+            <button onClick={() => { onCloseTab(tabMenu.id); setTabMenu(null); }}>Fechar aba</button>
+            <button disabled={tabs.length <= 1} onClick={() => { onCloseOtherTabs(tabMenu.id); setTabMenu(null); }}>Fechar outras</button>
+            <button disabled={!canReopenClosed} onClick={() => { onReopenClosed(); setTabMenu(null); }}>Reabrir aba fechada</button>
+          </div>
+        )}
 
         {toolsOpen && (
           <aside className="tools-drawer">

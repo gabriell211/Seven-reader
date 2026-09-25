@@ -131,10 +131,10 @@ O Seven Reader deve seguir a mesma base tecnológica do **Seven Mail**, removend
 
 ## Frontend
 
-- React **19.2.3**
-- React DOM **19.2.3**
+- React **19.3+**
+- React DOM **19.3+**
 - TypeScript **5.9+**
-- Vite **7+**
+- Vite **8.3+**
 - `@vitejs/plugin-react`
 - Design system próprio
 - CSS moderno
@@ -147,7 +147,7 @@ O Seven Reader deve seguir a mesma base tecnológica do **Seven Mail**, removend
 - `@tauri-apps/cli` **2.11+**
 - Rust
 - Plugins oficiais do Tauri sempre que possível
-- Janelas nativas independentes
+- Múltiplas janelas de documentos quando o usuário solicitar, sem separar ferramentas do workspace principal
 - File associations
 - Drag and drop nativo
 - Diálogos nativos
@@ -1014,11 +1014,11 @@ Esses formatos devem usar adapters e detecção de capacidade. Nunca simular sup
 
 # Conversão
 
-A conversão deve ter um **workspace próprio em uma segunda janela nativa**, separado da leitura.
+A conversão deve usar um **workspace integrado à janela principal**, seguindo o mesmo modelo das demais ferramentas. O documento continua visível quando fizer sentido e tarefas longas seguem em background.
 
 ## Janela de conversão
 
-- [ ] Janela independente
+- [ ] Painel/workspace integrado à janela principal
 - [ ] Drag and drop
 - [ ] Vários arquivos
 - [ ] Fila

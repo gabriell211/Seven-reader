@@ -40,7 +40,9 @@ import {
   renamePdfBookmark,
   setPdfLayerVisibility,
   openDocument,
+  printDocument,
   renderPage,
+  revealInFileManager,
   deleteAnnotation,
   fillFormFields,
   findRedactionMatches,
@@ -268,12 +270,15 @@ export default function App() {
 
   const rememberRecent = (summary: DocumentSummary) => {
     setRecents((current) => {
+      const previous = current.find((item) => item.path === summary.path);
       const next: RecentDocument[] = [
         {
           path: summary.path,
           name: summary.name,
           pageCount: summary.pageCount,
           lastOpenedAt: Date.now(),
+          pinned: previous?.pinned ?? false,
+          favorite: previous?.favorite ?? false,
         },
         ...current.filter((item) => item.path !== summary.path),
       ].slice(0, 20);
@@ -1039,6 +1044,49 @@ export default function App() {
     }
   };
 
+  const updateRecent = (path: string, update: (item: RecentDocument) => RecentDocument) => {
+    setRecents((current) => {
+      const next = current.map((item) => item.path === path ? update(item) : item);
+      localStorage.setItem(RECENTS_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const togglePinned = (path: string) => {
+    updateRecent(path, (item) => ({ ...item, pinned: !item.pinned }));
+  };
+
+  const toggleFavorite = (path: string) => {
+    updateRecent(path, (item) => ({ ...item, favorite: !item.favorite }));
+  };
+
+  const removeRecent = (path: string) => {
+    setRecents((current) => {
+      const next = current.filter((item) => item.path !== path);
+      localStorage.setItem(RECENTS_KEY, JSON.stringify(next));
+      return next;
+    });
+    setNotice("Item removido da lista de recentes. O arquivo não foi apagado.");
+  };
+
+  const revealRecent = async (path: string) => {
+    try {
+      await revealInFileManager(path);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runPrint = async () => {
+    if (!document) return;
+    try {
+      const started = await printDocument(document.path);
+      setNotice(`Impressão enviada ao sistema · job ${started.jobId.slice(0, 8)}`);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
   const status = (
     <>
       {notice && (
@@ -1225,6 +1273,7 @@ export default function App() {
           onClose={() => void closeCurrent()}
           onOpen={() => void choosePdf()}
           onSaveAs={() => void saveAs()}
+          onPrint={() => void runPrint()}
           onRender={(nextPage, nextZoom) => void render(nextPage, nextZoom)}
           onSearch={(query) => void runSearch(query)}
           onTool={(tool) => void selectTool(tool)}
@@ -1252,6 +1301,10 @@ export default function App() {
           setRecents([]);
           setNotice("Lista de recentes limpa.");
         }}
+        onTogglePinned={togglePinned}
+        onToggleFavorite={toggleFavorite}
+        onRemoveRecent={removeRecent}
+        onRevealRecent={(path) => void revealRecent(path)}
         onTool={(tool) => void selectTool(tool)}
         onSettings={() => setSettingsOpen(true)}
       />

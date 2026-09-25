@@ -760,3 +760,17 @@ svg { width: 20px; height: 20px; }
 .settings-order-row button,.settings-inline-actions button { min-height:29px; padding:0 8px; border:1px solid #dfdee4; border-radius:7px; color:#686a73; background:white; cursor:pointer; font-size:8.5px; }
 .settings-order-row button:disabled { opacity:.35; cursor:default; }
 .settings-inline-actions { display:flex; gap:7px; flex-wrap:wrap; }
+
+.image-crop-box { margin:0; padding:13px; border:1px solid #e1e0e6; border-radius:11px; display:grid; gap:10px; background:#fafafd; }
+.image-crop-box legend { padding:0 5px; color:#555760; font-size:10px; font-weight:750; }
+.image-crop-box > small { color:#8b8d96; font-size:8.5px; }
+.four-column-fields { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+.compact-toggle { min-height:42px; }
+.image-object-list { display:grid; gap:7px; max-height:340px; overflow:auto; }
+.image-object-row { min-height:62px; padding:9px; border:1px solid #e2e1e7; border-radius:10px; display:grid; grid-template-columns:34px minmax(0,1fr) auto auto; gap:8px; align-items:center; background:white; }
+.image-object-glyph { width:32px; height:32px; border-radius:8px; display:grid; place-items:center; color:#6847c8; background:#f0ebff; }
+.image-object-glyph svg { width:15px; }
+.image-object-row > div { min-width:0; display:grid; gap:2px; }
+.image-object-row strong { font:700 10px ui-monospace,SFMono-Regular,Consolas,monospace; }
+.image-object-row small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#8c8e96; font-size:8.5px; }
+@media (max-width:720px) { .four-column-fields { grid-template-columns:repeat(2,1fr); } .image-object-row { grid-template-columns:32px 1fr; } }

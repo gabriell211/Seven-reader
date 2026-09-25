@@ -301,6 +301,24 @@ export interface NewFormField {
   visibility: "visible" | "visible-no-print" | "hidden" | "hidden-printable";
 }
 
+export interface FieldActionInfo {
+  fieldObjectId: string;
+  fieldName: string;
+  trigger: "mouse-up" | "mouse-down" | "mouse-enter" | "mouse-exit" | "focus" | "blur" | string;
+  actionType: string;
+  target: string;
+  blocked: boolean;
+}
+
+export interface FieldActionInput {
+  fieldObjectId: string;
+  trigger: "mouse-up" | "mouse-down" | "mouse-enter" | "mouse-exit" | "focus" | "blur";
+  actionType: "uri" | "goto" | "reset" | "hide" | "submit" | "javascript" | "launch";
+  target: string;
+  targetPage?: number;
+  hide: boolean;
+}
+
 export interface DuplicateFieldRequest {
   objectId: string;
   pageStart: number;

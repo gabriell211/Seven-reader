@@ -482,6 +482,75 @@ pub fn session_create_form_field(
 }
 
 #[tauri::command]
+pub fn session_add_pdf_bookmark(
+    state: State<'_, AppState>,
+    document_id: String,
+    bookmark: advanced::BookmarkInput,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "bookmark", move |input, output| {
+        advanced::add_bookmark(input, output, bookmark)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_rename_pdf_bookmark(
+    state: State<'_, AppState>,
+    document_id: String,
+    object_id: String,
+    title: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "rename-bookmark", move |input, output| {
+        advanced::rename_bookmark(input, output, &object_id, &title)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_add_pdf_attachment(
+    state: State<'_, AppState>,
+    document_id: String,
+    file_path: String,
+    display_name: String,
+    description: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "attachment", move |input, output| {
+        advanced::add_attachment(input, output, &file_path, &display_name, &description)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_set_pdf_layer_visibility(
+    state: State<'_, AppState>,
+    document_id: String,
+    object_id: String,
+    visible: bool,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "layer", move |input, output| {
+        advanced::set_layer_visibility(input, output, &object_id, visible)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_update_document_metadata(
+    state: State<'_, AppState>,
+    document_id: String,
+    update: document_ops::MetadataUpdate,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "metadata", move |input, output| {
+        document_ops::write_metadata(input, output, update)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn save_document_as(
     state: State<'_, AppState>,
     document_id: String,

@@ -1,3 +1,4 @@
+mod advanced;
 mod annotations;
 mod capabilities;
 mod commands;
@@ -57,6 +58,12 @@ pub fn run() {
             commands::edit_add_link,
             commands::edit_overlay_text,
             commands::edit_set_background,
+            commands::inspect_advanced_pdf,
+            commands::add_pdf_attachment,
+            commands::extract_pdf_attachment,
+            commands::add_pdf_bookmark,
+            commands::rename_pdf_bookmark,
+            commands::set_pdf_layer_visibility,
             commands::list_annotations,
             commands::add_annotation,
             commands::delete_annotation,

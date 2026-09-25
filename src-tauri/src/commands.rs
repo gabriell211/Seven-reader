@@ -1,4 +1,5 @@
 use crate::{
+    advanced,
     annotations,
     capabilities,
     error::{CommandResult, ErrorPayload, SevenError},
@@ -556,6 +557,70 @@ pub fn edit_set_background(
     let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
     let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
     editing::set_background(&input, &output, options).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn inspect_advanced_pdf(path: String) -> CommandResult<advanced::AdvancedPdfReport> {
+    let input = pdf::validate_pdf_path(&path).map_err(ErrorPayload::from)?;
+    advanced::inspect(&input).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn add_pdf_attachment(
+    input: String,
+    output: String,
+    file_path: String,
+    display_name: String,
+    description: String,
+) -> CommandResult<()> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    advanced::add_attachment(&input, &output, Path::new(&file_path), &display_name, &description).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn extract_pdf_attachment(
+    input: String,
+    object_id: String,
+    destination: String,
+) -> CommandResult<()> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    advanced::extract_attachment(&input, &object_id, Path::new(&destination)).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn add_pdf_bookmark(
+    input: String,
+    output: String,
+    bookmark: advanced::BookmarkInput,
+) -> CommandResult<()> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    advanced::add_bookmark(&input, &output, bookmark).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn rename_pdf_bookmark(
+    input: String,
+    output: String,
+    object_id: String,
+    title: String,
+) -> CommandResult<()> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    advanced::rename_bookmark(&input, &output, &object_id, &title).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn set_pdf_layer_visibility(
+    input: String,
+    output: String,
+    object_id: String,
+    visible: bool,
+) -> CommandResult<()> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    advanced::set_layer_visibility(&input, &output, &object_id, visible).map_err(ErrorPayload::from)
 }
 
 #[tauri::command]

@@ -1,0 +1,535 @@
+use crate::error::SevenError;
+use lopdf::{dictionary, Dictionary, Document, Object, ObjectId, Stream};
+use serde::{Deserialize, Serialize};
+use std::{collections::HashSet, fs, path::Path};
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BookmarkInfo {
+    pub object_id: String,
+    pub title: String,
+    pub depth: usize,
+    pub page_index: Option<usize>,
+    pub open: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BookmarkInput {
+    pub title: String,
+    pub page_index: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AttachmentInfo {
+    pub name: String,
+    pub description: String,
+    pub size: Option<usize>,
+    pub object_id: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LayerInfo {
+    pub object_id: String,
+    pub name: String,
+    pub visible: bool,
+    pub intent: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AdvancedPdfReport {
+    pub bookmarks: Vec<BookmarkInfo>,
+    pub attachments: Vec<AttachmentInfo>,
+    pub layers: Vec<LayerInfo>,
+    pub is_portfolio: bool,
+    pub portfolio_view: Option<String>,
+    pub has_rich_media: bool,
+    pub has_three_d: bool,
+    pub has_geospatial: bool,
+    pub has_articles: bool,
+    pub has_javascript: bool,
+    pub has_launch_actions: bool,
+    pub has_open_action: bool,
+    pub suspicious_actions: usize,
+}
+
+fn object_text(object: &Object) -> String {
+    match object {
+        Object::String(bytes, _) | Object::Name(bytes) => String::from_utf8_lossy(bytes).into_owned(),
+        _ => String::new(),
+    }
+}
+
+fn parse_id(value: &str) -> Result<ObjectId, SevenError> {
+    let (a, b) = value
+        .split_once(':')
+        .ok_or_else(|| SevenError::OperationRejected("Object ID inválido".into()))?;
+    Ok((
+        a.parse().map_err(|_| SevenError::OperationRejected("Object ID inválido".into()))?,
+        b.parse().map_err(|_| SevenError::OperationRejected("Object ID inválido".into()))?,
+    ))
+}
+
+fn id_string(id: ObjectId) -> String {
+    format!("{}:{}", id.0, id.1)
+}
+
+fn page_index_for_id(document: &Document, page_id: ObjectId) -> Option<usize> {
+    document
+        .get_pages()
+        .values()
+        .position(|candidate| *candidate == page_id)
+}
+
+fn bookmark_target(document: &Document, dictionary: &Dictionary) -> Option<usize> {
+    if let Ok(Object::Array(dest)) = dictionary.get(b"Dest") {
+        if let Some(Object::Reference(page_id)) = dest.first() {
+            return page_index_for_id(document, *page_id);
+        }
+    }
+    if let Ok(Object::Dictionary(action)) = dictionary.get(b"A") {
+        if matches!(action.get(b"S"), Ok(Object::Name(name)) if name.as_slice() == b"GoTo") {
+            if let Ok(Object::Array(dest)) = action.get(b"D") {
+                if let Some(Object::Reference(page_id)) = dest.first() {
+                    return page_index_for_id(document, *page_id);
+                }
+            }
+        }
+    }
+    None
+}
+
+fn walk_bookmarks(
+    document: &Document,
+    first: Option<ObjectId>,
+    depth: usize,
+    output: &mut Vec<BookmarkInfo>,
+    visited: &mut HashSet<ObjectId>,
+) {
+    let mut current = first;
+    while let Some(id) = current {
+        if !visited.insert(id) || visited.len() > 50_000 {
+            break;
+        }
+        let Ok(dictionary) = document.get_object(id).and_then(Object::as_dict) else { break };
+        output.push(BookmarkInfo {
+            object_id: id_string(id),
+            title: dictionary.get(b"Title").ok().map(object_text).unwrap_or_default(),
+            depth,
+            page_index: bookmark_target(document, dictionary),
+            open: dictionary.get(b"Count").ok().and_then(|value| value.as_i64().ok()).unwrap_or(0) >= 0,
+        });
+        let child = dictionary.get(b"First").ok().and_then(|value| value.as_reference().ok());
+        if child.is_some() {
+            walk_bookmarks(document, child, depth + 1, output, visited);
+        }
+        current = dictionary.get(b"Next").ok().and_then(|value| value.as_reference().ok());
+    }
+}
+
+fn bookmark_list(document: &Document) -> Vec<BookmarkInfo> {
+    let Some(outlines_id) = document
+        .catalog()
+        .ok()
+        .and_then(|catalog| catalog.get(b"Outlines").ok())
+        .and_then(|value| value.as_reference().ok())
+    else {
+        return Vec::new();
+    };
+    let first = document
+        .get_object(outlines_id)
+        .ok()
+        .and_then(|value| value.as_dict().ok())
+        .and_then(|dictionary| dictionary.get(b"First").ok())
+        .and_then(|value| value.as_reference().ok());
+    let mut output = Vec::new();
+    let mut visited = HashSet::new();
+    walk_bookmarks(document, first, 0, &mut output, &mut visited);
+    output
+}
+
+fn name_tree_pairs(document: &Document, root: &Object, output: &mut Vec<(String, ObjectId)>, visited: &mut HashSet<ObjectId>) {
+    match root {
+        Object::Reference(id) => {
+            if !visited.insert(*id) { return; }
+            if let Ok(object) = document.get_object(*id) {
+                name_tree_pairs(document, object, output, visited);
+            }
+        }
+        Object::Dictionary(dictionary) => {
+            if let Ok(Object::Array(names)) = dictionary.get(b"Names") {
+                for pair in names.chunks(2) {
+                    if pair.len() != 2 { continue; }
+                    let name = object_text(&pair[0]);
+                    if let Ok(id) = pair[1].as_reference() {
+                        output.push((name, id));
+                    }
+                }
+            }
+            if let Ok(Object::Array(kids)) = dictionary.get(b"Kids") {
+                for kid in kids {
+                    name_tree_pairs(document, kid, output, visited);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn attachment_list(document: &Document) -> Vec<AttachmentInfo> {
+    let Some(names) = document.catalog().ok().and_then(|c| c.get(b"Names").ok()) else { return Vec::new() };
+    let names_dict = match names {
+        Object::Dictionary(d) => Some(d),
+        Object::Reference(id) => document.get_object(*id).ok().and_then(|o| o.as_dict().ok()),
+        _ => None,
+    };
+    let Some(embedded) = names_dict.and_then(|d| d.get(b"EmbeddedFiles").ok()) else { return Vec::new() };
+    let mut pairs = Vec::new();
+    name_tree_pairs(document, embedded, &mut pairs, &mut HashSet::new());
+    pairs
+        .into_iter()
+        .filter_map(|(name, id)| {
+            let spec = document.get_object(id).ok()?.as_dict().ok()?;
+            let description = spec.get(b"Desc").ok().map(object_text).unwrap_or_default();
+            let ef = spec.get(b"EF").ok()?.as_dict().ok()?;
+            let stream_id = ef.get(b"F").ok()?.as_reference().ok()?;
+            let size = document
+                .get_object(stream_id)
+                .ok()
+                .and_then(|o| o.as_stream().ok())
+                .map(|s| s.content.len());
+            Some(AttachmentInfo { name, description, size, object_id: id_string(id) })
+        })
+        .collect()
+}
+
+fn layer_list(document: &Document) -> Vec<LayerInfo> {
+    let Some(oc) = document.catalog().ok().and_then(|c| c.get(b"OCProperties").ok()) else { return Vec::new() };
+    let oc_dict = match oc {
+        Object::Dictionary(d) => Some(d),
+        Object::Reference(id) => document.get_object(*id).ok().and_then(|o| o.as_dict().ok()),
+        _ => None,
+    };
+    let Some(oc_dict) = oc_dict else { return Vec::new() };
+    let on_ids = oc_dict
+        .get(b"D")
+        .ok()
+        .and_then(|o| o.as_dict().ok())
+        .and_then(|d| d.get(b"ON").ok())
+        .and_then(|o| o.as_array().ok())
+        .map(|a| a.iter().filter_map(|o| o.as_reference().ok()).collect::<HashSet<_>>())
+        .unwrap_or_default();
+    let off_ids = oc_dict
+        .get(b"D")
+        .ok()
+        .and_then(|o| o.as_dict().ok())
+        .and_then(|d| d.get(b"OFF").ok())
+        .and_then(|o| o.as_array().ok())
+        .map(|a| a.iter().filter_map(|o| o.as_reference().ok()).collect::<HashSet<_>>())
+        .unwrap_or_default();
+
+    oc_dict
+        .get(b"OCGs")
+        .ok()
+        .and_then(|o| o.as_array().ok())
+        .map(|values| values.iter().filter_map(|entry| {
+            let id = entry.as_reference().ok()?;
+            let dictionary = document.get_object(id).ok()?.as_dict().ok()?;
+            let name = dictionary.get(b"Name").ok().map(object_text).unwrap_or_else(|| id_string(id));
+            let intent = dictionary
+                .get(b"Intent")
+                .ok()
+                .map(|object| match object {
+                    Object::Name(value) => vec![String::from_utf8_lossy(value).into_owned()],
+                    Object::Array(values) => values.iter().map(object_text).filter(|v| !v.is_empty()).collect(),
+                    _ => Vec::new(),
+                })
+                .unwrap_or_default();
+            Some(LayerInfo {
+                object_id: id_string(id),
+                name,
+                visible: if off_ids.contains(&id) { false } else { on_ids.contains(&id) || !off_ids.contains(&id) },
+                intent,
+            })
+        }).collect())
+        .unwrap_or_default()
+}
+
+fn scan_active_content(document: &Document) -> (bool, bool, bool, bool, bool, usize) {
+    let mut rich = false;
+    let mut three_d = false;
+    let mut geo = false;
+    let mut js = false;
+    let mut launch = false;
+    let mut suspicious = 0usize;
+    for object in document.objects.values() {
+        let Ok(dictionary) = object.as_dict() else { continue };
+        let subtype = dictionary.get(b"Subtype").ok().map(object_text).unwrap_or_default();
+        if matches!(subtype.as_str(), "RichMedia" | "Movie" | "Sound" | "Screen") {
+            rich = true;
+        }
+        if subtype == "3D" || dictionary.get(b"3DD").is_ok() {
+            three_d = true;
+        }
+        if dictionary.get(b"Measure").is_ok() || dictionary.get(b"VP").is_ok() || dictionary.get(b"GPTS").is_ok() || dictionary.get(b"LPTS").is_ok() {
+            geo = true;
+        }
+        let action = dictionary.get(b"S").ok().map(object_text).unwrap_or_default();
+        if action == "JavaScript" || dictionary.get(b"JS").is_ok() {
+            js = true;
+            suspicious += 1;
+        }
+        if action == "Launch" {
+            launch = true;
+            suspicious += 1;
+        }
+    }
+    let articles = document.catalog().ok().is_some_and(|c| c.get(b"Threads").is_ok());
+    (rich, three_d, geo, js, launch, suspicious + usize::from(articles && false))
+}
+
+pub fn inspect(path: &Path) -> Result<AdvancedPdfReport, SevenError> {
+    let document = Document::load(path).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let catalog = document.catalog().map_err(|error| SevenError::Operation(error.to_string()))?;
+    let (rich, three_d, geo, js, launch, suspicious) = scan_active_content(&document);
+    let is_portfolio = catalog.get(b"Collection").is_ok();
+    let portfolio_view = catalog
+        .get(b"Collection")
+        .ok()
+        .and_then(|object| object.as_dict().ok())
+        .and_then(|dictionary| dictionary.get(b"View").ok())
+        .map(object_text);
+    Ok(AdvancedPdfReport {
+        bookmarks: bookmark_list(&document),
+        attachments: attachment_list(&document),
+        layers: layer_list(&document),
+        is_portfolio,
+        portfolio_view,
+        has_rich_media: rich,
+        has_three_d: three_d,
+        has_geospatial: geo,
+        has_articles: catalog.get(b"Threads").is_ok(),
+        has_javascript: js,
+        has_launch_actions: launch,
+        has_open_action: catalog.get(b"OpenAction").is_ok(),
+        suspicious_actions: suspicious,
+    })
+}
+
+pub fn add_attachment(
+    input: &Path,
+    output: &Path,
+    file_path: &Path,
+    display_name: &str,
+    description: &str,
+) -> Result<(), SevenError> {
+    if !file_path.is_file() {
+        return Err(SevenError::NotFound(file_path.to_string_lossy().into_owned()));
+    }
+    let data = fs::read(file_path).map_err(|error| SevenError::Io(error.to_string()))?;
+    if data.len() > 1024 * 1024 * 1024 {
+        return Err(SevenError::OperationRejected("Anexo excede 1 GiB".into()));
+    }
+    let name = if display_name.trim().is_empty() {
+        file_path.file_name().and_then(|v| v.to_str()).unwrap_or("attachment.bin").to_owned()
+    } else {
+        display_name.trim().to_owned()
+    };
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+
+    let embedded_stream = Stream::new(
+        dictionary! {
+            "Type" => "EmbeddedFile",
+            "Params" => dictionary! { "Size" => data.len() as i64 },
+        },
+        data,
+    );
+    let stream_id = document.add_object(embedded_stream);
+    let spec_id = document.add_object(dictionary! {
+        "Type" => "Filespec",
+        "F" => Object::string_literal(&name),
+        "UF" => Object::string_literal(&name),
+        "Desc" => Object::string_literal(description),
+        "EF" => dictionary! { "F" => stream_id, "UF" => stream_id },
+    });
+
+    let catalog_id = document.trailer.get(b"Root").map_err(|e| SevenError::Operation(e.to_string()))?.as_reference().map_err(|e| SevenError::Operation(e.to_string()))?;
+    let existing_names = document
+        .catalog()
+        .ok()
+        .and_then(|c| c.get(b"Names").ok())
+        .cloned();
+
+    let names_id = match existing_names {
+        Some(Object::Reference(id)) => id,
+        Some(Object::Dictionary(dictionary)) => {
+            let id = document.add_object(dictionary);
+            document.get_object_mut(catalog_id).map_err(|e| SevenError::Operation(e.to_string()))?.as_dict_mut().map_err(|e| SevenError::Operation(e.to_string()))?.set("Names", id);
+            id
+        }
+        _ => {
+            let id = document.add_object(Dictionary::new());
+            document.get_object_mut(catalog_id).map_err(|e| SevenError::Operation(e.to_string()))?.as_dict_mut().map_err(|e| SevenError::Operation(e.to_string()))?.set("Names", id);
+            id
+        }
+    };
+
+    let current_embedded = document
+        .get_object(names_id).ok()
+        .and_then(|o| o.as_dict().ok())
+        .and_then(|d| d.get(b"EmbeddedFiles").ok())
+        .cloned();
+
+    let embedded_id = match current_embedded {
+        Some(Object::Reference(id)) => id,
+        Some(Object::Dictionary(dictionary)) => {
+            let id = document.add_object(dictionary);
+            document.get_object_mut(names_id).map_err(|e| SevenError::Operation(e.to_string()))?.as_dict_mut().map_err(|e| SevenError::Operation(e.to_string()))?.set("EmbeddedFiles", id);
+            id
+        }
+        _ => {
+            let id = document.add_object(dictionary! { "Names" => Vec::<Object>::new() });
+            document.get_object_mut(names_id).map_err(|e| SevenError::Operation(e.to_string()))?.as_dict_mut().map_err(|e| SevenError::Operation(e.to_string()))?.set("EmbeddedFiles", id);
+            id
+        }
+    };
+
+    let tree = document.get_object_mut(embedded_id).map_err(|e| SevenError::Operation(e.to_string()))?.as_dict_mut().map_err(|e| SevenError::Operation(e.to_string()))?;
+    let names = match tree.get_mut(b"Names") {
+        Ok(Object::Array(values)) => values,
+        _ => {
+            tree.set("Names", Vec::<Object>::new());
+            match tree.get_mut(b"Names") {
+                Ok(Object::Array(values)) => values,
+                _ => return Err(SevenError::Operation("Falha ao criar name tree de anexos".into())),
+            }
+        }
+    };
+    names.push(Object::string_literal(&name));
+    names.push(Object::Reference(spec_id));
+    atomic_save(document, output)
+}
+
+pub fn extract_attachment(path: &Path, object_id: &str, destination: &Path) -> Result<(), SevenError> {
+    let document = Document::load(path).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let id = parse_id(object_id)?;
+    let spec = document.get_object(id).map_err(|e| SevenError::Operation(e.to_string()))?.as_dict().map_err(|e| SevenError::Operation(e.to_string()))?;
+    let ef = spec.get(b"EF").map_err(|e| SevenError::Operation(e.to_string()))?.as_dict().map_err(|e| SevenError::Operation(e.to_string()))?;
+    let stream_id = ef.get(b"F").map_err(|e| SevenError::Operation(e.to_string()))?.as_reference().map_err(|e| SevenError::Operation(e.to_string()))?;
+    let stream = document.get_object(stream_id).map_err(|e| SevenError::Operation(e.to_string()))?.as_stream().map_err(|e| SevenError::Operation(e.to_string()))?;
+    let data = stream.decompressed_content().unwrap_or_else(|_| stream.content.clone());
+    fs::write(destination, data).map_err(|error| SevenError::Io(error.to_string()))
+}
+
+pub fn add_bookmark(input: &Path, output: &Path, bookmark: BookmarkInput) -> Result<(), SevenError> {
+    if bookmark.title.trim().is_empty() || bookmark.title.chars().count() > 500 {
+        return Err(SevenError::OperationRejected("Título do marcador inválido".into()));
+    }
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let page_id = document.get_pages().get(&((bookmark.page_index + 1) as u32)).copied().ok_or_else(|| SevenError::OperationRejected("Página não existe".into()))?;
+    let root_id = document.trailer.get(b"Root").map_err(|e| SevenError::Operation(e.to_string()))?.as_reference().map_err(|e| SevenError::Operation(e.to_string()))?;
+    let outlines_id = document
+        .catalog().ok()
+        .and_then(|c| c.get(b"Outlines").ok())
+        .and_then(|o| o.as_reference().ok())
+        .unwrap_or_else(|| {
+            let id = document.add_object(dictionary! { "Type" => "Outlines", "Count" => 0 });
+            document.get_object_mut(root_id).ok().and_then(|o| o.as_dict_mut().ok()).map(|c| c.set("Outlines", id));
+            id
+        });
+
+    let (first, last, count) = {
+        let outlines = document.get_object(outlines_id).map_err(|e| SevenError::Operation(e.to_string()))?.as_dict().map_err(|e| SevenError::Operation(e.to_string()))?;
+        (
+            outlines.get(b"First").ok().and_then(|o| o.as_reference().ok()),
+            outlines.get(b"Last").ok().and_then(|o| o.as_reference().ok()),
+            outlines.get(b"Count").ok().and_then(|o| o.as_i64().ok()).unwrap_or(0),
+        )
+    };
+    let mut item = dictionary! {
+        "Title" => Object::string_literal(bookmark.title.trim()),
+        "Parent" => outlines_id,
+        "Dest" => vec![Object::Reference(page_id), Object::Name(b"Fit".to_vec())],
+    };
+    if let Some(last) = last {
+        item.set("Prev", last);
+    }
+    let item_id = document.add_object(item);
+    if let Some(last) = last {
+        if let Ok(last_dict) = document.get_object_mut(last).and_then(Object::as_dict_mut) {
+            last_dict.set("Next", item_id);
+        }
+    }
+    let outlines = document.get_object_mut(outlines_id).map_err(|e| SevenError::Operation(e.to_string()))?.as_dict_mut().map_err(|e| SevenError::Operation(e.to_string()))?;
+    if first.is_none() { outlines.set("First", item_id); }
+    outlines.set("Last", item_id);
+    outlines.set("Count", count.abs() + 1);
+    atomic_save(document, output)
+}
+
+pub fn rename_bookmark(input: &Path, output: &Path, object_id: &str, title: &str) -> Result<(), SevenError> {
+    if title.trim().is_empty() || title.chars().count() > 500 {
+        return Err(SevenError::OperationRejected("Título inválido".into()));
+    }
+    let mut document = Document::load(input).map_err(|e| SevenError::PdfOpen(e.to_string()))?;
+    let id = parse_id(object_id)?;
+    document.get_object_mut(id).map_err(|e| SevenError::Operation(e.to_string()))?.as_dict_mut().map_err(|e| SevenError::Operation(e.to_string()))?.set("Title", Object::string_literal(title.trim()));
+    atomic_save(document, output)
+}
+
+pub fn set_layer_visibility(input: &Path, output: &Path, object_id: &str, visible: bool) -> Result<(), SevenError> {
+    let mut document = Document::load(input).map_err(|e| SevenError::PdfOpen(e.to_string()))?;
+    let target = parse_id(object_id)?;
+    let root_id = document.trailer.get(b"Root").map_err(|e| SevenError::Operation(e.to_string()))?.as_reference().map_err(|e| SevenError::Operation(e.to_string()))?;
+    let oc_id = document.get_object(root_id).map_err(|e| SevenError::Operation(e.to_string()))?.as_dict().map_err(|e| SevenError::Operation(e.to_string()))?.get(b"OCProperties").map_err(|_| SevenError::OperationRejected("Documento sem OCGs".into()))?.as_reference().map_err(|e| SevenError::Operation(e.to_string()))?;
+    let default_id = {
+        let oc = document.get_object(oc_id).map_err(|e| SevenError::Operation(e.to_string()))?.as_dict().map_err(|e| SevenError::Operation(e.to_string()))?;
+        match oc.get(b"D") {
+            Ok(Object::Reference(id)) => Some(*id),
+            _ => None,
+        }
+    };
+    if let Some(default_id) = default_id {
+        let d = document.get_object_mut(default_id).map_err(|e| SevenError::Operation(e.to_string()))?.as_dict_mut().map_err(|e| SevenError::Operation(e.to_string()))?;
+        set_visibility_arrays(d, target, visible);
+    } else {
+        let oc = document.get_object_mut(oc_id).map_err(|e| SevenError::Operation(e.to_string()))?.as_dict_mut().map_err(|e| SevenError::Operation(e.to_string()))?;
+        let d = match oc.get_mut(b"D") {
+            Ok(Object::Dictionary(d)) => d,
+            _ => {
+                oc.set("D", Dictionary::new());
+                match oc.get_mut(b"D") {
+                    Ok(Object::Dictionary(d)) => d,
+                    _ => return Err(SevenError::Operation("Falha no estado OCG".into())),
+                }
+            }
+        };
+        set_visibility_arrays(d, target, visible);
+    }
+    atomic_save(document, output)
+}
+
+fn set_visibility_arrays(dictionary: &mut Dictionary, target: ObjectId, visible: bool) {
+    for key in [b"ON".as_slice(), b"OFF".as_slice()] {
+        if let Ok(Object::Array(values)) = dictionary.get_mut(key) {
+            values.retain(|value| value.as_reference().ok() != Some(target));
+        }
+    }
+    let key = if visible { b"ON".as_slice() } else { b"OFF".as_slice() };
+    match dictionary.get_mut(key) {
+        Ok(Object::Array(values)) => values.push(Object::Reference(target)),
+        _ => dictionary.set(key, vec![Object::Reference(target)]),
+    }
+}
+
+fn atomic_save(mut document: Document, output: &Path) -> Result<(), SevenError> {
+    let temp = output.with_extension("seven-advanced.tmp.pdf");
+    document.compress();
+    document.save(&temp).map_err(|e| SevenError::Io(e.to_string()))?;
+    Document::load(&temp).map_err(|e| SevenError::PdfOpen(e.to_string()))?;
+    if output.exists() { fs::remove_file(output).map_err(|e| SevenError::Io(e.to_string()))?; }
+    fs::rename(&temp, output).map_err(|e| SevenError::Io(e.to_string()))
+}

@@ -819,6 +819,34 @@ pub fn session_add_pdf_attachment(
 }
 
 #[tauri::command]
+pub fn session_update_pdf_attachment(
+    state: State<'_, AppState>,
+    document_id: String,
+    object_id: String,
+    name: String,
+    description: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "update-attachment", move |input, output| {
+        advanced::update_attachment(input, output, &object_id, &name, &description)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_remove_pdf_attachment(
+    state: State<'_, AppState>,
+    document_id: String,
+    object_id: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "remove-attachment", move |input, output| {
+        advanced::remove_attachment(input, output, &object_id)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn session_set_pdf_layer_visibility(
     state: State<'_, AppState>,
     document_id: String,

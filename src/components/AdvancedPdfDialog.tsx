@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type { AdvancedPdfReport, LayerPropertiesUpdate } from "../types";
+import type { AdvancedPdfReport, BookmarkInfo, BookmarkUpdate, LayerPropertiesUpdate } from "../types";
 import { SevenIcon } from "./SevenIcon";
 
 type AdvancedTab = "overview" | "bookmarks" | "attachments" | "layers";
@@ -14,6 +14,9 @@ interface AdvancedPdfDialogProps {
   onReload: () => void;
   onAddBookmark: (title: string, pageIndex: number) => void;
   onRenameBookmark: (objectId: string, title: string) => void;
+  onUpdateBookmark: (update: BookmarkUpdate) => void;
+  onSetAllBookmarksOpen: (open: boolean) => void;
+  onGenerateBookmarksFromStructure: () => void;
   onDeleteBookmark: (objectId: string) => void;
   onMoveBookmark: (objectId: string, direction: "up" | "down" | "indent" | "outdent") => void;
   onSetBookmarkOpen: (objectId: string, open: boolean) => void;
@@ -43,6 +46,9 @@ export function AdvancedPdfDialog({
   onReload,
   onAddBookmark,
   onRenameBookmark,
+  onUpdateBookmark,
+  onSetAllBookmarksOpen,
+  onGenerateBookmarksFromStructure,
   onDeleteBookmark,
   onMoveBookmark,
   onSetBookmarkOpen,
@@ -58,6 +64,13 @@ export function AdvancedPdfDialog({
   const [tab, setTab] = useState<AdvancedTab>(initialTab);
   const [bookmarkTitle, setBookmarkTitle] = useState("");
   const [rename, setRename] = useState<Record<string,string>>({});
+  const [editingBookmark, setEditingBookmark] = useState<BookmarkInfo | null>(null);
+  const [bookmarkAction, setBookmarkAction] = useState<BookmarkUpdate["actionType"]>("goto");
+  const [bookmarkTargetPage, setBookmarkTargetPage] = useState(1);
+  const [bookmarkTarget, setBookmarkTarget] = useState("");
+  const [bookmarkBold, setBookmarkBold] = useState(false);
+  const [bookmarkItalic, setBookmarkItalic] = useState(false);
+  const [bookmarkColor, setBookmarkColor] = useState("#000000");
   const [attachmentName, setAttachmentName] = useState("");
   const [attachmentDescription, setAttachmentDescription] = useState("");
   const [attachmentPath, setAttachmentPath] = useState("");
@@ -76,6 +89,47 @@ export function AdvancedPdfDialog({
       report.hasThreeD && "conteúdo 3D",
     ].filter(Boolean) as string[];
   }, [report]);
+
+  const rgbToHex = (rgb: [number, number, number]) =>
+    `#${rgb.map((component) =>
+      Math.max(0, Math.min(255, Math.round(component * 255))).toString(16).padStart(2, "0")
+    ).join("")}`;
+
+  const hexToRgb = (hex: string): [number, number, number] => {
+    const value = hex.replace("#", "").padEnd(6, "0").slice(0, 6);
+    return [
+      parseInt(value.slice(0, 2), 16) / 255,
+      parseInt(value.slice(2, 4), 16) / 255,
+      parseInt(value.slice(4, 6), 16) / 255,
+    ];
+  };
+
+  const beginBookmarkEdit = (bookmark: BookmarkInfo) => {
+    setEditingBookmark(bookmark);
+    setRename((current) => ({ ...current, [bookmark.objectId]: current[bookmark.objectId] ?? bookmark.title }));
+    const action = bookmark.actionType === "uri" ? "uri" : bookmark.actionType === "goto" ? "goto" : "none";
+    setBookmarkAction(action);
+    setBookmarkTargetPage(bookmark.pageIndex !== undefined ? bookmark.pageIndex + 1 : pageIndex + 1);
+    setBookmarkTarget(bookmark.actionType === "uri" ? bookmark.actionTarget : "");
+    setBookmarkBold(bookmark.bold);
+    setBookmarkItalic(bookmark.italic);
+    setBookmarkColor(rgbToHex(bookmark.color));
+  };
+
+  const saveBookmarkEdit = () => {
+    if (!editingBookmark) return;
+    onUpdateBookmark({
+      objectId: editingBookmark.objectId,
+      title: rename[editingBookmark.objectId] ?? editingBookmark.title,
+      actionType: bookmarkAction,
+      targetPage: bookmarkAction === "goto" ? Math.max(0, bookmarkTargetPage - 1) : undefined,
+      target: bookmarkTarget,
+      bold: bookmarkBold,
+      italic: bookmarkItalic,
+      color: hexToRgb(bookmarkColor),
+    });
+    setEditingBookmark(null);
+  };
 
   const chooseAttachment = async () => {
     const path = await open({ title: "Selecionar arquivo para incorporar", multiple: false, directory: false });
@@ -131,10 +185,39 @@ export function AdvancedPdfDialog({
           </>}
 
           {!loading && report && tab==="bookmarks" && <>
+            <div className="bookmark-toolbar">
+              <button onClick={()=>onSetAllBookmarksOpen(true)} disabled={!report.bookmarks.some((bookmark)=>bookmark.hasChildren)}>Expandir todos</button>
+              <button onClick={()=>onSetAllBookmarksOpen(false)} disabled={!report.bookmarks.some((bookmark)=>bookmark.hasChildren)}>Recolher todos</button>
+              <button onClick={onGenerateBookmarksFromStructure} disabled={report.bookmarks.length>0} title={report.bookmarks.length ? "Disponível apenas quando o documento ainda não possui outline." : "Usa headings H1-H6 reais da estrutura Tagged PDF."}>
+                <SevenIcon name="automation"/> Gerar da estrutura
+              </button>
+            </div>
             <div className="inline-create-row">
               <label className="workflow-field"><span>Novo marcador na página {pageIndex+1}</span><input value={bookmarkTitle} onChange={(e)=>setBookmarkTitle(e.target.value)} placeholder="Título"/></label>
               <button className="primary-button" disabled={!bookmarkTitle.trim()} onClick={addBookmark}><SevenIcon name="bookmark"/> Criar</button>
             </div>
+            {editingBookmark && (
+              <section className="bookmark-editor">
+                <header>
+                  <div><strong>Editar marcador</strong><small>{editingBookmark.objectId} · nível {editingBookmark.depth+1}</small></div>
+                  <button className="icon-button" onClick={()=>setEditingBookmark(null)}><SevenIcon name="close"/></button>
+                </header>
+                <label className="workflow-field"><span>Título</span><input value={rename[editingBookmark.objectId]??editingBookmark.title} onChange={(e)=>setRename(current=>({...current,[editingBookmark.objectId]:e.target.value}))}/></label>
+                <div className="two-column-fields">
+                  <label className="workflow-field"><span>Ação</span><select value={bookmarkAction} onChange={(e)=>setBookmarkAction(e.target.value as BookmarkUpdate["actionType"])}><option value="goto">Ir para página</option><option value="uri">Abrir URL</option><option value="none">Sem ação</option></select></label>
+                  {bookmarkAction==="goto" && <label className="workflow-field"><span>Página</span><input type="number" min={1} value={bookmarkTargetPage} onChange={(e)=>setBookmarkTargetPage(Math.max(1,Number(e.target.value)||1))}/></label>}
+                  {bookmarkAction==="uri" && <label className="workflow-field"><span>URL</span><input value={bookmarkTarget} onChange={(e)=>setBookmarkTarget(e.target.value)} placeholder="https://..."/></label>}
+                </div>
+                <div className="bookmark-style-controls">
+                  <label className="toggle-row"><input type="checkbox" checked={bookmarkBold} onChange={(e)=>setBookmarkBold(e.target.checked)}/><span><strong>Negrito</strong></span></label>
+                  <label className="toggle-row"><input type="checkbox" checked={bookmarkItalic} onChange={(e)=>setBookmarkItalic(e.target.checked)}/><span><strong>Itálico</strong></span></label>
+                  <label className="workflow-field"><span>Cor</span><input type="color" value={bookmarkColor} onChange={(e)=>setBookmarkColor(e.target.value)}/></label>
+                </div>
+                <button className="primary-button workflow-submit" disabled={!(rename[editingBookmark.objectId]??editingBookmark.title).trim() || (bookmarkAction==="uri" && !bookmarkTarget.trim())} onClick={saveBookmarkEdit}>
+                  <SevenIcon name="save"/> Aplicar ao marcador
+                </button>
+              </section>
+            )}
             <div className="structure-list">
               {report.bookmarks.map((bookmark)=>(
                 <div className="bookmark-row" key={bookmark.objectId} style={{paddingLeft:12+bookmark.depth*18}}>
@@ -151,7 +234,8 @@ export function AdvancedPdfDialog({
                     <button title="Descer" onClick={()=>onMoveBookmark(bookmark.objectId,"down")}>↓</button>
                     <button title="Tornar filho do marcador anterior" onClick={()=>onMoveBookmark(bookmark.objectId,"indent")}>→</button>
                     <button title="Subir um nível" disabled={!bookmark.parentObjectId} onClick={()=>onMoveBookmark(bookmark.objectId,"outdent")}>←</button>
-                    <button title="Salvar nome" onClick={()=>onRenameBookmark(bookmark.objectId,rename[bookmark.objectId]??bookmark.title)}>Salvar</button>
+                    <button title="Editar destino, ação e aparência" onClick={()=>beginBookmarkEdit(bookmark)}>Editar</button>
+                    <button title="Salvar somente o nome" onClick={()=>onRenameBookmark(bookmark.objectId,rename[bookmark.objectId]??bookmark.title)}>Nome</button>
                     <button className="danger-quiet" title="Excluir marcador e filhos" onClick={()=>onDeleteBookmark(bookmark.objectId)}>Excluir</button>
                   </div>
                 </div>

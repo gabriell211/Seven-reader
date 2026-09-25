@@ -209,7 +209,7 @@ export function CreatePdfDialog({
                 </button>
                 {clipboardImage && (
                   <span className="clipboard-image-state">
-                    <SevenIcon name="image" /> {clipboardImage.width}×{clipboardImage.height}px
+                    <SevenIcon name="open" /> {clipboardImage.width}×{clipboardImage.height}px
                   </span>
                 )}
                 {clipboardError && <small className="dependency-note">{clipboardError}</small>}

@@ -534,6 +534,10 @@ export interface BackgroundOptions {
   red: number;
   green: number;
   blue: number;
+  opacity: number;
+  imagePath?: string;
+  imageScale: number;
+  position: "center" | "stretch" | "tile";
 }
 
 export interface SessionReplaceTextResult {

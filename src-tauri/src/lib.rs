@@ -1,5 +1,6 @@
 mod capabilities;
 mod commands;
+mod document_ops;
 mod error;
 mod jobs;
 mod pdf;
@@ -38,6 +39,15 @@ pub fn run() {
             commands::start_rotate_pages,
             commands::start_ocr,
             commands::start_optimize_pdf,
+            commands::get_document_metadata,
+            commands::update_document_metadata,
+            commands::sanitize_document,
+            commands::get_accessibility_report,
+            commands::compare_documents,
+            commands::start_encrypt_pdf,
+            commands::start_decrypt_pdf,
+            commands::start_convert_to_pdf,
+            commands::start_export_pdf,
             commands::get_job_status,
             commands::cancel_job,
         ])

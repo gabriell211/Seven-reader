@@ -197,3 +197,40 @@ pub fn validated_rotation(angle: i16) -> Result<i16, SevenError> {
         )),
     }
 }
+
+
+pub fn validated_directory(path: &str) -> Result<PathBuf, SevenError> {
+    let directory = std::fs::canonicalize(path)
+        .map_err(|error| SevenError::InvalidPath(error.to_string()))?;
+    if !directory.is_dir() {
+        return Err(SevenError::InvalidPath("O caminho não aponta para uma pasta".into()));
+    }
+    Ok(directory)
+}
+
+pub fn validated_basename(value: &str) -> Result<String, SevenError> {
+    let name = value.trim();
+    if name.is_empty() || name.len() > 120 {
+        return Err(SevenError::OperationRejected("Nome de saída inválido".into()));
+    }
+    if !name.chars().all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | ' ' | '.')) {
+        return Err(SevenError::OperationRejected(
+            "O nome pode conter apenas letras, números, espaço, ponto, hífen e sublinhado".into(),
+        ));
+    }
+    Ok(name.trim_end_matches('.').to_owned())
+}
+
+pub fn validated_password(value: &str, label: &str) -> Result<String, SevenError> {
+    if value.is_empty() || value.chars().count() > 127 {
+        return Err(SevenError::OperationRejected(format!(
+            "{label} deve ter entre 1 e 127 caracteres"
+        )));
+    }
+    if value.chars().any(|ch| ch == '\0' || ch == '\r' || ch == '\n') {
+        return Err(SevenError::OperationRejected(format!(
+            "{label} contém caracteres não permitidos"
+        )));
+    }
+    Ok(value.to_owned())
+}

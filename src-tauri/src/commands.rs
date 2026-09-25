@@ -2,6 +2,7 @@ use crate::{
     capabilities,
     error::{CommandResult, ErrorPayload, SevenError},
     jobs::{self, JobStart},
+    document_ops,
     pdf,
     state::{AppState, JobStatus},
 };
@@ -313,6 +314,202 @@ pub fn start_optimize_pdf(
         input.to_string_lossy().into_owned(),
     ];
     Ok(jobs::start_process_job(app, &state, "optimize", executable, args, Some(output)))
+}
+
+#[tauri::command]
+pub fn get_document_metadata(
+    path: String,
+) -> CommandResult<document_ops::DocumentMetadata> {
+    let input = pdf::validate_pdf_path(&path).map_err(ErrorPayload::from)?;
+    document_ops::read_metadata(&input).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn update_document_metadata(
+    input: String,
+    output: String,
+    update: document_ops::MetadataUpdate,
+) -> CommandResult<()> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    document_ops::write_metadata(&input, &output, update).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn sanitize_document(
+    input: String,
+    output: String,
+    options: document_ops::SanitizeOptions,
+) -> CommandResult<document_ops::SanitizeReport> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    document_ops::sanitize_document(&input, &output, options).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn get_accessibility_report(
+    path: String,
+) -> CommandResult<document_ops::AccessibilityReport> {
+    let input = pdf::validate_pdf_path(&path).map_err(ErrorPayload::from)?;
+    document_ops::accessibility_report(&input).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub async fn compare_documents(
+    state: State<'_, AppState>,
+    left: String,
+    right: String,
+) -> CommandResult<pdf::CompareReport> {
+    let left = pdf::validate_pdf_path(&left).map_err(ErrorPayload::from)?;
+    let right = pdf::validate_pdf_path(&right).map_err(ErrorPayload::from)?;
+    let state_snapshot = AppState {
+        documents: state.documents.clone(),
+        jobs: state.jobs.clone(),
+        cache_dir: state.cache_dir.clone(),
+        resource_dir: state.resource_dir.clone(),
+    };
+    tauri::async_runtime::spawn_blocking(move || pdf::compare_documents(&state_snapshot, &left, &right))
+        .await
+        .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
+        .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn start_encrypt_pdf(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: String,
+    output: String,
+    user_password: String,
+    owner_password: String,
+) -> CommandResult<JobStart> {
+    let executable = jobs::require_executable(&["qpdf"], "qpdf").map_err(ErrorPayload::from)?;
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    let user_password = jobs::validated_password(&user_password, "Senha de abertura").map_err(ErrorPayload::from)?;
+    let owner_password = jobs::validated_password(&owner_password, "Senha de proprietário").map_err(ErrorPayload::from)?;
+
+    let args = vec![
+        "--encrypt".into(),
+        format!("--user-password={user_password}"),
+        format!("--owner-password={owner_password}"),
+        "--bits=256".into(),
+        "--".into(),
+        input.to_string_lossy().into_owned(),
+        output.to_string_lossy().into_owned(),
+    ];
+    Ok(jobs::start_process_job(app, &state, "encrypt", executable, args, Some(output)))
+}
+
+#[tauri::command]
+pub fn start_decrypt_pdf(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: String,
+    output: String,
+    password: String,
+) -> CommandResult<JobStart> {
+    let executable = jobs::require_executable(&["qpdf"], "qpdf").map_err(ErrorPayload::from)?;
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    let password = jobs::validated_password(&password, "Senha").map_err(ErrorPayload::from)?;
+    let args = vec![
+        format!("--password={password}"),
+        "--decrypt".into(),
+        input.to_string_lossy().into_owned(),
+        output.to_string_lossy().into_owned(),
+    ];
+    Ok(jobs::start_process_job(app, &state, "decrypt", executable, args, Some(output)))
+}
+
+#[tauri::command]
+pub fn start_convert_to_pdf(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: String,
+    output_directory: String,
+) -> CommandResult<JobStart> {
+    let executable = jobs::require_executable(&["soffice", "libreoffice"], "LibreOffice").map_err(ErrorPayload::from)?;
+    let input_path = std::path::Path::new(&input);
+    if !input_path.exists() || !input_path.is_file() {
+        return Err(ErrorPayload::from(SevenError::NotFound(input)));
+    }
+    let input = fs::canonicalize(input_path).map_err(|error| ErrorPayload::from(SevenError::InvalidPath(error.to_string())))?;
+    let output_directory = jobs::validated_directory(&output_directory).map_err(ErrorPayload::from)?;
+
+    let args = vec![
+        "--headless".into(),
+        "--convert-to".into(),
+        "pdf".into(),
+        "--outdir".into(),
+        output_directory.to_string_lossy().into_owned(),
+        input.to_string_lossy().into_owned(),
+    ];
+    Ok(jobs::start_process_job(
+        app,
+        &state,
+        "convert-to-pdf",
+        executable,
+        args,
+        Some(output_directory),
+    ))
+}
+
+#[tauri::command]
+pub fn start_export_pdf(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: String,
+    output: String,
+    format: String,
+    dpi: Option<u16>,
+) -> CommandResult<JobStart> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let format = format.to_lowercase();
+
+    if format == "txt" {
+        let executable = jobs::require_executable(&["pdftotext"], "pdftotext").map_err(ErrorPayload::from)?;
+        let output = jobs::validated_output(&output, "txt").map_err(ErrorPayload::from)?;
+        let args = vec![input.to_string_lossy().into_owned(), output.to_string_lossy().into_owned()];
+        return Ok(jobs::start_process_job(app, &state, "export-text", executable, args, Some(output)));
+    }
+
+    let executable = jobs::require_executable(&["gswin64c", "gswin32c", "gs"], "Ghostscript").map_err(ErrorPayload::from)?;
+    if format == "ps" {
+        let output = jobs::validated_output(&output, "ps").map_err(ErrorPayload::from)?;
+        let args = vec![
+            "-sDEVICE=ps2write".into(),
+            "-dNOPAUSE".into(),
+            "-dBATCH".into(),
+            format!("-sOutputFile={}", output.to_string_lossy()),
+            input.to_string_lossy().into_owned(),
+        ];
+        return Ok(jobs::start_process_job(app, &state, "export-ps", executable, args, Some(output)));
+    }
+
+    let extension = match format.as_str() {
+        "png" => "png",
+        "jpeg" | "jpg" => "jpg",
+        "tiff" | "tif" => "tif",
+        _ => return Err(ErrorPayload::from(SevenError::UnsupportedFormat(format))),
+    };
+    let output_directory = jobs::validated_directory(&output).map_err(ErrorPayload::from)?;
+    let dpi = dpi.unwrap_or(150).clamp(72, 1200);
+    let device = match extension {
+        "png" => "png16m",
+        "jpg" => "jpeg",
+        _ => "tiff24nc",
+    };
+    let pattern = output_directory.join(format!("page-%04d.{extension}"));
+    let args = vec![
+        format!("-sDEVICE={device}"),
+        format!("-r{dpi}"),
+        "-dNOPAUSE".into(),
+        "-dBATCH".into(),
+        format!("-sOutputFile={}", pattern.to_string_lossy()),
+        input.to_string_lossy().into_owned(),
+    ];
+    Ok(jobs::start_process_job(app, &state, "export-images", executable, args, Some(output_directory)))
 }
 
 #[tauri::command]

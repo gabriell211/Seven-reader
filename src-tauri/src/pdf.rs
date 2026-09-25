@@ -290,3 +290,82 @@ pub fn create_blank_pdf(
 
     Ok(())
 }
+
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ComparePage {
+    pub page_index: usize,
+    pub left_excerpt: String,
+    pub right_excerpt: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompareReport {
+    pub left_pages: usize,
+    pub right_pages: usize,
+    pub changed_pages: usize,
+    pub pages: Vec<ComparePage>,
+}
+
+fn normalized_page_text(page: &PdfPage<'_>) -> Result<String, SevenError> {
+    let text = page
+        .text()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .all();
+    Ok(text.split_whitespace().collect::<Vec<_>>().join(" "))
+}
+
+pub fn compare_documents(
+    state: &AppState,
+    left: &Path,
+    right: &Path,
+) -> Result<CompareReport, SevenError> {
+    let pdfium = bind_pdfium(&state.resource_dir).map_err(SevenError::PdfEngineUnavailable)?;
+    let left_doc = pdfium
+        .load_pdf_from_file(left, None)
+        .map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let right_doc = pdfium
+        .load_pdf_from_file(right, None)
+        .map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+
+    let left_pages = left_doc.pages().len() as usize;
+    let right_pages = right_doc.pages().len() as usize;
+    let max_pages = left_pages.max(right_pages);
+    let mut pages = Vec::new();
+
+    for index in 0..max_pages {
+        let left_text = if index < left_pages {
+            normalized_page_text(
+                &left_doc.pages().get(index as PdfPageIndex)
+                    .map_err(|error| SevenError::Operation(error.to_string()))?
+            )?
+        } else {
+            String::new()
+        };
+        let right_text = if index < right_pages {
+            normalized_page_text(
+                &right_doc.pages().get(index as PdfPageIndex)
+                    .map_err(|error| SevenError::Operation(error.to_string()))?
+            )?
+        } else {
+            String::new()
+        };
+
+        if left_text != right_text {
+            pages.push(ComparePage {
+                page_index: index,
+                left_excerpt: left_text.chars().take(260).collect(),
+                right_excerpt: right_text.chars().take(260).collect(),
+            });
+        }
+    }
+
+    Ok(CompareReport {
+        left_pages,
+        right_pages,
+        changed_pages: pages.len(),
+        pages,
+    })
+}

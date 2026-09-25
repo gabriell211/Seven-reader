@@ -22,6 +22,8 @@ pub struct Capabilities {
     pub scanner: Capability,
     pub printing: Capability,
     pub certificates: Capability,
+    pub pdftotext: Capability,
+    pub openssl: Capability,
 }
 
 fn command_version(candidates: &[&str], args: &[&str]) -> Capability {
@@ -85,6 +87,9 @@ pub fn detect(state: &AppState) -> Capabilities {
     #[cfg(target_os = "macos")]
     let printing = command_version(&["lpstat"], &["-r"]);
 
+    let pdftotext = command_version(&["pdftotext"], &["-v"]);
+    let openssl = command_version(&["openssl"], &["version"]);
+
     let certificates = Capability {
         available: false,
         version: None,
@@ -100,5 +105,7 @@ pub fn detect(state: &AppState) -> Capabilities {
         scanner,
         printing,
         certificates,
+        pdftotext,
+        openssl,
     }
 }

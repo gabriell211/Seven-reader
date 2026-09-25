@@ -1,7 +1,7 @@
 use crate::state::AppState;
 use pdfium_render::prelude::Pdfium;
 use serde::Serialize;
-use std::{path::Path, process::Command};
+use std::{env, path::{Path, PathBuf}, process::Command};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Capability {
@@ -25,6 +25,7 @@ pub struct Capabilities {
     pub pdftotext: Capability,
     pub openssl: Capability,
     pub tesseract: Capability,
+    pub web_pdf: Capability,
 }
 
 fn command_version(candidates: &[&str], args: &[&str]) -> Capability {
@@ -43,6 +44,45 @@ fn command_version(candidates: &[&str], args: &[&str]) -> Capability {
         }
     }
     Capability { available: false, version: None, detail: None }
+}
+
+pub fn find_browser() -> Option<PathBuf> {
+    for candidate in ["msedge", "chrome", "google-chrome", "chromium", "chromium-browser"] {
+        if let Ok(path) = which::which(candidate) {
+            return Some(path);
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let mut candidates = Vec::new();
+        for key in ["PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA"] {
+            if let Some(base) = env::var_os(key) {
+                let base = PathBuf::from(base);
+                candidates.push(base.join("Microsoft/Edge/Application/msedge.exe"));
+                candidates.push(base.join("Google/Chrome/Application/chrome.exe"));
+            }
+        }
+        if let Some(path) = candidates.into_iter().find(|path| path.is_file()) {
+            return Some(path);
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        for path in [
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+            "/Applications/Chromium.app/Contents/MacOS/Chromium",
+        ] {
+            let candidate = PathBuf::from(path);
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+    }
+
+    None
 }
 
 pub fn bind_pdfium(resource_dir: &Path) -> Result<Pdfium, String> {
@@ -91,6 +131,18 @@ pub fn detect(state: &AppState) -> Capabilities {
     let pdftotext = command_version(&["pdftotext"], &["-v"]);
     let openssl = command_version(&["openssl"], &["version"]);
     let tesseract = command_version(&["tesseract"], &["--version"]);
+    let web_pdf = match find_browser() {
+        Some(path) => Capability {
+            available: true,
+            version: None,
+            detail: Some(path.to_string_lossy().into_owned()),
+        },
+        None => Capability {
+            available: false,
+            version: None,
+            detail: Some("Chrome, Chromium ou Edge não detectado".into()),
+        },
+    };
 
     let certificates = Capability {
         available: true,
@@ -110,5 +162,6 @@ pub fn detect(state: &AppState) -> Capabilities {
         pdftotext,
         openssl,
         tesseract,
+        web_pdf,
     }
 }

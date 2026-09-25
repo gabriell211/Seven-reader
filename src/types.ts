@@ -285,6 +285,18 @@ export interface NewFormField {
   options: string[];
 }
 
+export interface DuplicateFieldRequest {
+  objectId: string;
+  pageStart: number;
+  pageEnd: number;
+  rows: number;
+  columns: number;
+  gapX: number;
+  gapY: number;
+  offsetX: number;
+  offsetY: number;
+}
+
 export interface FormFieldUpdate {
   objectId: string;
   name: string;

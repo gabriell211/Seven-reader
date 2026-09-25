@@ -56,6 +56,28 @@ export interface SearchHit {
   occurrences: number;
 }
 
+export interface AdvancedSearchOptions {
+  query: string;
+  matchCase: boolean;
+  wholeWord: boolean;
+  regex: boolean;
+  pageStart?: number;
+  pageEnd?: number;
+  includeText: boolean;
+  includeComments: boolean;
+  includeBookmarks: boolean;
+  includeForms: boolean;
+  includeMetadata: boolean;
+}
+
+export interface AdvancedSearchHit {
+  kind: "text" | "comment" | "bookmark" | "form" | "metadata" | string;
+  pageIndex?: number;
+  title: string;
+  excerpt: string;
+  occurrences: number;
+}
+
 export interface JobStart {
   jobId: string;
 }

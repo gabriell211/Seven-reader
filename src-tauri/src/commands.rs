@@ -117,6 +117,104 @@ pub fn start_combine_documents(
 }
 
 #[tauri::command]
+pub fn start_extract_pages(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: String,
+    output: String,
+    page_range: String,
+) -> CommandResult<JobStart> {
+    let executable = jobs::require_executable(&["qpdf"], "qpdf").map_err(ErrorPayload::from)?;
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    let page_range = jobs::validated_page_range(&page_range).map_err(ErrorPayload::from)?;
+
+    let args = vec![
+        input.to_string_lossy().into_owned(),
+        "--pages".into(),
+        ".".into(),
+        page_range,
+        "--".into(),
+        output.to_string_lossy().into_owned(),
+    ];
+
+    Ok(jobs::start_process_job(
+        app,
+        &state,
+        "extract-pages",
+        executable,
+        args,
+        Some(output),
+    ))
+}
+
+#[tauri::command]
+pub fn start_reorder_pages(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: String,
+    output: String,
+    page_order: String,
+) -> CommandResult<JobStart> {
+    let executable = jobs::require_executable(&["qpdf"], "qpdf").map_err(ErrorPayload::from)?;
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    let page_order = jobs::validated_page_range(&page_order).map_err(ErrorPayload::from)?;
+
+    let args = vec![
+        input.to_string_lossy().into_owned(),
+        "--pages".into(),
+        ".".into(),
+        page_order,
+        "--".into(),
+        output.to_string_lossy().into_owned(),
+    ];
+
+    Ok(jobs::start_process_job(
+        app,
+        &state,
+        "reorder-pages",
+        executable,
+        args,
+        Some(output),
+    ))
+}
+
+#[tauri::command]
+pub fn start_rotate_pages(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: String,
+    output: String,
+    page_range: String,
+    angle: i16,
+) -> CommandResult<JobStart> {
+    let executable = jobs::require_executable(&["qpdf"], "qpdf").map_err(ErrorPayload::from)?;
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    let page_range = jobs::validated_page_range(&page_range).map_err(ErrorPayload::from)?;
+    let angle = jobs::validated_rotation(angle).map_err(ErrorPayload::from)?;
+    let sign = if angle >= 0 { "+" } else { "" };
+    let rotate = format!("--rotate={sign}{angle}:{page_range}");
+
+    let args = vec![
+        input.to_string_lossy().into_owned(),
+        rotate,
+        "--".into(),
+        output.to_string_lossy().into_owned(),
+    ];
+
+    Ok(jobs::start_process_job(
+        app,
+        &state,
+        "rotate-pages",
+        executable,
+        args,
+        Some(output),
+    ))
+}
+
+#[tauri::command]
 pub fn start_ocr(
     app: AppHandle,
     state: State<'_, AppState>,

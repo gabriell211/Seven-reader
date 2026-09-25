@@ -15,7 +15,7 @@ export const tools: ToolDefinition[] = [
   { id: "edit", label: "Editar PDF", description: "Texto, imagens, objetos, links e conteúdo.", icon: "edit", group: "Documento", capability: "pdf_engine", implemented: false },
   { id: "convert", label: "Converter", description: "PDF, Office, imagens, texto e formatos de publicação.", icon: "convert", group: "Documento", capability: "office", implemented: false },
   { id: "create", label: "Criar PDF", description: "Arquivos, imagens, scanner, clipboard e página em branco.", icon: "create", group: "Documento", capability: "pdf_engine", implemented: false },
-  { id: "organize", label: "Organizar páginas", description: "Reordenar, extrair, dividir, girar e inserir.", icon: "pages", group: "Documento", capability: "pdf_engine", implemented: false },
+  { id: "organize", label: "Organizar páginas", description: "Reordenar, extrair e girar páginas preservando a estrutura PDF.", icon: "pages", group: "Documento", capability: "qpdf", implemented: true },
   { id: "combine", label: "Combinar arquivos", description: "Mescle PDFs usando processamento local.", icon: "merge", group: "Documento", capability: "qpdf", implemented: true },
   { id: "comment", label: "Comentar", description: "Destaques, notas, desenho, carimbos e revisão.", icon: "comment", group: "Revisão", capability: "pdf_engine", implemented: false },
   { id: "fill-sign", label: "Preencher e assinar", description: "Campos, assinatura eletrônica e iniciais.", icon: "sign", group: "Revisão", capability: "pdf_engine", implemented: false },

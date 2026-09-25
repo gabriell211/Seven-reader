@@ -49,6 +49,31 @@ export async function startCombine(inputs: string[], output: string): Promise<Jo
   return invoke<JobStart>("start_combine_documents", { inputs, output });
 }
 
+export async function startExtractPages(
+  input: string,
+  output: string,
+  pageRange: string,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_extract_pages", { input, output, pageRange });
+}
+
+export async function startReorderPages(
+  input: string,
+  output: string,
+  pageOrder: string,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_reorder_pages", { input, output, pageOrder });
+}
+
+export async function startRotatePages(
+  input: string,
+  output: string,
+  pageRange: string,
+  angle: -270 | -180 | -90 | 0 | 90 | 180 | 270,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_rotate_pages", { input, output, pageRange, angle });
+}
+
 export async function startOcr(
   input: string,
   output: string,

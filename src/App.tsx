@@ -4,6 +4,7 @@ import { message, open, save } from "@tauri-apps/plugin-dialog";
 import { SplashScreen } from "./components/SplashScreen";
 import { Home } from "./components/Home";
 import { DocumentWorkspace } from "./components/DocumentWorkspace";
+import { PageOrganizerDialog, type PageOperation } from "./components/PageOrganizerDialog";
 import {
   cancelJob,
   closeDocument,
@@ -14,6 +15,9 @@ import {
   saveCopy,
   searchDocument,
   startCombine,
+  startExtractPages,
+  startReorderPages,
+  startRotatePages,
   startOcr,
   startOptimize,
 } from "./lib/native";
@@ -72,6 +76,7 @@ export default function App() {
   const [searchHits, setSearchHits] = useState<SearchHit[]>([]);
   const [jobs, setJobs] = useState<Record<string, JobStatus>>({});
   const [notice, setNotice] = useState<string | null>(null);
+  const [organizerOpen, setOrganizerOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -233,6 +238,11 @@ export default function App() {
     }
 
     try {
+      if (tool === "organize") {
+        setOrganizerOpen(true);
+        return;
+      }
+
       if (tool === "combine") {
         const selected = await open({
           title: "Combinar PDFs",
@@ -288,12 +298,53 @@ export default function App() {
     }
   };
 
+
+  const runPageOperation = async (
+    operation: PageOperation,
+    pageExpression: string,
+    angle: 90 | 180 | 270,
+  ) => {
+    const input = await pickInputPdf();
+    if (!input) return;
+
+    const suffix = operation === "extract" ? "extraido" : operation === "rotate" ? "girado" : "organizado";
+    const output = await save({
+      title: operation === "extract" ? "Salvar páginas extraídas" : operation === "rotate" ? "Salvar PDF girado" : "Salvar PDF reorganizado",
+      defaultPath: `Seven-Reader-${suffix}.pdf`,
+      filters: [{ name: "Documento PDF", extensions: ["pdf"] }],
+    });
+    if (!output) return;
+
+    try {
+      const started =
+        operation === "extract"
+          ? await startExtractPages(input, output, pageExpression)
+          : operation === "rotate"
+            ? await startRotatePages(input, output, pageExpression, angle)
+            : await startReorderPages(input, output, pageExpression);
+      setOrganizerOpen(false);
+      setNotice(`Operação de páginas iniciada · job ${started.jobId.slice(0, 8)}`);
+    } catch (error) {
+      const text = errorMessage(error);
+      setNotice(text);
+      await message(text, { title: "Seven Reader", kind: "error" });
+    }
+  };
+
   const status = (
     <>
       {notice && (
         <button className="global-notice" onClick={() => setNotice(null)} aria-label="Fechar aviso">
           {notice}
         </button>
+      )}
+      {organizerOpen && (
+        <PageOrganizerDialog
+          fileName={document?.name ?? "Selecionar PDF"}
+          pageCount={document?.pageCount}
+          onClose={() => setOrganizerOpen(false)}
+          onRun={(operation, pageExpression, angle) => void runPageOperation(operation, pageExpression, angle)}
+        />
       )}
       {activeJobs.length > 0 && (
         <div className="job-stack" aria-live="polite">

@@ -137,3 +137,38 @@ pub fn validated_output(path: &str, extension: &str) -> Result<PathBuf, SevenErr
     }
     Ok(destination)
 }
+
+
+pub fn validated_page_range(value: &str) -> Result<String, SevenError> {
+    let range = value.trim();
+    if range.is_empty() || range.len() > 512 {
+        return Err(SevenError::OperationRejected("Intervalo de páginas inválido".into()));
+    }
+
+    let allowed = range.chars().all(|ch| {
+        ch.is_ascii_digit()
+            || matches!(ch, ',' | '-' | ':' | 'x' | 'r' | 'z' | 'o' | 'd' | 'e' | 'v' | 'n')
+    });
+
+    if !allowed
+        || range.starts_with('-')
+        || range.ends_with('-')
+        || range.contains("..")
+        || range.contains("--")
+    {
+        return Err(SevenError::OperationRejected(
+            "Use apenas a sintaxe de páginas suportada, por exemplo: 1-5,8,z-2".into(),
+        ));
+    }
+
+    Ok(range.to_owned())
+}
+
+pub fn validated_rotation(angle: i16) -> Result<i16, SevenError> {
+    match angle {
+        -270 | -180 | -90 | 0 | 90 | 180 | 270 => Ok(angle),
+        _ => Err(SevenError::OperationRejected(
+            "Rotação deve ser 0, 90, 180 ou 270 graus".into(),
+        )),
+    }
+}

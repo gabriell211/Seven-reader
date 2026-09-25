@@ -10,6 +10,7 @@ mod jobs;
 mod ocr;
 mod pdf;
 mod redaction;
+mod search;
 mod signatures;
 mod state;
 
@@ -37,6 +38,7 @@ pub fn run() {
             commands::close_document,
             commands::render_page,
             commands::search_document,
+            commands::search_document_advanced,
             commands::save_document_as,
             commands::create_blank_document,
             commands::create_pdf_from_text,

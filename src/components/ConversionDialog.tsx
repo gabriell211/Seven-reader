@@ -8,6 +8,7 @@ interface ConversionDialogProps {
   currentPdf?: string;
   onClose: () => void;
   onConvertToPdf: (input: string, outputDirectory: string) => void;
+  onBatchConvertToPdf: (inputs: string[], outputDirectory: string) => void;
   onExport: (input: string, output: string, format: "png" | "jpeg" | "tiff" | "txt" | "ps", dpi?: number) => void;
 }
 
@@ -16,6 +17,7 @@ export function ConversionDialog({
   currentPdf,
   onClose,
   onConvertToPdf,
+  onBatchConvertToPdf,
   onExport,
 }: ConversionDialogProps) {
   const [mode, setMode] = useState<"to-pdf" | "from-pdf">(currentPdf ? "from-pdf" : "to-pdf");
@@ -23,16 +25,18 @@ export function ConversionDialog({
   const [dpi, setDpi] = useState(150);
 
   const convertToPdf = async () => {
-    const input = await open({
-      title: "Selecionar documento para converter",
-      multiple: false,
+    const selected = await open({
+      title: "Selecionar documento(s) para converter",
+      multiple: true,
       directory: false,
       filters: [{ name: "Documentos", extensions: ["doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp", "rtf", "txt", "html", "htm"] }],
     });
-    if (typeof input !== "string") return;
+    const inputs = Array.isArray(selected) ? selected : typeof selected === "string" ? [selected] : [];
+    if (!inputs.length) return;
     const outputDirectory = await open({ title: "Pasta de saída", directory: true, multiple: false });
     if (typeof outputDirectory !== "string") return;
-    onConvertToPdf(input, outputDirectory);
+    if (inputs.length === 1) onConvertToPdf(inputs[0], outputDirectory);
+    else onBatchConvertToPdf(inputs, outputDirectory);
   };
 
   const exportPdf = async () => {
@@ -83,8 +87,8 @@ export function ConversionDialog({
           {mode === "to-pdf" ? (
             <div className="workflow-feature">
               <span className="feature-icon"><SevenIcon name="convert" /></span>
-              <div><h3>Office, OpenDocument, RTF, texto e HTML</h3><p>O LibreOffice é executado em modo headless e grava o PDF diretamente na pasta escolhida.</p></div>
-              <button className="primary-button" disabled={!officeAvailable} onClick={() => void convertToPdf()}>Selecionar arquivo</button>
+              <div><h3>Office, OpenDocument, RTF, texto e HTML</h3><p>Selecione um ou vários arquivos. Em lote, a fila processa um documento por vez para manter o aplicativo responsivo.</p></div>
+              <button className="primary-button" disabled={!officeAvailable} onClick={() => void convertToPdf()}>Selecionar arquivo(s)</button>
               {!officeAvailable && <small className="dependency-note">LibreOffice não detectado.</small>}
             </div>
           ) : (

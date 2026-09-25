@@ -80,6 +80,9 @@ import {
   sessionReplaceImageObject,
   sessionRemoveImageObject,
   sessionEditAddImage,
+  listPdfLinks,
+  sessionEditUpdateLink,
+  sessionEditRemoveLink,
   sessionEditAddLink,
   sessionEditOverlayText,
   sessionEditSetBackground,
@@ -159,6 +162,8 @@ import type {
   InkAnnotationInput,
   JobStatus,
   LinkPlacement,
+  LinkInfo,
+  LinkUpdate,
   NewFormField,
   OcrOptions,
   OcrWord,
@@ -298,6 +303,8 @@ export default function App() {
   const [signatureLoading, setSignatureLoading] = useState(false);
   const [editingOpen, setEditingOpen] = useState(false);
   const [imageObjects, setImageObjects] = useState<ImageObjectInfo[]>([]);
+  const [pdfLinks, setPdfLinks] = useState<LinkInfo[]>([]);
+  const [pdfLinksLoading, setPdfLinksLoading] = useState(false);
   const [imageObjectsLoading, setImageObjectsLoading] = useState(false);
   const [redactionOpen, setRedactionOpen] = useState(false);
   const [redactionMatches, setRedactionMatches] = useState<RedactionArea[]>([]);
@@ -1112,6 +1119,7 @@ export default function App() {
           return;
         }
         setImageObjects([]);
+        setPdfLinks([]);
         setEditingOpen(true);
         return;
       }
@@ -1583,6 +1591,40 @@ export default function App() {
     try {
       const summary = await sessionEditAddImage(document.id, placement);
       await acceptDocumentRevision(summary, "Imagem inserida na sessão.");
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const reloadPdfLinks = async () => {
+    if (!document) return;
+    try {
+      setPdfLinksLoading(true);
+      setPdfLinks(await listPdfLinks(document.id));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    } finally {
+      setPdfLinksLoading(false);
+    }
+  };
+
+  const runEditUpdateLink = async (update: LinkUpdate) => {
+    if (!document) return;
+    try {
+      const summary = await sessionEditUpdateLink(document.id, update);
+      await acceptDocumentRevision(summary, "Link atualizado na sessão.");
+      setPdfLinks(await listPdfLinks(document.id));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runEditRemoveLink = async (pageIndex: number, objectId: string) => {
+    if (!document) return;
+    try {
+      const summary = await sessionEditRemoveLink(document.id, pageIndex, objectId);
+      await acceptDocumentRevision(summary, "Link removido da sessão.");
+      setPdfLinks(await listPdfLinks(document.id));
     } catch (error) {
       setNotice(errorMessage(error));
     }
@@ -2368,6 +2410,8 @@ export default function App() {
           pageCount={document.pageCount}
           imageObjects={imageObjects}
           imageObjectsLoading={imageObjectsLoading}
+          links={pdfLinks}
+          linksLoading={pdfLinksLoading}
           onClose={() => setEditingOpen(false)}
           onAddText={(placement) => void runEditAddText(placement)}
           onReplaceText={(find, replacement, allPages) => void runEditReplaceText(find, replacement, allPages)}
@@ -2375,6 +2419,9 @@ export default function App() {
           onReplaceImage={(resourceName, imagePath) => void runReplaceImageObject(resourceName, imagePath)}
           onRemoveImage={(resourceName) => void runRemoveImageObject(resourceName)}
           onAddImage={(placement) => void runEditAddImage(placement)}
+          onReloadLinks={() => void reloadPdfLinks()}
+          onUpdateLink={(update) => void runEditUpdateLink(update)}
+          onRemoveLink={(pageIndex,objectId) => void runEditRemoveLink(pageIndex,objectId)}
           onAddLink={(link) => void runEditAddLink(link)}
           onOverlay={(options) => void runEditOverlay(options)}
           onBackground={(options) => void runEditBackground(options)}

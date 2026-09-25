@@ -725,6 +725,19 @@ pub fn session_edit_remove_managed_element(
 }
 
 #[tauri::command]
+pub fn session_set_page_labels(
+    state: State<'_, AppState>,
+    document_id: String,
+    options: editing::PageLabelOptions,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "page-labels", move |input, output| {
+        editing::set_page_labels(input, output, options)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn session_edit_overlay_text(
     state: State<'_, AppState>,
     document_id: String,

@@ -1003,6 +1003,17 @@ pub fn add_annotation(
 }
 
 #[tauri::command]
+pub fn add_ink_annotation(
+    input: String,
+    output: String,
+    ink: annotations::InkAnnotationInput,
+) -> CommandResult<()> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    annotations::add_ink_annotation(&input, &output, ink).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn delete_annotation(
     input: String,
     output: String,

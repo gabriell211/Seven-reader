@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { PageBoxUpdate, PrintPreflightReport } from "../types";
 import { SevenIcon } from "./SevenIcon";
 
@@ -36,6 +36,8 @@ export function PrintProductionDialog({
   const [trimMm, setTrimMm] = useState(3);
   const [bleedMm, setBleedMm] = useState(0);
   const [cropToTrim, setCropToTrim] = useState(false);
+
+  useEffect(() => { onReload(); }, [onReload]);
 
   const unembedded = useMemo(
     () => report?.fonts.filter((font) => !font.embedded).length ?? 0,

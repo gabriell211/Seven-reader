@@ -670,6 +670,61 @@ pub fn session_edit_add_link(
 }
 
 #[tauri::command]
+pub fn list_managed_pdf_elements(
+    state: State<'_, AppState>,
+    document_id: String,
+) -> CommandResult<Vec<editing::ManagedElementInfo>> {
+    let document = state
+        .documents
+        .lock()
+        .get(&document_id)
+        .cloned()
+        .ok_or_else(|| ErrorPayload::from(SevenError::DocumentNotOpen))?;
+    editing::list_managed_elements(document.active_path()).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_edit_update_overlay_text(
+    state: State<'_, AppState>,
+    document_id: String,
+    element_id: String,
+    options: editing::OverlayTextOptions,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "update-overlay", move |input, output| {
+        editing::update_overlay_text(input, output, &element_id, options)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_edit_update_background(
+    state: State<'_, AppState>,
+    document_id: String,
+    element_id: String,
+    options: editing::BackgroundOptions,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "update-background", move |input, output| {
+        editing::update_background(input, output, &element_id, options)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_edit_remove_managed_element(
+    state: State<'_, AppState>,
+    document_id: String,
+    element_id: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "remove-managed-element", move |input, output| {
+        editing::remove_managed_element(input, output, &element_id)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn session_edit_overlay_text(
     state: State<'_, AppState>,
     document_id: String,

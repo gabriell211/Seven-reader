@@ -204,16 +204,17 @@ export function AdvancedPdfDialog({
                 </header>
                 <label className="workflow-field"><span>Título</span><input value={rename[editingBookmark.objectId]??editingBookmark.title} onChange={(e)=>setRename(current=>({...current,[editingBookmark.objectId]:e.target.value}))}/></label>
                 <div className="two-column-fields">
-                  <label className="workflow-field"><span>Ação</span><select value={bookmarkAction} onChange={(e)=>setBookmarkAction(e.target.value as BookmarkUpdate["actionType"])}><option value="goto">Ir para página</option><option value="uri">Abrir URL</option><option value="none">Sem ação</option></select></label>
+                  <label className="workflow-field"><span>Ação</span><select value={bookmarkAction} onChange={(e)=>setBookmarkAction(e.target.value as BookmarkUpdate["actionType"])}><option value="goto">Ir para página</option><option value="uri">Abrir URL</option><option value="named">Destino nomeado</option><option value="none">Sem ação</option></select></label>
                   {bookmarkAction==="goto" && <label className="workflow-field"><span>Página</span><input type="number" min={1} value={bookmarkTargetPage} onChange={(e)=>setBookmarkTargetPage(Math.max(1,Number(e.target.value)||1))}/></label>}
                   {bookmarkAction==="uri" && <label className="workflow-field"><span>URL</span><input value={bookmarkTarget} onChange={(e)=>setBookmarkTarget(e.target.value)} placeholder="https://..."/></label>}
+                  {bookmarkAction==="named" && <label className="workflow-field"><span>Destino nomeado</span><input value={bookmarkTarget} onChange={(e)=>setBookmarkTarget(e.target.value)} placeholder="Nome do destino"/></label>}
                 </div>
                 <div className="bookmark-style-controls">
                   <label className="toggle-row"><input type="checkbox" checked={bookmarkBold} onChange={(e)=>setBookmarkBold(e.target.checked)}/><span><strong>Negrito</strong></span></label>
                   <label className="toggle-row"><input type="checkbox" checked={bookmarkItalic} onChange={(e)=>setBookmarkItalic(e.target.checked)}/><span><strong>Itálico</strong></span></label>
                   <label className="workflow-field"><span>Cor</span><input type="color" value={bookmarkColor} onChange={(e)=>setBookmarkColor(e.target.value)}/></label>
                 </div>
-                <button className="primary-button workflow-submit" disabled={!(rename[editingBookmark.objectId]??editingBookmark.title).trim() || (bookmarkAction==="uri" && !bookmarkTarget.trim())} onClick={saveBookmarkEdit}>
+                <button className="primary-button workflow-submit" disabled={!(rename[editingBookmark.objectId]??editingBookmark.title).trim() || ((bookmarkAction==="uri" || bookmarkAction==="named") && !bookmarkTarget.trim())} onClick={saveBookmarkEdit}>
                   <SevenIcon name="save"/> Aplicar ao marcador
                 </button>
               </section>

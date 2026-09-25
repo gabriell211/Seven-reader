@@ -30,6 +30,7 @@ import {
   compareDocuments,
   createFormField,
   createPdfFromImages,
+  createPdfFromClipboardImage,
   createPdfFromText,
   createBlankDocument,
   getAccessibilityReport,
@@ -1222,6 +1223,28 @@ export default function App() {
     }
   };
 
+  const createClipboardImagePdf = async (
+    rgba: number[],
+    width: number,
+    height: number,
+    dpi: number,
+  ) => {
+    const destination = await save({
+      title: "Criar PDF a partir da imagem do clipboard",
+      defaultPath: "Clipboard-Seven.pdf",
+      filters: [{ name: "Documento PDF", extensions: ["pdf"] }],
+    });
+    if (!destination) return;
+    try {
+      await createPdfFromClipboardImage(destination, rgba, width, height, dpi);
+      setCreateDialogOpen(false);
+      setNotice("PDF criado a partir da imagem da área de transferência.");
+      await openPath(destination);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
   const createFilePdf = async (input: string, outputDirectory: string) => {
     try {
       const started = await startConvertToPdf(input, outputDirectory);
@@ -1686,6 +1709,7 @@ export default function App() {
           onCreate={(pageSize, pageCount) => void createBlankPdf(pageSize, pageCount)}
           onCreateImages={(inputs, dpi) => void createImagesPdf(inputs, dpi)}
           onCreateText={(text, pageSize, fontSize) => void createTextPdf(text, pageSize, fontSize)}
+          onCreateClipboardImage={(rgba, width, height, dpi) => void createClipboardImagePdf(rgba, width, height, dpi)}
           onCreateFile={(input, outputDirectory) => void createFilePdf(input, outputDirectory)}
           onCreateWeb={(url) => void createWebPdf(url)}
         />

@@ -6,6 +6,7 @@ import type {
   AdvancedSearchHit,
   AdvancedSearchOptions,
   Capabilities,
+  InkAnnotationInput,
   DocumentSummary,
   RenderResult,
   SearchHit,
@@ -39,6 +40,7 @@ interface WorkspaceProps {
   onPrint: () => void;
   onRender: (page: number, zoom: number) => void;
   onSearch: (query: string) => void;
+  onInk: (ink: InkAnnotationInput) => void;
   onAdvancedSearch: (options: AdvancedSearchOptions) => void;
   onTool: (tool: ToolId) => void;
   onSettings: () => void;
@@ -81,6 +83,7 @@ export function DocumentWorkspace({
   onPrint,
   onRender,
   onSearch,
+  onInk,
   onAdvancedSearch,
   onTool,
   onSettings,
@@ -111,6 +114,10 @@ export function DocumentWorkspace({
   const [tabMenu, setTabMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const stageRef = useRef<HTMLElement>(null);
+  const pageRef = useRef<HTMLDivElement>(null);
+  const [inkPoints, setInkPoints] = useState<Array<[number, number]>>([]);
+  const [inkWidth, setInkWidth] = useState(2.5);
+  const drawingRef = useRef(false);
 
   useEffect(() => {
     const focus = () => searchRef.current?.focus();
@@ -128,7 +135,7 @@ export function DocumentWorkspace({
       window.removeEventListener("blur", close);
     };
   }, [tabMenu]);
-  const [viewerTool, setViewerTool] = useState<"select" | "hand">("select");
+  const [viewerTool, setViewerTool] = useState<"select" | "hand" | "draw">("select");
 
   const filteredTools = useMemo(() => {
     const query = toolSearch.trim().toLocaleLowerCase("pt-BR");
@@ -169,6 +176,52 @@ export function DocumentWorkspace({
     const widthZoom = (availableWidth / baseWidth) * 100;
     const pageZoom = Math.min(widthZoom, (availableHeight / baseHeight) * 100);
     onRender(page, Math.max(25, Math.min(400, mode === "width" ? widthZoom : pageZoom)));
+  };
+
+  const normalizedPoint = (clientX: number, clientY: number): [number, number] | null => {
+    const rect = pageRef.current?.getBoundingClientRect();
+    if (!rect || rect.width <= 0 || rect.height <= 0) return null;
+    return [
+      Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)),
+      Math.max(0, Math.min(1, (clientY - rect.top) / rect.height)),
+    ];
+  };
+
+  const beginInk = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (viewerTool !== "draw") return;
+    const point = normalizedPoint(event.clientX, event.clientY);
+    if (!point) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drawingRef.current = true;
+    setInkPoints([point]);
+  };
+
+  const moveInk = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (viewerTool !== "draw" || !drawingRef.current) return;
+    const point = normalizedPoint(event.clientX, event.clientY);
+    if (!point) return;
+    setInkPoints((current) => {
+      const last = current.at(-1);
+      if (last && Math.hypot(point[0] - last[0], point[1] - last[1]) < 0.0015) return current;
+      return current.length >= 20_000 ? current : [...current, point];
+    });
+  };
+
+  const finishInk = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (viewerTool !== "draw" || !drawingRef.current) return;
+    drawingRef.current = false;
+    try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* already released */ }
+    setInkPoints((current) => {
+      if (current.length >= 2) {
+        onInk({
+          pageIndex: page,
+          author: "Seven Reader",
+          points: current,
+          lineWidth: inkWidth,
+        });
+      }
+      return [];
+    });
   };
 
   const submitSearch = () => {
@@ -385,8 +438,29 @@ export function DocumentWorkspace({
         <main className="document-stage" ref={stageRef}>
           <div className="document-canvas">
             {rendered ? (
-              <div className="rendered-page" style={{ width: rendered.width }}>
+              <div
+                className={viewerTool === "draw" ? "rendered-page drawing-active" : "rendered-page"}
+                style={{ width: rendered.width }}
+                ref={pageRef}
+                onPointerDown={beginInk}
+                onPointerMove={moveInk}
+                onPointerUp={finishInk}
+                onPointerCancel={finishInk}
+              >
                 <img src={nativeAssetUrl(rendered.cachePath)} alt={`Página ${page + 1}`} draggable={false} />
+                {viewerTool === "draw" && inkPoints.length > 0 && (
+                  <svg className="ink-preview" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
+                    <polyline
+                      points={inkPoints.map(([x, y]) => `${(x * 1000).toFixed(2)},${(y * 1000).toFixed(2)}`).join(" ")}
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={Math.max(1.5, inkWidth * 1.8)}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  </svg>
+                )}
               </div>
             ) : (
               <div className="loading-page"><span className="loader-ring" /><strong>Renderizando página…</strong></div>
@@ -399,8 +473,14 @@ export function DocumentWorkspace({
             <span />
             <button aria-label="Comentário" onClick={() => onTool("comment")}><SevenIcon name="comment" /></button>
             <button aria-label="Destaque" onClick={() => onTool("comment")} title="Abrir comentários e marcações"><SevenIcon name="highlight" /></button>
-            <button aria-label="Desenho" disabled><SevenIcon name="draw" /></button>
+            <button className={viewerTool === "draw" ? "active" : ""} aria-label="Desenho à mão livre" onClick={() => setViewerTool(viewerTool === "draw" ? "select" : "draw")}><SevenIcon name="draw" /></button>
             <button aria-label="Assinatura" onClick={() => onTool("fill-sign")}><SevenIcon name="sign" /></button>
+            {viewerTool === "draw" && (
+              <label className="ink-width-control" title="Espessura do desenho">
+                <input type="range" min={0.5} max={12} step={0.5} value={inkWidth} onChange={(event) => setInkWidth(Number(event.target.value))} />
+                <small>{inkWidth.toFixed(1)} pt</small>
+              </label>
+            )}
           </div>
 
           <div className="view-controls">

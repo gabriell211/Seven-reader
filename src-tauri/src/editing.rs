@@ -29,6 +29,24 @@ pub struct ImagePlacement {
     pub y: f64,
     pub width: f64,
     pub height: f64,
+    pub rotation: f64,
+    pub opacity: f64,
+    pub mirror_x: bool,
+    pub mirror_y: bool,
+    pub crop_left: f64,
+    pub crop_top: f64,
+    pub crop_right: f64,
+    pub crop_bottom: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageObjectInfo {
+    pub page_index: usize,
+    pub resource_name: String,
+    pub object_id: String,
+    pub pixel_width: Option<i64>,
+    pub pixel_height: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -338,10 +356,164 @@ pub fn replace_text(
     Ok(ReplaceTextReport { replacements, pages_changed, unsupported_text_operators })
 }
 
+fn xobject_dictionary(document: &Document, resources: &Dictionary) -> Dictionary {
+    match resources.get(b"XObject") {
+        Ok(Object::Dictionary(dictionary)) => dictionary.clone(),
+        Ok(Object::Reference(id)) => document
+            .get_object(*id)
+            .ok()
+            .and_then(|object| object.as_dict().ok())
+            .cloned()
+            .unwrap_or_default(),
+        _ => Dictionary::new(),
+    }
+}
+
+pub fn list_image_objects(input: &Path, page_index: usize) -> Result<Vec<ImageObjectInfo>, SevenError> {
+    let document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let page_id = page_id(&document, page_index)?;
+    let resources = effective_resources(&document, page_id);
+    let xobjects = xobject_dictionary(&document, &resources);
+    let mut output = Vec::new();
+
+    for (name, object) in xobjects.iter() {
+        let Ok(id) = object.as_reference() else { continue };
+        let Ok(stream) = document.get_object(id).and_then(Object::as_stream) else { continue };
+        let subtype = stream.dict.get(b"Subtype").ok().and_then(|value| value.as_name().ok());
+        if subtype != Some(b"Image") {
+            continue;
+        }
+        let pixel_width = stream.dict.get(b"Width").ok().and_then(|value| value.as_i64().ok());
+        let pixel_height = stream.dict.get(b"Height").ok().and_then(|value| value.as_i64().ok());
+        output.push(ImageObjectInfo {
+            page_index,
+            resource_name: String::from_utf8_lossy(name).into_owned(),
+            object_id: format!("{}:{}", id.0, id.1),
+            pixel_width,
+            pixel_height,
+        });
+    }
+
+    output.sort_by(|left, right| left.resource_name.cmp(&right.resource_name));
+    Ok(output)
+}
+
+fn localize_xobjects(
+    document: &mut Document,
+    page_id: ObjectId,
+) -> Result<(Dictionary, Dictionary), SevenError> {
+    let mut resources = effective_resources(document, page_id);
+    let xobjects = xobject_dictionary(document, &resources);
+    resources.set("XObject", xobjects.clone());
+    document
+        .get_object_mut(page_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .set("Resources", resources.clone());
+    Ok((resources, xobjects))
+}
+
+pub fn replace_image_object(
+    input: &Path,
+    output: &Path,
+    page_index: usize,
+    resource_name: &str,
+    image_path: &str,
+) -> Result<(), SevenError> {
+    if resource_name.is_empty() || resource_name.len() > 256 {
+        return Err(SevenError::OperationRejected("Nome do recurso de imagem inválido".into()));
+    }
+    let image_path = Path::new(image_path);
+    if !image_path.is_file() {
+        return Err(SevenError::NotFound(image_path.to_string_lossy().into_owned()));
+    }
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let page_id = page_id(&document, page_index)?;
+    let (mut resources, mut xobjects) = localize_xobjects(&mut document, page_id)?;
+    if xobjects.get(resource_name.as_bytes()).is_err() {
+        return Err(SevenError::OperationRejected("Recurso de imagem não encontrado nesta página".into()));
+    }
+    let stream = lopdf::xobject::image(image_path)
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    let id = document.add_object(stream);
+    xobjects.set(resource_name, id);
+    resources.set("XObject", xobjects);
+    document
+        .get_object_mut(page_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .set("Resources", resources);
+    atomic_save(document, output)
+}
+
+pub fn remove_image_object(
+    input: &Path,
+    output: &Path,
+    page_index: usize,
+    resource_name: &str,
+) -> Result<usize, SevenError> {
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let page_id = page_id(&document, page_index)?;
+    let data = document.get_page_content(page_id);
+    if data.len() > MAX_PAGE_CONTENT {
+        return Err(SevenError::OperationRejected("Página excede o limite seguro de edição".into()));
+    }
+    let mut content = Content::decode(&data)
+        .map_err(|error| SevenError::Operation(format!("Content stream: {error}")))?;
+    let before = content.operations.len();
+    content.operations.retain(|operation| {
+        if operation.operator != "Do" {
+            return true;
+        }
+        let Some(Object::Name(name)) = operation.operands.first() else { return true };
+        name.as_slice() != resource_name.as_bytes()
+    });
+    let removed = before.saturating_sub(content.operations.len());
+    if removed == 0 {
+        return Err(SevenError::OperationRejected(
+            "A imagem existe nos recursos, mas não há uso direto editável nesta página; ela pode estar dentro de um Form XObject".into(),
+        ));
+    }
+    let encoded = content.encode().map_err(|error| SevenError::Operation(error.to_string()))?;
+    let stream_id = document.add_object(Stream::new(Dictionary::new(), encoded));
+    document
+        .get_object_mut(page_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .set("Contents", stream_id);
+
+    let (mut resources, mut xobjects) = localize_xobjects(&mut document, page_id)?;
+    xobjects.remove(resource_name.as_bytes());
+    resources.set("XObject", xobjects);
+    document
+        .get_object_mut(page_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .set("Resources", resources);
+    atomic_save(document, output)?;
+    Ok(removed)
+}
+
 pub fn add_image(input: &Path, output: &Path, placement: ImagePlacement) -> Result<(), SevenError> {
     if placement.width <= 0.0 || placement.height <= 0.0 {
         return Err(SevenError::OperationRejected("Dimensões da imagem inválidas".into()));
     }
+    if !(0.0..=1.0).contains(&placement.opacity) {
+        return Err(SevenError::OperationRejected("Opacidade deve ficar entre 0 e 1".into()));
+    }
+    for crop in [placement.crop_left, placement.crop_top, placement.crop_right, placement.crop_bottom] {
+        if !(0.0..=0.95).contains(&crop) {
+            return Err(SevenError::OperationRejected("Recorte deve ficar entre 0 e 95%".into()));
+        }
+    }
+    if placement.crop_left + placement.crop_right >= 0.98 || placement.crop_top + placement.crop_bottom >= 0.98 {
+        return Err(SevenError::OperationRejected("O recorte remove quase toda a imagem".into()));
+    }
+
     let image_path = Path::new(&placement.image_path);
     if !image_path.is_file() {
         return Err(SevenError::NotFound(placement.image_path));
@@ -349,8 +521,26 @@ pub fn add_image(input: &Path, output: &Path, placement: ImagePlacement) -> Resu
 
     let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
     let page_id = page_id(&document, placement.page_index)?;
-    let image_stream = lopdf::xobject::image(image_path)
-        .map_err(|error| SevenError::Operation(error.to_string()))?;
+
+    let decoded = image::open(image_path).map_err(|error| SevenError::Operation(error.to_string()))?;
+    let iw = decoded.width();
+    let ih = decoded.height();
+    let left = (f64::from(iw) * placement.crop_left).round() as u32;
+    let top = (f64::from(ih) * placement.crop_top).round() as u32;
+    let right = (f64::from(iw) * placement.crop_right).round() as u32;
+    let bottom = (f64::from(ih) * placement.crop_bottom).round() as u32;
+    let cw = iw.saturating_sub(left + right).max(1);
+    let ch = ih.saturating_sub(top + bottom).max(1);
+
+    let temp_image = output.with_extension(format!("seven-image-{}.png", uuid::Uuid::new_v4()));
+    decoded.crop_imm(left, top, cw, ch)
+        .save(&temp_image)
+        .map_err(|error| SevenError::Io(error.to_string()))?;
+
+    let image_stream = lopdf::xobject::image(&temp_image)
+        .map_err(|error| SevenError::Operation(error.to_string()));
+    let _ = fs::remove_file(&temp_image);
+    let image_stream = image_stream?;
     let image_id = document.add_object(image_stream);
     let name = format!("SRI{}", image_id.0);
 
@@ -358,23 +548,48 @@ pub fn add_image(input: &Path, output: &Path, placement: ImagePlacement) -> Resu
         .add_xobject(page_id, name.as_bytes(), image_id)
         .map_err(|error| SevenError::Operation(error.to_string()))?;
 
+    let mut resources = effective_resources(&document, page_id);
+    let mut ext_gstates = match resources.get(b"ExtGState") {
+        Ok(Object::Dictionary(dictionary)) => dictionary.clone(),
+        Ok(Object::Reference(id)) => document.get_object(*id).ok().and_then(|object| object.as_dict().ok()).cloned().unwrap_or_default(),
+        _ => Dictionary::new(),
+    };
+    let gs_name = format!("SRGS{}", image_id.0);
+    let gs_id = document.add_object(dictionary! {
+        "Type" => "ExtGState",
+        "ca" => placement.opacity,
+        "CA" => placement.opacity,
+    });
+    ext_gstates.set(gs_name.as_str(), gs_id);
+    resources.set("ExtGState", ext_gstates);
+    document
+        .get_object_mut(page_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .set("Resources", resources);
+
+    let radians = placement.rotation.to_radians();
+    let mut cos = radians.cos();
+    let mut sin = radians.sin();
+    if placement.mirror_x { cos = -cos; sin = -sin; }
+    let vertical = if placement.mirror_y { -1.0 } else { 1.0 };
+    let a = placement.width * cos;
+    let b = placement.width * sin;
+    let c_matrix = -placement.height * sin * vertical;
+    let d = placement.height * cos * vertical;
+
     append_content(
         &mut document,
         page_id,
         Content {
             operations: vec![
                 Operation::new("q", vec![]),
-                Operation::new(
-                    "cm",
-                    vec![
-                        placement.width.into(),
-                        0.into(),
-                        0.into(),
-                        placement.height.into(),
-                        placement.x.into(),
-                        placement.y.into(),
-                    ],
-                ),
+                Operation::new("gs", vec![Object::Name(gs_name.into_bytes())]),
+                Operation::new("cm", vec![
+                    a.into(), b.into(), c_matrix.into(), d.into(),
+                    placement.x.into(), placement.y.into(),
+                ]),
                 Operation::new("Do", vec![Object::Name(name.into_bytes())]),
                 Operation::new("Q", vec![]),
             ],

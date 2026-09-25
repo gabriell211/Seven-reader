@@ -443,14 +443,47 @@ export interface ImageObjectInfo {
   pixelHeight?: number;
 }
 
+export type LinkTargetKind = "url" | "page" | "file" | "named";
+
 export interface LinkPlacement {
   pageIndex: number;
   x: number;
   y: number;
   width: number;
   height: number;
+  targetKind: LinkTargetKind;
   target: string;
   targetPage?: number;
+  namedDestination?: string;
+  borderWidth: number;
+  borderColor: [number, number, number];
+}
+
+export interface LinkInfo {
+  objectId: string;
+  pageIndex: number;
+  rect: [number, number, number, number];
+  targetKind: LinkTargetKind | "unknown";
+  target: string;
+  targetPage?: number;
+  namedDestination?: string;
+  borderWidth: number;
+  borderColor: [number, number, number];
+}
+
+export interface LinkUpdate {
+  objectId: string;
+  pageIndex: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  targetKind: LinkTargetKind;
+  target: string;
+  targetPage?: number;
+  namedDestination?: string;
+  borderWidth: number;
+  borderColor: [number, number, number];
 }
 
 export interface OverlayTextOptions {

@@ -81,6 +81,8 @@ pub fn run() {
             commands::start_export_pdf,
             commands::sign_document,
             commands::validate_signatures,
+            commands::start_print_document,
+            commands::reveal_in_file_manager,
             commands::get_job_status,
             commands::cancel_job,
         ])

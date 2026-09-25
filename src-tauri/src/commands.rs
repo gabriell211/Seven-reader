@@ -1170,7 +1170,8 @@ pub fn start_batch_convert_to_pdf(
 
     let executable = jobs::require_executable(&["soffice", "libreoffice"], "LibreOffice").map_err(ErrorPayload::from)?;
     let output_directory = jobs::validated_directory(&output_directory).map_err(ErrorPayload::from)?;
-    let mut steps = Vec::with_capacity(inputs.len());
+    let total = inputs.len();
+    let mut steps = Vec::with_capacity(total);
 
     for (index, input) in inputs.into_iter().enumerate() {
         let path = std::path::Path::new(&input);
@@ -1199,7 +1200,7 @@ pub fn start_batch_convert_to_pdf(
         steps.push(jobs::ProcessStep {
             program: executable.clone(),
             args,
-            label: format!("Convertendo {} de {} · {name}", index + 1, inputs.len()),
+            label: format!("Convertendo {} de {} · {name}", index + 1, total),
         });
     }
 

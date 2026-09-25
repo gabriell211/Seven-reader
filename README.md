@@ -409,6 +409,11 @@ Categorias:
 - JavaScript e ações PDF
 - Portfólios PDF
 - Camadas
+- Artigos PDF
+- Índices e Catálogo
+- Rich Media
+- 3D
+- Revisão compartilhada
 - Ferramentas geoespaciais
 
 ## Ferramentas rápidas
@@ -816,6 +821,17 @@ Permitir inserir:
 - antes de página específica;
 - depois de página específica.
 
+## Mover e copiar entre documentos
+
+- [ ] Abrir dois PDFs lado a lado
+- [ ] Tile vertical/horizontal
+- [ ] Selecionar uma ou várias páginas
+- [ ] Arrastar páginas para outro PDF para mover
+- [ ] Copiar e colar páginas entre PDFs
+- [ ] Preservar conteúdo, campos, comentários e links compatíveis
+- [ ] Atualizar os dois documentos sem corromper o original
+- [ ] Undo antes do salvamento quando tecnicamente seguro
+
 ## Extrair
 
 - [ ] Intervalo
@@ -825,6 +841,8 @@ Permitir inserir:
 - [ ] Criar um PDF único
 - [ ] Extrair cada página como arquivo separado
 - [ ] Preservar forms/comments/links quando tecnicamente aplicável
+- [ ] Informar que bookmarks e article threads associados às páginas podem não acompanhar a extração
+- [ ] Validar permissões do documento antes de extrair
 
 ## Dividir
 
@@ -1330,6 +1348,7 @@ Criar a partir de:
 ## Tipos de campo
 
 - [ ] Text Field
+- [ ] Image Field
 - [ ] Checkbox
 - [ ] Radio
 - [ ] Dropdown
@@ -1345,6 +1364,9 @@ Criar a partir de:
 - [ ] Criar
 - [ ] Duplicar
 - [ ] Copiar
+- [ ] Criar múltiplas cópias em linhas e colunas
+- [ ] Duplicar campo em todas as páginas
+- [ ] Duplicar campo em intervalo de páginas
 - [ ] Mover
 - [ ] Redimensionar
 - [ ] Seleção múltipla
@@ -1362,6 +1384,53 @@ Criar a partir de:
 - [ ] Cor
 - [ ] Border
 - [ ] Visibility
+- [ ] Visible
+- [ ] Hidden
+- [ ] Visible but doesn't print
+- [ ] Hidden but printable
+- [ ] Orientation
+- [ ] Lock properties
+- [ ] Usar propriedades atuais como padrão para novos campos
+- [ ] Posicionamento numérico preciso
+- [ ] Width
+- [ ] Height
+- [ ] Border color
+- [ ] Fill color
+- [ ] Line thickness
+- [ ] Line style
+- [ ] Font size
+- [ ] Text color
+
+## Gatilhos e ações de campo
+
+Gatilhos suportados:
+
+- [ ] Mouse Up
+- [ ] Mouse Down
+- [ ] Mouse Enter
+- [ ] Mouse Exit
+- [ ] On Focus
+- [ ] On Blur
+
+Ações suportadas, sempre submetidas à política de segurança:
+
+- [ ] Execute menu item
+- [ ] Go to page view
+- [ ] Go to 3D/Multimedia view
+- [ ] Import form data
+- [ ] Open file
+- [ ] Open web link
+- [ ] Play sound
+- [ ] Play media
+- [ ] Read article
+- [ ] Reset form
+- [ ] Run JavaScript em sandbox
+- [ ] Set layer visibility
+- [ ] Show/hide field
+- [ ] Submit form
+- [ ] Ordenar múltiplas ações
+- [ ] Editar ação
+- [ ] Excluir ação
 
 ## Formatação e validação
 
@@ -1421,6 +1490,16 @@ JavaScript nunca deve ser executado sem política de segurança.
 - [ ] Reset
 - [ ] Clear form
 - [ ] Autofill local opcional
+
+## Preferências de formulários
+
+- [ ] Calcular valores automaticamente
+- [ ] Ajustar tab order automaticamente ao mover/criar/excluir campos
+- [ ] Mostrar focus rectangle
+- [ ] Mostrar indicador de overflow em campo de texto
+- [ ] Preview do campo durante criação/edição
+- [ ] Detectar campos automaticamente
+- [ ] AutoComplete local configurável
 
 ## Compatibilidade
 
@@ -1706,21 +1785,40 @@ Um retângulo visual sobre o conteúdo **não** é redação.
 ## Otimizador avançado
 
 - [ ] Auditoria de uso de espaço
+- [ ] Compatibilidade alvo / versão PDF
+- [ ] Aplicar a um arquivo
+- [ ] Aplicar a múltiplos arquivos
+- [ ] Pasta, nome e regra de sobrescrita
 - [ ] Downsample color
 - [ ] Downsample grayscale
 - [ ] Downsample monochrome
+- [ ] Average downsampling
+- [ ] Subsampling
+- [ ] Bicubic downsampling
 - [ ] JPEG
 - [ ] JPEG2000 quando suportado
 - [ ] ZIP/Flate
 - [ ] JBIG2 quando suportado
-- [ ] Remover thumbnails
+- [ ] Qualidade por tipo de imagem
+- [ ] Remover thumbnails incorporadas
 - [ ] Desincorporar fontes quando seguro
 - [ ] Subset fonts
-- [ ] Descartar objetos
-- [ ] Descartar user data
-- [ ] Limpeza estrutural
+- [ ] Painel Transparency
+- [ ] Flatten transparency
+- [ ] Painel Discard Objects
+- [ ] Remover objetos incompatíveis/obsoletos selecionados
+- [ ] Painel Discard User Data
+- [ ] Remover comentários, forms, multimídia e dados privados conforme seleção
+- [ ] Painel Clean Up
+- [ ] Flate em streams não codificados
+- [ ] Converter LZW para Flate quando aplicável
+- [ ] Remover bookmarks inválidos
+- [ ] Remover links inválidos
+- [ ] Remover named destinations não referenciados
+- [ ] Optimize page content
+- [ ] Descartar conteúdo de layers ocultas quando selecionado
+- [ ] Flatten de layers visíveis quando selecionado
 - [ ] Linearização/Fast Web View
-- [ ] Compatibilidade alvo
 - [ ] Estimativa antes/depois
 - [ ] Salvar preset
 
@@ -1765,9 +1863,24 @@ Um retângulo visual sobre o conteúdo **não** é redação.
 
 - [ ] Visualizar OCGs
 - [ ] Mostrar/ocultar
+- [ ] Grupos aninhados
+- [ ] Layer bloqueada/informativa
+- [ ] Listar layers de todas as páginas
+- [ ] Listar apenas layers das páginas visíveis
+- [ ] Reset to Initial Visibility
+- [ ] Apply Print Overrides
+- [ ] Apply Export Overrides
+- [ ] Apply Layer Overrides
 - [ ] Estado inicial
+- [ ] Default State
+- [ ] Intent: View
+- [ ] Intent: Reference
+- [ ] Visibility: sempre/nunca/conforme estado
+- [ ] Print: sempre/nunca/conforme estado
+- [ ] Export: sempre/nunca/conforme estado
 - [ ] Importar arquivo como camada
 - [ ] Reordenar camada
+- [ ] Renomear camada
 - [ ] Editar propriedades
 - [ ] Adicionar navegação de camada
 - [ ] Merge layers
@@ -1794,26 +1907,69 @@ Um Portfólio PDF mantém arquivos independentes dentro de uma unidade integrada
 - [ ] Editar descrição
 - [ ] Preview de componente
 - [ ] Extrair componente
-- [ ] Pesquisar
+- [ ] Pesquisar dentro dos componentes compatíveis
 - [ ] Ordenar lista
+- [ ] Exibição em lista
+- [ ] Navegar por pastas internas
+- [ ] Abrir componente no aplicativo compatível
+- [ ] Preview de PDF/imagem/texto compatível
+- [ ] Editar filename do componente
+- [ ] Editar description
+- [ ] Manter arquivos componentes independentes
 - [ ] Assinaturas/certificação do portfólio
 - [ ] Painel de assinaturas do portfólio
 
 ---
 
-# Conteúdo multimídia e 3D
+# Rich Media e 3D
 
 Suporte sempre isolado e desativado por padrão para conteúdo ativo.
 
-- [ ] Detectar objetos 3D
-- [ ] U3D
-- [ ] PRC
-- [ ] Poster/preview estático
-- [ ] Áudio incorporado
-- [ ] Vídeo incorporado
+## Áudio e vídeo
+
+- [ ] Adicionar vídeo
+- [ ] Adicionar som
+- [ ] Incorporar mídia local
+- [ ] Referenciar mídia por URL HTTP/HTTPS quando permitido
+- [ ] H.264
+- [ ] AAC
+- [ ] MP3
+- [ ] MOV/MP4 compatíveis
+- [ ] Definir play area
+- [ ] Mover play area
+- [ ] Redimensionar play area
+- [ ] Excluir mídia
+- [ ] Poster image
+- [ ] Poster a partir de arquivo
+- [ ] Poster a partir de frame
+- [ ] Launch settings
+- [ ] Activation settings
+- [ ] Playback style
+- [ ] Floating window
+- [ ] Playback controls
+- [ ] Skin
+- [ ] Cor/opacity dos controles
+- [ ] Auto-hide controls
+- [ ] Preview e trim
+- [ ] Chapter points
+- [ ] Actions por chapter point
 - [ ] Extrair mídia
 - [ ] Política de confiança
 - [ ] Nunca executar automaticamente
+
+## 3D
+
+- [ ] Detectar objetos 3D
+- [ ] Adicionar 3D quando engine permitir
+- [ ] U3D
+- [ ] PRC
+- [ ] Poster/preview estático
+- [ ] Ativar conteúdo somente com consentimento
+- [ ] Views 3D
+- [ ] Navegação/interação 3D
+- [ ] Medição de objetos 3D
+- [ ] Comentários associados a views 3D
+- [ ] Propriedades da área 3D
 - [ ] Compatibilidade legada somente quando segura
 
 ---
@@ -1823,14 +1979,28 @@ Suporte sempre isolado e desativado por padrão para conteúdo ativo.
 Módulo profissional.
 
 - [ ] Detectar geospatial PDF
-- [ ] Coordenadas
-- [ ] Localizar posição
+- [ ] Interpretar sistemas de coordenadas
+- [ ] Interpretar escala/projeção/metadados espaciais
+- [ ] Mostrar latitude/longitude sob o cursor
+- [ ] Localizar posição por coordenadas
+- [ ] Adicionar marcador geoespacial
+- [ ] Copiar coordenadas
+- [ ] Formato decimal
+- [ ] Graus/minutos/segundos
+- [ ] Coordenadas assinadas ou direcionais
+- [ ] Opção WGS 1984
 - [ ] Medir distância geográfica
+- [ ] Medir perímetro
 - [ ] Medir área
-- [ ] Unidades
-- [ ] Importar shapefile quando tecnicamente viável
-- [ ] Exportar marcações geoespaciais
-- [ ] Criar PDF geoespacial quando a engine permitir
+- [ ] Unidades de distância
+- [ ] Unidades de área
+- [ ] Criar PDF geoespacial a partir de GeoTIFF
+- [ ] Criar PDF geoespacial a partir de JPEG 2000 com metadados espaciais
+- [ ] Preservar coordenadas na criação
+- [ ] Importar SHP + DBF como layer
+- [ ] Validar sobreposição de sistemas de coordenadas
+- [ ] Preservar atributos do shapefile
+- [ ] Exportar marcações geoespaciais quando suportado
 
 ---
 
@@ -1966,6 +2136,84 @@ Ferramenta para executar sequências de comandos sobre um ou vários arquivos.
 
 ---
 
+# Artigos PDF
+
+Artigos definem uma sequência de regiões de leitura para documentos com múltiplas colunas ou conteúdo distribuído entre páginas.
+
+- [ ] Painel Articles
+- [ ] Criar Article Box
+- [ ] Encadear várias caixas
+- [ ] Numeração automática artigo-caixa
+- [ ] Finalizar artigo
+- [ ] Título
+- [ ] Assunto
+- [ ] Autor
+- [ ] Keywords
+- [ ] Ler artigo seguindo a sequência
+- [ ] Avançar caixa a caixa
+- [ ] Voltar caixa a caixa
+- [ ] Restaurar visualização ao terminar
+- [ ] Insert article box no meio do thread
+- [ ] Mover article box
+- [ ] Redimensionar article box
+- [ ] Excluir uma caixa
+- [ ] Excluir artigo inteiro
+- [ ] Renumerar automaticamente após edição
+- [ ] Combinar dois artigos
+- [ ] Ação de formulário "Read an article"
+- [ ] Article Box disponível também em Print Production
+
+---
+
+# Índices e Catálogo
+
+Suporte a pesquisa em grandes coleções de PDFs sem abrir todos os arquivos.
+
+- [ ] Criar índice de texto completo
+- [ ] Adicionar pastas ao catálogo
+- [ ] Incluir subpastas
+- [ ] Excluir paths/padrões
+- [ ] Descrição do índice
+- [ ] Opções avançadas de indexação
+- [ ] Construir índice
+- [ ] Atualizar/reconstruir índice
+- [ ] Limpar índice
+- [ ] Abrir índice existente
+- [ ] Pesquisar em índice selecionado
+- [ ] Pesquisa em múltiplos documentos
+- [ ] Mostrar documento, página e contexto do resultado
+- [ ] Navegar diretamente ao resultado
+- [ ] Processamento em background
+- [ ] Cancelamento
+- [ ] Progresso
+- [ ] Índices locais, sem upload
+
+---
+
+# Revisão compartilhada
+
+Módulo de colaboração sem IA. Pode utilizar backend configurável e deve permanecer separado do núcleo local.
+
+- [ ] Compartilhar PDF para revisão
+- [ ] Convidar revisores
+- [ ] Link de revisão
+- [ ] Comentários centralizados
+- [ ] Respostas
+- [ ] Status resolvido/não resolvido
+- [ ] Consolidar comentários
+- [ ] Atualizar comentários
+- [ ] Tracking de participantes
+- [ ] Tracking de progresso
+- [ ] Data limite
+- [ ] Lembretes
+- [ ] Encerrar revisão
+- [ ] Exportar/importar comentários
+- [ ] Backend próprio configurável
+- [ ] SharePoint/servidor interno como adapter opcional
+- [ ] Operação local de comentários continua independente do serviço online
+
+---
+
 # Propriedades e metadados
 
 - [ ] Título
@@ -2009,7 +2257,15 @@ Ferramenta para executar sequências de comandos sobre um ou vários arquivos.
 ## Preparar acessibilidade
 
 - [ ] Accessibility checker
+- [ ] Selecionar regras a verificar
 - [ ] Relatório
+- [ ] Resultado por regra
+- [ ] Resultado por página
+- [ ] Navegar do erro até o conteúdo
+- [ ] Corrigir automaticamente quando a regra permitir
+- [ ] Corrigir manualmente
+- [ ] Explicação da regra
+- [ ] Marcar item como verificado manualmente quando aplicável
 - [ ] Autotag
 - [ ] Detectar PDF somente imagem
 - [ ] Sugerir OCR
@@ -2114,6 +2370,8 @@ Ferramenta para executar sequências de comandos sobre um ou vários arquivos.
 
 Módulo profissional para pré-impressão.
 
+A ferramenta deve reproduzir o fluxo completo de **Use print production**, com cada ferramenta sendo funcional.
+
 ## Output Preview
 
 - [ ] Separations preview
@@ -2127,6 +2385,84 @@ Módulo profissional para pré-impressão.
 - [ ] Ink coverage
 - [ ] Total Area Coverage
 
+## Flattener Preview
+
+- [ ] Detectar objetos transparentes
+- [ ] Preview das áreas afetadas
+- [ ] Raster/vector balance
+- [ ] Line art and text resolution
+- [ ] Gradient and mesh resolution
+- [ ] Preserve overprint
+- [ ] Converter texto/traços conforme preset quando necessário
+- [ ] Aplicar por página/intervalo
+- [ ] Salvar preset
+
+## Save as PDF/X
+
+- [ ] Validar requisitos
+- [ ] Escolher variante PDF/X suportada
+- [ ] Output intent
+- [ ] Converter/salvar
+- [ ] Relatório de incompatibilidades
+- [ ] Não declarar conformidade sem validação real
+
+## Set Page Boxes
+
+- [ ] MediaBox
+- [ ] CropBox
+- [ ] BleedBox
+- [ ] TrimBox
+- [ ] ArtBox
+- [ ] Margens numéricas
+- [ ] Preview
+- [ ] Página atual
+- [ ] Intervalo
+- [ ] Todas as páginas
+
+## Add Printer Marks
+
+- [ ] Crop marks
+- [ ] Registration marks
+- [ ] Color bars
+- [ ] Page information
+- [ ] Offset
+- [ ] Page range
+- [ ] Incorporar marcas ao PDF
+
+## Fix Hairlines
+
+- [ ] Detectar hairlines
+- [ ] Threshold configurável
+- [ ] Substituir por traço mais espesso
+- [ ] Cor/objeto quando aplicável
+- [ ] Preview
+- [ ] Intervalo de páginas
+
+## Ink Manager
+
+- [ ] Listar process inks
+- [ ] Listar spot inks
+- [ ] Mapear spot para process
+- [ ] Alias entre inks
+- [ ] Ink type
+- [ ] Neutral density
+- [ ] Trapping sequence
+- [ ] Opaque/transparent handling
+
+## Trap Presets
+
+- [ ] Criar preset
+- [ ] Editar preset
+- [ ] Excluir preset
+- [ ] Aplicar por intervalo
+- [ ] In-RIP capability detection
+- [ ] Não oferecer execução In-RIP quando dispositivo/PPD não suportar
+
+## Add Article Box
+
+- [ ] Criar article thread diretamente pelo módulo de produção
+- [ ] Encaminhar para o mesmo domínio de Artigos PDF
+
 ## Preflight
 
 - [ ] Perfis de verificação
@@ -2138,6 +2474,17 @@ Módulo profissional para pré-impressão.
 - [ ] PDF/E validation quando aplicável
 - [ ] Relatório
 - [ ] Preset customizado
+- [ ] Mais de um conjunto/biblioteca de perfis
+- [ ] Checks
+- [ ] Fixups
+- [ ] Inspeções avançadas
+- [ ] Resultados por objeto
+- [ ] Resultados por recurso
+- [ ] Output intents
+- [ ] Correção de problemas selecionados
+- [ ] Preflight actions
+- [ ] Droplet/automação equivalente
+- [ ] Variáveis de Preflight
 
 ## Edit Object
 
@@ -3068,6 +3415,11 @@ Após estabilização do núcleo:
 - [ ] Layers
 - [ ] Geospatial
 - [ ] Guided actions
+- [ ] Articles
+- [ ] Catalog/indexes
+- [ ] Rich Media
+- [ ] 3D
+- [ ] Shared review
 - [ ] Print production
 - [ ] Preflight
 - [ ] Color management
@@ -3121,7 +3473,11 @@ A versão 1.0 somente pode ser marcada como estável quando:
 - operações pesadas não bloqueiam UI;
 - testes estão verdes;
 - fuzzing básico não encontra crash conhecido;
-- coleção de compatibilidade foi validada.
+- coleção de compatibilidade foi validada;
+- nenhuma ferramenta visível depende de mock ou placeholder;
+- cada ferramenta marcada como suportada possui teste E2E do fluxo principal;
+- ferramentas condicionais detectam capability real antes de serem habilitadas;
+- Artigos, Catálogo/índices, layers, Portfólios e Rich Media preservam o estado após salvar e reabrir quando o padrão PDF permitir.
 
 ---
 

@@ -501,6 +501,184 @@ pub fn delete_field(
     atomic_save(document, output)
 }
 
+fn xml_escape(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
+}
+
+fn fdf_escape(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('(', "\\(")
+        .replace(')', "\\)")
+        .replace('\r', "\\r")
+        .replace('\n', "\\n")
+}
+
+pub fn export_form_data(path: &Path, destination: &Path) -> Result<usize, SevenError> {
+    let fields = list_fields(path)?;
+    let extension = destination
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+
+    match extension.as_str() {
+        "xfdf" => {
+            let mut xml = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<xfdf xmlns=\"http://ns.adobe.com/xfdf/\">\n  <fields>\n");
+            for field in &fields {
+                xml.push_str(&format!(
+                    "    <field name=\"{}\"><value>{}</value></field>\n",
+                    xml_escape(&field.name),
+                    xml_escape(&field.value),
+                ));
+            }
+            xml.push_str("  </fields>\n</xfdf>\n");
+            fs::write(destination, xml).map_err(|error| SevenError::Io(error.to_string()))?;
+        }
+        "fdf" => {
+            let mut fdf = String::from("%FDF-1.2\n1 0 obj\n<< /FDF << /Fields [\n");
+            for field in &fields {
+                fdf.push_str(&format!(
+                    "<< /T ({}) /V ({}) >>\n",
+                    fdf_escape(&field.name),
+                    fdf_escape(&field.value),
+                ));
+            }
+            fdf.push_str("] >> >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n");
+            fs::write(destination, fdf).map_err(|error| SevenError::Io(error.to_string()))?;
+        }
+        other => return Err(SevenError::UnsupportedFormat(other.to_owned())),
+    }
+    Ok(fields.len())
+}
+
+fn decode_fdf_literal(value: &str) -> String {
+    let mut output = String::new();
+    let mut chars = value.chars();
+    while let Some(ch) = chars.next() {
+        if ch != '\\' {
+            output.push(ch);
+            continue;
+        }
+        match chars.next() {
+            Some('n') => output.push('\n'),
+            Some('r') => output.push('\r'),
+            Some('t') => output.push('\t'),
+            Some('(') => output.push('('),
+            Some(')') => output.push(')'),
+            Some('\\') => output.push('\\'),
+            Some(other) => output.push(other),
+            None => break,
+        }
+    }
+    output
+}
+
+fn parse_xfdf_values(path: &Path) -> Result<Vec<FormValue>, SevenError> {
+    use quick_xml::{events::Event, Reader};
+    let mut reader = Reader::from_file(path).map_err(|error| SevenError::Operation(error.to_string()))?;
+    reader.config_mut().trim_text(true);
+    let mut buf = Vec::new();
+    let mut current_name: Option<String> = None;
+    let mut in_value = false;
+    let mut values = Vec::new();
+
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(event)) => {
+                let tag = String::from_utf8_lossy(event.name().as_ref()).to_string();
+                if tag == "field" {
+                    current_name = event.attributes().flatten().find_map(|attr| {
+                        (attr.key.as_ref() == b"name")
+                            .then(|| attr.unescape_value().ok().map(|value| value.into_owned()))
+                            .flatten()
+                    });
+                } else if tag == "value" && current_name.is_some() {
+                    in_value = true;
+                }
+            }
+            Ok(Event::Text(event)) if in_value => {
+                if let Some(name) = current_name.clone() {
+                    values.push(FormValue {
+                        name,
+                        value: event.decode().map(|value| value.into_owned()).unwrap_or_default(),
+                    });
+                }
+            }
+            Ok(Event::End(event)) => {
+                let tag = String::from_utf8_lossy(event.name().as_ref()).to_string();
+                if tag == "value" { in_value = false; }
+                if tag == "field" { current_name = None; }
+            }
+            Ok(Event::Eof) => break,
+            Err(error) => return Err(SevenError::Operation(format!("XFDF inválido: {error}"))),
+            _ => {}
+        }
+        buf.clear();
+    }
+    Ok(values)
+}
+
+fn parse_fdf_values(path: &Path) -> Result<Vec<FormValue>, SevenError> {
+    let text = fs::read_to_string(path).map_err(|error| SevenError::Io(error.to_string()))?;
+    let regex = regex::Regex::new(r"/T\s*\(((?:\\.|[^\\)])*)\)\s*/V\s*\(((?:\\.|[^\\)])*)\)")
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    Ok(regex
+        .captures_iter(&text)
+        .filter_map(|captures| {
+            Some(FormValue {
+                name: decode_fdf_literal(captures.get(1)?.as_str()),
+                value: decode_fdf_literal(captures.get(2)?.as_str()),
+            })
+        })
+        .collect())
+}
+
+pub fn import_form_data(
+    input: &Path,
+    output: &Path,
+    data_path: &Path,
+) -> Result<usize, SevenError> {
+    let extension = data_path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let values = match extension.as_str() {
+        "xfdf" => parse_xfdf_values(data_path)?,
+        "fdf" => parse_fdf_values(data_path)?,
+        other => return Err(SevenError::UnsupportedFormat(other.to_owned())),
+    };
+    if values.is_empty() {
+        return Err(SevenError::OperationRejected("Nenhum valor de formulário encontrado no arquivo".into()));
+    }
+    fill_fields(input, output, values)
+}
+
+pub fn reset_form(
+    input: &Path,
+    output: &Path,
+    use_defaults: bool,
+) -> Result<usize, SevenError> {
+    let fields = list_fields(input)?;
+    if fields.is_empty() {
+        return Err(SevenError::OperationRejected("O PDF não possui campos AcroForm".into()));
+    }
+    let values = fields
+        .into_iter()
+        .map(|field| FormValue {
+            name: field.name,
+            value: if use_defaults { field.default_value } else { String::new() },
+        })
+        .collect::<Vec<_>>();
+    fill_fields(input, output, values)
+}
+
 fn atomic_save(mut document: Document, output: &Path) -> Result<(), SevenError> {
     let temp = output.with_extension("seven-form.tmp.pdf");
     document.compress();

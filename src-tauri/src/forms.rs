@@ -1136,15 +1136,16 @@ pub fn set_field_action(
         _ => return Err(SevenError::OperationRejected("Tipo de ação não suportado".into())),
     };
 
-    let field = document
-        .get_object_mut(id)
-        .map_err(|_| SevenError::OperationRejected("Campo não encontrado".into()))?
-        .as_dict_mut()
-        .map_err(|error| SevenError::Operation(error.to_string()))?;
-    let mut aa = match field.get(b"AA") {
-        Ok(Object::Dictionary(dictionary)) => dictionary.clone(),
-        Ok(Object::Reference(reference)) => document
-            .get_object(*reference)
+    let existing_aa = document
+        .get_object(id)
+        .ok()
+        .and_then(|object| object.as_dict().ok())
+        .and_then(|field| field.get(b"AA").ok())
+        .cloned();
+    let mut aa = match existing_aa {
+        Some(Object::Dictionary(dictionary)) => dictionary,
+        Some(Object::Reference(reference)) => document
+            .get_object(reference)
             .ok()
             .and_then(|object| object.as_dict().ok())
             .cloned()
@@ -1152,7 +1153,12 @@ pub fn set_field_action(
         _ => Dictionary::new(),
     };
     aa.set(trigger, Object::Dictionary(action));
-    field.set("AA", aa);
+    document
+        .get_object_mut(id)
+        .map_err(|_| SevenError::OperationRejected("Campo não encontrado".into()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .set("AA", aa);
     atomic_save(document, output)
 }
 

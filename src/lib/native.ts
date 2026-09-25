@@ -1,6 +1,8 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import type {
   Capabilities,
+  CatalogHit,
+  CatalogSummary,
   DocumentSummary,
   AccessibilityReport,
   AdvancedPdfReport,
@@ -50,6 +52,26 @@ declare global {
 
 export const isNativeDesktop = (): boolean =>
   typeof window !== "undefined" && Boolean(window.__TAURI_INTERNALS__);
+
+export async function buildCatalog(name: string, inputs: string[]): Promise<CatalogSummary> {
+  return invoke<CatalogSummary>("build_catalog", { name, inputs });
+}
+
+export async function listCatalogs(): Promise<CatalogSummary[]> {
+  return invoke<CatalogSummary[]>("list_catalogs");
+}
+
+export async function searchCatalog(
+  id: string,
+  query: string,
+  matchCase = false,
+): Promise<CatalogHit[]> {
+  return invoke<CatalogHit[]>("search_catalog", { id, query, matchCase });
+}
+
+export async function deleteCatalog(id: string): Promise<void> {
+  await invoke("delete_catalog", { id });
+}
 
 export async function getCapabilities(): Promise<Capabilities | null> {
   if (!isNativeDesktop()) return null;

@@ -1,0 +1,74 @@
+import { open } from "@tauri-apps/plugin-dialog";
+import type { SevenSettings } from "../lib/settings";
+import { SevenIcon } from "./SevenIcon";
+
+interface SettingsDialogProps {
+  settings: SevenSettings;
+  onClose: () => void;
+  onChange: (settings: SevenSettings) => void;
+}
+
+export function SettingsDialog({ settings, onClose, onChange }: SettingsDialogProps) {
+  const patch = <K extends keyof SevenSettings>(key: K, value: SevenSettings[K]) =>
+    onChange({ ...settings, [key]: value });
+
+  const addTrustedLocation = async () => {
+    const selected = await open({ title: "Adicionar local confiável", directory: true, multiple: false });
+    if (typeof selected !== "string" || settings.trustedLocations.includes(selected)) return;
+    patch("trustedLocations", [...settings.trustedLocations, selected]);
+  };
+
+  return (
+    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <section className="settings-dialog" role="dialog" aria-modal="true">
+        <header className="organizer-head">
+          <div><span className="eyebrow">PREFERÊNCIAS</span><h2>Seven Reader</h2><p>Configurações locais deste dispositivo.</p></div>
+          <button className="icon-button" onClick={onClose}><SevenIcon name="close" /></button>
+        </header>
+
+        <div className="settings-scroll">
+          <section className="settings-section">
+            <div><span className="eyebrow">APARÊNCIA</span><h3>Tema</h3></div>
+            <div className="segmented">
+              {(["system","light","dark"] as const).map((value) => <button key={value} className={settings.appearance===value?"active":""} onClick={()=>patch("appearance",value)}>{value==="system"?"Sistema":value==="light"?"Claro":"Escuro"}</button>)}
+            </div>
+          </section>
+
+          <section className="settings-section">
+            <div><span className="eyebrow">DOCUMENTOS</span><h3>Visualização</h3></div>
+            <label className="settings-number"><span>Zoom padrão</span><input type="number" min={25} max={400} value={settings.defaultZoom} onChange={(e)=>patch("defaultZoom",Math.max(25,Math.min(400,Number(e.target.value)||100)))}/><small>%</small></label>
+            <label className="toggle-row"><input type="checkbox" checked={settings.reopenLastDocument} onChange={(e)=>patch("reopenLastDocument",e.target.checked)}/><span><strong>Reabrir último documento</strong><small>O caminho fica armazenado somente neste dispositivo.</small></span></label>
+          </section>
+
+          <section className="settings-section">
+            <div><span className="eyebrow">SEGURANÇA</span><h3>Modo protegido</h3></div>
+            <label className="toggle-row"><input type="checkbox" checked={settings.protectedView} onChange={(e)=>patch("protectedView",e.target.checked)}/><span><strong>Visualização protegida para arquivos não confiáveis</strong><small>Bloqueia operações de escrita quando conteúdo ativo é encontrado.</small></span></label>
+            <label className="toggle-row"><input type="checkbox" checked={settings.blockLaunchActions} onChange={(e)=>patch("blockLaunchActions",e.target.checked)}/><span><strong>Bloquear Launch actions</strong><small>O Seven nunca executa Launch automaticamente.</small></span></label>
+            <label className="toggle-row"><input type="checkbox" checked={settings.warnExternalUrls} onChange={(e)=>patch("warnExternalUrls",e.target.checked)}/><span><strong>Confirmar URLs externas</strong><small>Aplicável quando a navegação externa for iniciada pelo usuário.</small></span></label>
+            <div className="trusted-locations">
+              <div className="setting-row-title"><strong>Locais confiáveis</strong><button onClick={()=>void addTrustedLocation()}><SevenIcon name="create"/> Adicionar pasta</button></div>
+              {settings.trustedLocations.map((path)=><div className="trusted-row" key={path}><SevenIcon name="folder"/><span>{path}</span><button onClick={()=>patch("trustedLocations",settings.trustedLocations.filter((item)=>item!==path))}><SevenIcon name="close"/></button></div>)}
+              {!settings.trustedLocations.length&&<small>Nenhum local confiável configurado.</small>}
+            </div>
+          </section>
+
+          <section className="settings-section">
+            <div><span className="eyebrow">OCR</span><h3>Padrões</h3></div>
+            <label className="workflow-field"><span>Idiomas</span><input value={settings.ocrLanguage} onChange={(e)=>patch("ocrLanguage",e.target.value)}/></label>
+            <label className="workflow-field"><span>Saída</span><select value={settings.ocrOutputType} onChange={(e)=>patch("ocrOutputType",e.target.value as SevenSettings["ocrOutputType"])}><option value="auto">Automática</option><option value="pdf">PDF</option><option value="pdfa">PDF/A</option></select></label>
+          </section>
+
+          <section className="settings-section">
+            <div><span className="eyebrow">CONVERSÃO</span><h3>Imagem</h3></div>
+            <label className="settings-number"><span>DPI padrão</span><input type="number" min={72} max={1200} value={settings.conversionDpi} onChange={(e)=>patch("conversionDpi",Math.max(72,Math.min(1200,Number(e.target.value)||150)))}/><small>DPI</small></label>
+          </section>
+
+          <section className="settings-section">
+            <div><span className="eyebrow">ASSINATURAS</span><h3>Validação</h3></div>
+            <label className="toggle-row"><input type="checkbox" checked={settings.signatureValidationOnline} onChange={(e)=>patch("signatureValidationOnline",e.target.checked)}/><span><strong>Permitir checagem online quando solicitada</strong><small>Revogação/chain validation continua opt-in por operação.</small></span></label>
+          </section>
+        </div>
+      </section>
+    </div>
+  );
+}

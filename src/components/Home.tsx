@@ -11,6 +11,7 @@ interface HomeProps {
   onOpenRecent: (path: string) => void;
   onClearRecent: () => void;
   onTool: (id: ToolId) => void;
+  onSettings: () => void;
 }
 
 const quick = [
@@ -30,6 +31,7 @@ export function Home({
   onOpenRecent,
   onClearRecent,
   onTool,
+  onSettings,
 }: HomeProps) {
   const scrollToTools = () => document.getElementById("all-tools")?.scrollIntoView({ behavior: "smooth" });
 
@@ -38,7 +40,7 @@ export function Home({
       <header className="app-header">
         <BrandMark withWordmark />
         <div className="header-actions">
-          <button className="icon-button" aria-label="Configurações" disabled title="Preferências serão habilitadas quando persistência estiver concluída">
+          <button className="icon-button" aria-label="Configurações" onClick={onSettings}>
             <SevenIcon name="settings" />
           </button>
         </div>

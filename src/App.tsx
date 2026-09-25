@@ -17,6 +17,8 @@ import { SignatureDialog } from "./components/SignatureDialog";
 import { EditingDialog } from "./components/EditingDialog";
 import { RedactionDialog } from "./components/RedactionDialog";
 import { AdvancedPdfDialog } from "./components/AdvancedPdfDialog";
+import { SettingsDialog } from "./components/SettingsDialog";
+import { applyAppearance, isTrustedPath, loadSettings, saveSettings, type SevenSettings } from "./lib/settings";
 import {
   addAnnotation,
   addPdfAttachment,
@@ -177,6 +179,16 @@ export default function App() {
   const [advancedTab, setAdvancedTab] = useState<"overview"|"bookmarks"|"attachments"|"layers"|null>(null);
   const [advancedReport, setAdvancedReport] = useState<AdvancedPdfReport|null>(null);
   const [advancedLoading, setAdvancedLoading] = useState(false);
+  const [settings, setSettings] = useState<SevenSettings>(loadSettings);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [protectedView, setProtectedView] = useState(false);
+  const [protectedReasons, setProtectedReasons] = useState<string[]>([]);
+  const [trustedOnce, setTrustedOnce] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    applyAppearance(settings.appearance);
+    saveSettings(settings);
+  }, [settings]);
 
   useEffect(() => {
     let active = true;
@@ -212,6 +224,43 @@ export default function App() {
     return () => dispose?.();
   }, [native]);
 
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const modifier = event.ctrlKey || event.metaKey;
+      if (modifier && event.key.toLowerCase() === "o") {
+        event.preventDefault();
+        void choosePdf();
+      }
+      if (modifier && event.shiftKey && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        void saveAs();
+      }
+      if (modifier && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        window.dispatchEvent(new Event("seven:focus-search"));
+      }
+      if (document && modifier && (event.key === "+" || event.key === "=")) {
+        event.preventDefault();
+        void render(page, Math.min(400, zoom + 10));
+      }
+      if (document && modifier && event.key === "-") {
+        event.preventDefault();
+        void render(page, Math.max(25, zoom - 10));
+      }
+      if (document && event.key === "PageDown") {
+        event.preventDefault();
+        void render(Math.min(document.pageCount - 1, page + 1), zoom);
+      }
+      if (document && event.key === "PageUp") {
+        event.preventDefault();
+        void render(Math.max(0, page - 1), zoom);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [document, page, zoom]);
+
   const activeJobs = useMemo(
     () => Object.values(jobs).filter((job) => job.state === "queued" || job.state === "running"),
     [jobs],
@@ -238,10 +287,27 @@ export default function App() {
       const summary = await openDocument(path);
       setDocument(summary);
       setPage(0);
-      setZoom(100);
+      setZoom(settings.defaultZoom);
       setSearchHits([]);
       setRendered(null);
       rememberRecent(summary);
+      localStorage.setItem("seven-reader:last-document", summary.path);
+      try {
+        const security = await inspectAdvancedPdf(summary.path);
+        const reasons = [
+          security.hasJavascript && "JavaScript",
+          security.hasLaunchActions && "Launch actions",
+          security.hasOpenAction && "OpenAction",
+          security.hasRichMedia && "Rich Media",
+          security.hasThreeD && "3D",
+        ].filter(Boolean) as string[];
+        const trusted = trustedOnce.has(summary.path) || isTrustedPath(summary.path, settings.trustedLocations);
+        setProtectedReasons(reasons);
+        setProtectedView(settings.protectedView && reasons.length > 0 && !trusted);
+      } catch {
+        setProtectedReasons(["estrutura não pôde ser totalmente inspecionada"]);
+        setProtectedView(settings.protectedView && !isTrustedPath(summary.path, settings.trustedLocations));
+      }
       const first = await renderPage(summary.id, 0, 1400);
       setRendered(first);
     } catch (error) {
@@ -331,6 +397,13 @@ export default function App() {
     if (!native) {
       setNotice("Esta é uma prévia visual. Processamento de PDF funciona no aplicativo desktop.");
       return;
+    }
+    if (protectedView) {
+      const readOnlyTools: ToolId[] = ["properties","compare","accessibility","bookmarks","attachments","layers","portfolio","articles","rich-media","three-d","geospatial","certificates"];
+      if (!readOnlyTools.includes(tool)) {
+        setNotice("Visualização protegida: confie no arquivo antes de executar operações de escrita.");
+        return;
+      }
     }
     if (!canRunTool(tool, capabilities)) {
       setNotice("Esta ferramenta ainda não está habilitada porque sua implementação real não está disponível.");
@@ -505,6 +578,25 @@ export default function App() {
 
 
 
+
+
+  const trustCurrentOnce = () => {
+    if (!document) return;
+    setTrustedOnce((current) => new Set([...current, document.path]));
+    setProtectedView(false);
+    setNotice("Arquivo confiável apenas nesta sessão.");
+  };
+
+  const trustCurrentLocation = () => {
+    if (!document) return;
+    const normalized = document.path.replace(/\\/g, "/");
+    const folder = normalized.slice(0, Math.max(normalized.lastIndexOf("/"), 1));
+    if (!settings.trustedLocations.includes(folder)) {
+      setSettings((current) => ({ ...current, trustedLocations: [...current.trustedLocations, folder] }));
+    }
+    setProtectedView(false);
+    setNotice("Pasta adicionada aos locais confiáveis.");
+  };
 
   const reloadAdvanced = async () => {
     if (!document) return;
@@ -954,6 +1046,7 @@ export default function App() {
           {notice}
         </button>
       )}
+      {settingsOpen && <SettingsDialog settings={settings} onClose={() => setSettingsOpen(false)} onChange={setSettings} />}
       {advancedTab && document && (
         <AdvancedPdfDialog
           documentPath={document.path}
@@ -1135,6 +1228,11 @@ export default function App() {
           onRender={(nextPage, nextZoom) => void render(nextPage, nextZoom)}
           onSearch={(query) => void runSearch(query)}
           onTool={(tool) => void selectTool(tool)}
+          onSettings={() => setSettingsOpen(true)}
+          protectedView={protectedView}
+          protectedReasons={protectedReasons}
+          onTrustOnce={trustCurrentOnce}
+          onTrustLocation={trustCurrentLocation}
         />
         {status}
       </>
@@ -1155,6 +1253,7 @@ export default function App() {
           setNotice("Lista de recentes limpa.");
         }}
         onTool={(tool) => void selectTool(tool)}
+        onSettings={() => setSettingsOpen(true)}
       />
       {status}
     </>

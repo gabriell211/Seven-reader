@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BrandMark } from "./BrandMark";
 import { SevenIcon, type IconName } from "./SevenIcon";
 import { canRunTool, tools } from "../data/tools";
 import type { Capabilities, DocumentSummary, RenderResult, SearchHit, ToolId } from "../types";
 import { nativeAssetUrl } from "../lib/native";
+import { ProtectedViewBanner } from "./ProtectedViewBanner";
 
 interface WorkspaceProps {
   document: DocumentSummary;
@@ -19,6 +20,11 @@ interface WorkspaceProps {
   onRender: (page: number, zoom: number) => void;
   onSearch: (query: string) => void;
   onTool: (tool: ToolId) => void;
+  onSettings: () => void;
+  protectedView: boolean;
+  protectedReasons: string[];
+  onTrustOnce: () => void;
+  onTrustLocation: () => void;
 }
 
 const primaryTools: Array<{ id: ToolId; icon: IconName; label: string }> = [
@@ -43,10 +49,22 @@ export function DocumentWorkspace({
   onRender,
   onSearch,
   onTool,
+  onSettings,
+  protectedView,
+  protectedReasons,
+  onTrustOnce,
+  onTrustLocation,
 }: WorkspaceProps) {
   const [toolsOpen, setToolsOpen] = useState(false);
   const [leftPanel, setLeftPanel] = useState<"thumbs" | "search" | null>("thumbs");
   const [search, setSearch] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const focus = () => searchRef.current?.focus();
+    window.addEventListener("seven:focus-search", focus);
+    return () => window.removeEventListener("seven:focus-search", focus);
+  }, []);
   const [viewerTool, setViewerTool] = useState<"select" | "hand">("select");
 
   const pageLabel = useMemo(() => `${page + 1} / ${document.pageCount}`, [page, document.pageCount]);
@@ -74,13 +92,14 @@ export function DocumentWorkspace({
         <label className="workspace-search">
           <SevenIcon name="search" />
           <input
+            ref={searchRef}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             onKeyDown={(event) => event.key === "Enter" && submitSearch()}
             placeholder="Pesquisar no documento"
           />
         </label>
-        <button className="icon-button" aria-label="Configurações" disabled><SevenIcon name="settings" /></button>
+        <button className="icon-button" aria-label="Configurações" onClick={onSettings}><SevenIcon name="settings" /></button>
       </header>
 
       <nav className="global-bar" aria-label="Ferramentas do documento">
@@ -102,6 +121,7 @@ export function DocumentWorkspace({
       </nav>
 
       <div className="workspace-body">
+        {protectedView && <ProtectedViewBanner reasons={protectedReasons} onTrustOnce={onTrustOnce} onTrustLocation={onTrustLocation} />}
         <aside className="side-rail">
           <button
             className={leftPanel === "thumbs" ? "rail-button active" : "rail-button"}

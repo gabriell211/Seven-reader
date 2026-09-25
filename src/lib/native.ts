@@ -4,6 +4,7 @@ import type {
   CatalogHit,
   CatalogSummary,
   DocumentSummary,
+  DuplicateFieldRequest,
   AccessibilityReport,
   AdvancedPdfReport,
   AdvancedSearchHit,
@@ -292,6 +293,21 @@ export async function sessionCreateFormField(
   field: NewFormField,
 ): Promise<DocumentSummary> {
   return invoke<DocumentSummary>("session_create_form_field", { documentId, field });
+}
+
+export async function sessionDuplicateFormField(
+  documentId: string,
+  request: DuplicateFieldRequest,
+): Promise<SessionFormFillResult> {
+  return invoke<SessionFormFillResult>("session_duplicate_form_field", { documentId, request });
+}
+
+export async function sessionSetPageTabOrder(
+  documentId: string,
+  pageIndex: number,
+  order: "row" | "column" | "structure",
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_set_page_tab_order", { documentId, pageIndex, order });
 }
 
 export async function exportFormData(

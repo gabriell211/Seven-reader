@@ -56,6 +56,19 @@ export interface SearchHit {
   occurrences: number;
 }
 
+export interface NormalizedRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface TextSelectionResult {
+  text: string;
+  pageIndex: number;
+  rect: NormalizedRect;
+}
+
 export interface AdvancedSearchOptions {
   query: string;
   matchCase: boolean;

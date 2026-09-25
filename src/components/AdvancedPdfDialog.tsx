@@ -199,7 +199,7 @@ export function AdvancedPdfDialog({
                   printState:layer.printState,
                   exportState:layer.exportState,
                 };
-                const patchLayer=<K extends keyof LayerPropertiesUpdate>(key:K,value:LayerPropertiesUpdate[K])=>
+                const patchLayer=<K extends keyof LayerPropertiesUpdate,>(key:K,value:LayerPropertiesUpdate[K])=>
                   setLayerEdits(current=>({...current,[layer.objectId]:{...edit,[key]:value}}));
                 return (
                   <article className="layer-row" key={layer.objectId} style={{marginLeft:layer.depth*14}}>

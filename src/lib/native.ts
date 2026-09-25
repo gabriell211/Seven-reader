@@ -31,6 +31,8 @@ import type {
   PageBoxUpdate,
   RedactionArea,
   RedactionReport,
+  ReviewTransferReport,
+  SessionReviewImportResult,
   RenderResult,
   ReplaceTextReport,
   SanitizeOptions,
@@ -71,6 +73,20 @@ export async function searchCatalog(
 
 export async function deleteCatalog(id: string): Promise<void> {
   await invoke("delete_catalog", { id });
+}
+
+export async function exportReviewXfdf(
+  input: string,
+  destination: string,
+): Promise<ReviewTransferReport> {
+  return invoke<ReviewTransferReport>("export_review_xfdf", { input, destination });
+}
+
+export async function sessionImportReviewXfdf(
+  documentId: string,
+  xfdf: string,
+): Promise<SessionReviewImportResult> {
+  return invoke<SessionReviewImportResult>("session_import_review_xfdf", { documentId, xfdf });
 }
 
 export async function getCapabilities(): Promise<Capabilities | null> {

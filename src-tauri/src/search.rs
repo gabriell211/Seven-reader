@@ -103,7 +103,7 @@ pub fn search(
     if options.include_text {
         let pdfium = bind_pdfium(&state.resource_dir).map_err(SevenError::PdfEngineUnavailable)?;
         let pdf = pdfium
-            .load_pdf_from_file(&document.path, document.password.as_deref())
+            .load_pdf_from_file(document.active_path(), document.password.as_deref())
             .map_err(|error| SevenError::PdfOpen(error.to_string()))?;
 
         let total = pdf.pages().len() as usize;
@@ -131,7 +131,7 @@ pub fn search(
     }
 
     if options.include_comments {
-        for annotation in annotations::list_annotations(&document.path)? {
+        for annotation in annotations::list_annotations(document.active_path())? {
             let combined = format!("{} {} {}", annotation.kind, annotation.author, annotation.text);
             push_if_match(
                 &mut hits,
@@ -145,7 +145,7 @@ pub fn search(
     }
 
     if options.include_bookmarks {
-        let report = advanced::inspect(&document.path)?;
+        let report = advanced::inspect(document.active_path())?;
         for bookmark in report.bookmarks {
             push_if_match(
                 &mut hits,
@@ -159,7 +159,7 @@ pub fn search(
     }
 
     if options.include_forms {
-        for field in forms::list_fields(&document.path)? {
+        for field in forms::list_fields(document.active_path())? {
             let combined = format!("{} {} {}", field.name, field.field_type, field.value);
             push_if_match(
                 &mut hits,
@@ -173,7 +173,7 @@ pub fn search(
     }
 
     if options.include_metadata {
-        let metadata = document_ops::read_metadata(&document.path)?;
+        let metadata = document_ops::read_metadata(document.active_path())?;
         for (label, value) in [
             ("Título", metadata.title),
             ("Autor", metadata.author),

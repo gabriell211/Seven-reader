@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { message, open, save } from "@tauri-apps/plugin-dialog";
@@ -122,6 +122,7 @@ import type {
 const RECENTS_KEY = "seven-reader:recents:v1";
 const TASKS_KEY = "seven-reader:tasks:v1";
 const RECENT_TOOLS_KEY = "seven-reader:recent-tools:v1";
+const SESSION_KEY = "seven-reader:session:v1";
 
 const emptyCapabilities: Capabilities = {
   pdf_engine: { available: false },
@@ -235,6 +236,7 @@ export default function App() {
   const [protectedView, setProtectedView] = useState(false);
   const [protectedReasons, setProtectedReasons] = useState<string[]>([]);
   const [trustedOnce, setTrustedOnce] = useState<Set<string>>(new Set());
+  const sessionRestoredRef = useRef(false);
 
   useEffect(() => {
     applyAppearance(settings.appearance);
@@ -331,6 +333,15 @@ export default function App() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [document, page, zoom, openTabs, closedTabs]);
+
+  useEffect(() => {
+    if (!native) return;
+    const session = openTabs.map((tab) => {
+      const view = tabViews[tab.id] ?? (tab.id === document?.id ? { page, zoom } : { page: 0, zoom: settings.defaultZoom });
+      return { path: tab.path, page: view.page, zoom: view.zoom };
+    });
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  }, [native, openTabs, tabViews, document?.id, page, zoom, settings.defaultZoom]);
 
   const activeJobs = useMemo(
     () => Object.values(jobs).filter((job) => job.state === "queued" || job.state === "running"),
@@ -442,6 +453,38 @@ export default function App() {
     }).then((dispose) => { unlisten = dispose; });
     return () => unlisten?.();
   }, [native, openTabs, settings.defaultZoom]);
+
+  const restoreSession = async () => {
+    if (!native) return;
+    try {
+      const raw = localStorage.getItem(SESSION_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      const session = Array.isArray(parsed)
+        ? parsed.filter((item): item is { path: string; page: number; zoom: number } =>
+            item && typeof item.path === "string" && typeof item.page === "number" && typeof item.zoom === "number")
+        : [];
+      if (!session.length) {
+        const path = localStorage.getItem("seven-reader:last-document");
+        if (path) await openPath(path);
+        return;
+      }
+      for (const item of session.slice(0, 20)) {
+        await openPath(item.path, {
+          page: Math.max(0, Math.trunc(item.page)),
+          zoom: Math.max(25, Math.min(400, item.zoom)),
+        });
+      }
+      setNotice(`Sessão restaurada · ${session.length} documento(s).`);
+    } catch (error) {
+      setNotice(`Não foi possível restaurar toda a sessão: ${errorMessage(error)}`);
+    }
+  };
+
+  useEffect(() => {
+    if (!native || splash || sessionRestoredRef.current || !settings.reopenLastDocument) return;
+    sessionRestoredRef.current = true;
+    void restoreSession();
+  }, [native, splash, settings.reopenLastDocument]);
 
   const choosePdf = async () => {
     if (!native) return;
@@ -1729,10 +1772,7 @@ export default function App() {
         onOpen={() => void choosePdf()}
         onOpenFolder={() => void chooseFolder()}
         lastSessionPath={localStorage.getItem("seven-reader:last-document")}
-        onRecoverSession={() => {
-          const path = localStorage.getItem("seven-reader:last-document");
-          if (path) void openPath(path);
-        }}
+        onRecoverSession={() => void restoreSession()}
         onOpenRecent={(path) => void openPath(path)}
         onClearRecent={() => {
           localStorage.removeItem(RECENTS_KEY);

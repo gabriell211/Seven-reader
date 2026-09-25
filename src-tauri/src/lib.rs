@@ -11,6 +11,7 @@ mod ocr;
 mod pdf;
 mod redaction;
 mod search;
+mod session;
 mod signatures;
 mod state;
 
@@ -42,6 +43,13 @@ pub fn run() {
             commands::search_document_advanced,
             commands::extract_text_in_rect,
             commands::crop_page_selection,
+            commands::save_document,
+            commands::undo_document,
+            commands::redo_document,
+            commands::session_add_annotation,
+            commands::session_delete_annotation,
+            commands::session_add_ink,
+            commands::session_add_markup,
             commands::save_document_as,
             commands::create_blank_document,
             commands::create_pdf_from_clipboard_image,

@@ -914,6 +914,51 @@ pub fn session_delete_form_field(
     .map_err(ErrorPayload::from)
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GeneratedBookmarksResult {
+    pub document: pdf::DocumentSummary,
+    pub created: usize,
+}
+
+#[tauri::command]
+pub fn session_update_pdf_bookmark(
+    state: State<'_, AppState>,
+    document_id: String,
+    update: advanced::BookmarkUpdate,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "update-bookmark", move |input, output| {
+        advanced::update_bookmark(input, output, update)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_set_all_pdf_bookmarks_open(
+    state: State<'_, AppState>,
+    document_id: String,
+    open: bool,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "bookmark-tree-state", move |input, output| {
+        advanced::set_all_bookmarks_open(input, output, open)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_generate_pdf_bookmarks_from_structure(
+    state: State<'_, AppState>,
+    document_id: String,
+) -> CommandResult<GeneratedBookmarksResult> {
+    session::apply_revision(&state, &document_id, "generate-bookmarks", move |input, output| {
+        advanced::generate_bookmarks_from_structure(input, output)
+    })
+    .map(|(document, created)| GeneratedBookmarksResult { document, created })
+    .map_err(ErrorPayload::from)
+}
+
 #[tauri::command]
 pub fn session_add_pdf_bookmark(
     state: State<'_, AppState>,

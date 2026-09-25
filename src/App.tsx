@@ -22,6 +22,7 @@ import { SettingsDialog } from "./components/SettingsDialog";
 import { applyAppearance, isTrustedPath, loadSettings, saveSettings, type SevenSettings } from "./lib/settings";
 import {
   addAnnotation,
+  addInkAnnotation,
   addPdfAttachment,
   addPdfBookmark,
   cancelJob,
@@ -100,6 +101,7 @@ import type {
   FormFieldInfo,
   FormValue,
   ImagePlacement,
+  InkAnnotationInput,
   JobStatus,
   LinkPlacement,
   NewFormField,
@@ -1078,6 +1080,23 @@ export default function App() {
     }
   };
 
+  const runInkAnnotation = async (ink: InkAnnotationInput) => {
+    if (!document) return;
+    const output = await save({
+      title: "Salvar PDF com desenho",
+      defaultPath: document.name.replace(/\.pdf$/i, "-desenho.pdf"),
+      filters: [{ name: "Documento PDF", extensions: ["pdf"] }],
+    });
+    if (!output) return;
+    try {
+      await addInkAnnotation(document.path, output, ink);
+      setNotice("Desenho gravado como anotação Ink do PDF.");
+      await openPath(output, { page, zoom });
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
   const runDeleteAnnotation = async (output: string, objectId: string) => {
     if (!document) return;
     try {
@@ -1680,6 +1699,7 @@ export default function App() {
           onPrint={() => void runPrint()}
           onRender={(nextPage, nextZoom) => void render(nextPage, nextZoom)}
           onSearch={(query) => void runSearch(query)}
+          onInk={(ink) => void runInkAnnotation(ink)}
           onAdvancedSearch={(options) => void runAdvancedSearch(options)}
           onTool={(tool) => void selectTool(tool)}
           onSettings={() => setSettingsOpen(true)}

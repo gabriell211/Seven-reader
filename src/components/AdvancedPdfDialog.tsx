@@ -6,18 +6,17 @@ import { SevenIcon } from "./SevenIcon";
 type AdvancedTab = "overview" | "bookmarks" | "attachments" | "layers";
 
 interface AdvancedPdfDialogProps {
-  documentPath: string;
   pageIndex: number;
   report: AdvancedPdfReport | null;
   loading: boolean;
   initialTab?: AdvancedTab;
   onClose: () => void;
   onReload: () => void;
-  onAddBookmark: (output: string, title: string, pageIndex: number) => void;
-  onRenameBookmark: (output: string, objectId: string, title: string) => void;
-  onAddAttachment: (output: string, filePath: string, displayName: string, description: string) => void;
+  onAddBookmark: (title: string, pageIndex: number) => void;
+  onRenameBookmark: (objectId: string, title: string) => void;
+  onAddAttachment: (filePath: string, displayName: string, description: string) => void;
   onExtractAttachment: (objectId: string, destination: string) => void;
-  onLayerVisibility: (output: string, objectId: string, visible: boolean) => void;
+  onLayerVisibility: (objectId: string, visible: boolean) => void;
 }
 
 function fileSize(value?: number): string {
@@ -28,7 +27,6 @@ function fileSize(value?: number): string {
 }
 
 export function AdvancedPdfDialog({
-  documentPath,
   pageIndex,
   report,
   loading,
@@ -61,12 +59,6 @@ export function AdvancedPdfDialog({
     ].filter(Boolean) as string[];
   }, [report]);
 
-  const output = async (suffix: string) => save({
-    title: "Salvar PDF atualizado",
-    defaultPath: documentPath.replace(/\.pdf$/i, `-${suffix}.pdf`),
-    filters: [{ name: "Documento PDF", extensions: ["pdf"] }],
-  });
-
   const chooseAttachment = async () => {
     const path = await open({ title: "Selecionar arquivo para incorporar", multiple: false, directory: false });
     if (typeof path === "string") {
@@ -75,14 +67,12 @@ export function AdvancedPdfDialog({
     }
   };
 
-  const addBookmark = async () => {
-    const destination = await output("marcador");
-    if (destination) onAddBookmark(destination, bookmarkTitle, pageIndex);
+  const addBookmark = () => {
+    onAddBookmark(bookmarkTitle, pageIndex);
   };
 
-  const addAttachment = async () => {
-    const destination = await output("anexo");
-    if (destination) onAddAttachment(destination, attachmentPath, attachmentName, attachmentDescription);
+  const addAttachment = () => {
+    onAddAttachment(attachmentPath, attachmentName, attachmentDescription);
   };
 
   return (
@@ -125,14 +115,14 @@ export function AdvancedPdfDialog({
           {!loading && report && tab==="bookmarks" && <>
             <div className="inline-create-row">
               <label className="workflow-field"><span>Novo marcador na página {pageIndex+1}</span><input value={bookmarkTitle} onChange={(e)=>setBookmarkTitle(e.target.value)} placeholder="Título"/></label>
-              <button className="primary-button" disabled={!bookmarkTitle.trim()} onClick={()=>void addBookmark()}><SevenIcon name="bookmark"/> Criar</button>
+              <button className="primary-button" disabled={!bookmarkTitle.trim()} onClick={addBookmark}><SevenIcon name="bookmark"/> Criar</button>
             </div>
             <div className="structure-list">
               {report.bookmarks.map((bookmark)=>(
                 <div className="structure-row" key={bookmark.objectId} style={{paddingLeft:12+bookmark.depth*18}}>
                   <SevenIcon name="bookmark"/>
                   <div><input value={rename[bookmark.objectId]??bookmark.title} onChange={(e)=>setRename(c=>({...c,[bookmark.objectId]:e.target.value}))}/><small>{bookmark.pageIndex!==undefined?`Página ${bookmark.pageIndex+1}`:"Destino não resolvido"} · {bookmark.open?"expandido":"recolhido"}</small></div>
-                  <button onClick={async()=>{const dest=await output("marcador-renomeado");if(dest)onRenameBookmark(dest,bookmark.objectId,rename[bookmark.objectId]??bookmark.title)}}>Salvar nome</button>
+                  <button onClick={()=>onRenameBookmark(bookmark.objectId,rename[bookmark.objectId]??bookmark.title)}>Salvar nome</button>
                 </div>
               ))}
               {report.bookmarks.length===0&&<div className="empty-panel">Nenhum marcador no outline.</div>}
@@ -143,7 +133,7 @@ export function AdvancedPdfDialog({
             <div className="attachment-create">
               <button className="secondary-light-button choose-wide" onClick={()=>void chooseAttachment()}><SevenIcon name="open"/>{attachmentPath||"Selecionar arquivo"}</button>
               <div className="two-column-fields"><label className="workflow-field"><span>Nome</span><input value={attachmentName} onChange={(e)=>setAttachmentName(e.target.value)}/></label><label className="workflow-field"><span>Descrição</span><input value={attachmentDescription} onChange={(e)=>setAttachmentDescription(e.target.value)}/></label></div>
-              <button className="primary-button workflow-submit" disabled={!attachmentPath} onClick={()=>void addAttachment()}><SevenIcon name="attachment"/> Incorporar arquivo</button>
+              <button className="primary-button workflow-submit" disabled={!attachmentPath} onClick={addAttachment}><SevenIcon name="attachment"/> Incorporar arquivo</button>
             </div>
             <div className="structure-list">{report.attachments.map((attachment)=>(
               <div className="structure-row" key={attachment.objectId}><SevenIcon name="attachment"/><div><strong>{attachment.name}</strong><small>{attachment.description||"Sem descrição"} · {fileSize(attachment.size)}</small></div><button onClick={async()=>{const dest=await save({title:"Extrair anexo",defaultPath:attachment.name});if(dest)onExtractAttachment(attachment.objectId,dest)}}>Extrair</button></div>
@@ -151,9 +141,9 @@ export function AdvancedPdfDialog({
           </>}
 
           {!loading && report && tab==="layers" && <>
-            <div className="organizer-note"><SevenIcon name="layers"/><span>Alterar visibilidade grava o estado inicial ON/OFF da OCG em uma nova cópia; conteúdo da layer é preservado.</span></div>
+            <div className="organizer-note"><SevenIcon name="layers"/><span>Alterar visibilidade grava o estado inicial ON/OFF da OCG na sessão atual; conteúdo da layer é preservado e a ação pode ser desfeita.</span></div>
             <div className="structure-list">{report.layers.map((layer)=>(
-              <div className="structure-row" key={layer.objectId}><SevenIcon name="layers"/><div><strong>{layer.name}</strong><small>{layer.intent.length?`Intent: ${layer.intent.join(", ")}`:"Intent não declarado"}</small></div><button className={layer.visible?"layer-toggle active":"layer-toggle"} onClick={async()=>{const dest=await output("layers");if(dest)onLayerVisibility(dest,layer.objectId,!layer.visible)}}>{layer.visible?"Visível":"Oculta"}</button></div>
+              <div className="structure-row" key={layer.objectId}><SevenIcon name="layers"/><div><strong>{layer.name}</strong><small>{layer.intent.length?`Intent: ${layer.intent.join(", ")}`:"Intent não declarado"}</small></div><button className={layer.visible?"layer-toggle active":"layer-toggle"} onClick={()=>onLayerVisibility(layer.objectId,!layer.visible)}>{layer.visible?"Visível":"Oculta"}</button></div>
             ))}{report.layers.length===0&&<div className="empty-panel">Nenhuma Optional Content Group detectada.</div>}</div>
           </>}
         </div>

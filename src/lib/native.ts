@@ -398,6 +398,26 @@ export async function sessionAddPdfAttachment(
   });
 }
 
+export async function sessionUpdatePdfAttachment(
+  documentId: string,
+  objectId: string,
+  name: string,
+  description: string,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_update_pdf_attachment", {
+    documentId, objectId, name, description,
+  });
+}
+
+export async function sessionRemovePdfAttachment(
+  documentId: string,
+  objectId: string,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_remove_pdf_attachment", {
+    documentId, objectId,
+  });
+}
+
 export async function sessionSetPdfLayerVisibility(
   documentId: string,
   objectId: string,

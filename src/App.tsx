@@ -74,6 +74,9 @@ import {
   sessionAddMarkup,
   sessionEditAddText,
   sessionEditReplaceText,
+  listPageImageObjects,
+  sessionReplaceImageObject,
+  sessionRemoveImageObject,
   sessionEditAddImage,
   sessionEditAddLink,
   sessionEditOverlayText,
@@ -128,6 +131,7 @@ import type {
   FormFieldInfo,
   FormValue,
   ImagePlacement,
+  ImageObjectInfo,
   InkAnnotationInput,
   JobStatus,
   LinkPlacement,
@@ -263,6 +267,8 @@ export default function App() {
   const [signatureValidation, setSignatureValidation] = useState<SignatureValidationReport | null>(null);
   const [signatureLoading, setSignatureLoading] = useState(false);
   const [editingOpen, setEditingOpen] = useState(false);
+  const [imageObjects, setImageObjects] = useState<ImageObjectInfo[]>([]);
+  const [imageObjectsLoading, setImageObjectsLoading] = useState(false);
   const [redactionOpen, setRedactionOpen] = useState(false);
   const [redactionMatches, setRedactionMatches] = useState<RedactionArea[]>([]);
   const [redactionLoading, setRedactionLoading] = useState(false);
@@ -1075,6 +1081,7 @@ export default function App() {
           setNotice("Abra um PDF para editar.");
           return;
         }
+        setImageObjects([]);
         setEditingOpen(true);
         return;
       }
@@ -1390,6 +1397,40 @@ export default function App() {
         result.document,
         `${result.report.replacements} substituição(ões) em ${result.report.pagesChanged} página(s).`,
       );
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const reloadImageObjects = async () => {
+    if (!document) return;
+    try {
+      setImageObjectsLoading(true);
+      setImageObjects(await listPageImageObjects(document.id, page));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    } finally {
+      setImageObjectsLoading(false);
+    }
+  };
+
+  const runReplaceImageObject = async (resourceName: string, imagePath: string) => {
+    if (!document) return;
+    try {
+      const summary = await sessionReplaceImageObject(document.id, page, resourceName, imagePath);
+      await acceptDocumentRevision(summary, `Imagem ${resourceName} substituída na página.`);
+      await reloadImageObjects();
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runRemoveImageObject = async (resourceName: string) => {
+    if (!document) return;
+    try {
+      const summary = await sessionRemoveImageObject(document.id, page, resourceName);
+      await acceptDocumentRevision(summary, `Imagem ${resourceName} removida da página.`);
+      await reloadImageObjects();
     } catch (error) {
       setNotice(errorMessage(error));
     }
@@ -2065,9 +2106,14 @@ export default function App() {
         <EditingDialog
           pageIndex={page}
           pageCount={document.pageCount}
+          imageObjects={imageObjects}
+          imageObjectsLoading={imageObjectsLoading}
           onClose={() => setEditingOpen(false)}
           onAddText={(placement) => void runEditAddText(placement)}
           onReplaceText={(find, replacement, allPages) => void runEditReplaceText(find, replacement, allPages)}
+          onReloadImages={() => void reloadImageObjects()}
+          onReplaceImage={(resourceName, imagePath) => void runReplaceImageObject(resourceName, imagePath)}
+          onRemoveImage={(resourceName) => void runRemoveImageObject(resourceName)}
           onAddImage={(placement) => void runEditAddImage(placement)}
           onAddLink={(link) => void runEditAddLink(link)}
           onOverlay={(options) => void runEditOverlay(options)}

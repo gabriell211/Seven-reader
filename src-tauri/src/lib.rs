@@ -91,6 +91,7 @@ pub fn run() {
             commands::session_add_pdf_attachment,
             commands::session_update_pdf_attachment,
             commands::session_remove_pdf_attachment,
+            commands::session_update_pdf_layer_properties,
             commands::session_set_pdf_layer_visibility,
             commands::session_update_document_metadata,
             commands::save_document_as,

@@ -1,4 +1,10 @@
 export type AppearanceMode = "system" | "light" | "dark";
+export type QuickToolId =
+  | "select" | "hand" | "comment" | "highlight" | "underline" | "strikeout"
+  | "draw" | "text" | "fill" | "sign" | "eraser";
+export type SidePanelId =
+  | "thumbs" | "search" | "bookmarks" | "comments" | "attachments" | "layers"
+  | "signatures" | "fields" | "tasks";
 
 export interface SevenSettings {
   appearance: AppearanceMode;
@@ -13,6 +19,9 @@ export interface SevenSettings {
   ocrOutputType: "auto" | "pdf" | "pdfa";
   conversionDpi: number;
   signatureValidationOnline: boolean;
+  quickTools: QuickToolId[];
+  quickToolsPosition: { x: number; y: number } | null;
+  sidePanels: SidePanelId[];
 }
 
 const KEY = "seven-reader:settings:v1";
@@ -30,6 +39,9 @@ export const defaultSettings: SevenSettings = {
   ocrOutputType: "auto",
   conversionDpi: 150,
   signatureValidationOnline: false,
+  quickTools: ["select", "hand", "comment", "highlight", "underline", "strikeout", "draw", "text", "fill", "sign", "eraser"],
+  quickToolsPosition: null,
+  sidePanels: ["thumbs", "search", "bookmarks", "comments", "attachments", "layers", "signatures", "fields", "tasks"],
 };
 
 export function loadSettings(): SevenSettings {
@@ -40,6 +52,12 @@ export function loadSettings(): SevenSettings {
       ...parsed,
       trustedLocations: Array.isArray(parsed.trustedLocations) ? parsed.trustedLocations : [],
       trustedHosts: Array.isArray(parsed.trustedHosts) ? parsed.trustedHosts : [],
+      quickTools: Array.isArray(parsed.quickTools) ? parsed.quickTools as QuickToolId[] : defaultSettings.quickTools,
+      quickToolsPosition:
+        parsed.quickToolsPosition && typeof parsed.quickToolsPosition === "object"
+          ? parsed.quickToolsPosition
+          : null,
+      sidePanels: Array.isArray(parsed.sidePanels) ? parsed.sidePanels as SidePanelId[] : defaultSettings.sidePanels,
     };
   } catch {
     return defaultSettings;

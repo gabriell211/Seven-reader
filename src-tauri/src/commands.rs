@@ -1,7 +1,9 @@
 use crate::{
+    annotations,
     capabilities,
     error::{CommandResult, ErrorPayload, SevenError},
     jobs::{self, JobStart},
+    forms,
     ocr,
     document_ops,
     pdf,
@@ -435,6 +437,62 @@ pub fn start_optimize_pdf(
         input.to_string_lossy().into_owned(),
     ];
     Ok(jobs::start_process_job(app, &state, "optimize", executable, args, Some(output)))
+}
+
+#[tauri::command]
+pub fn list_annotations(path: String) -> CommandResult<Vec<annotations::AnnotationInfo>> {
+    let input = pdf::validate_pdf_path(&path).map_err(ErrorPayload::from)?;
+    annotations::list_annotations(&input).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn add_annotation(
+    input: String,
+    output: String,
+    annotation: annotations::AnnotationInput,
+) -> CommandResult<()> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    annotations::add_annotation(&input, &output, annotation).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn delete_annotation(
+    input: String,
+    output: String,
+    object_id: String,
+) -> CommandResult<()> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    annotations::delete_annotation(&input, &output, &object_id).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn list_form_fields(path: String) -> CommandResult<Vec<forms::FormFieldInfo>> {
+    let input = pdf::validate_pdf_path(&path).map_err(ErrorPayload::from)?;
+    forms::list_fields(&input).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn fill_form_fields(
+    input: String,
+    output: String,
+    values: Vec<forms::FormValue>,
+) -> CommandResult<usize> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    forms::fill_fields(&input, &output, values).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn create_form_field(
+    input: String,
+    output: String,
+    field: forms::NewFormField,
+) -> CommandResult<()> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    forms::create_field(&input, &output, field).map_err(ErrorPayload::from)
 }
 
 #[tauri::command]

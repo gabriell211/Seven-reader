@@ -1,7 +1,9 @@
+mod annotations;
 mod capabilities;
 mod commands;
 mod document_ops;
 mod error;
+mod forms;
 mod jobs;
 mod ocr;
 mod pdf;
@@ -44,6 +46,12 @@ pub fn run() {
             commands::start_rotate_pages,
             commands::start_ocr,
             commands::start_optimize_pdf,
+            commands::list_annotations,
+            commands::add_annotation,
+            commands::delete_annotation,
+            commands::list_form_fields,
+            commands::fill_form_fields,
+            commands::create_form_field,
             commands::get_document_metadata,
             commands::update_document_metadata,
             commands::sanitize_document,

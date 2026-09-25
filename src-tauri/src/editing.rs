@@ -1772,13 +1772,44 @@ fn apply_background_to_document(
     Ok(())
 }
 
-fn page_label_style(style: &str) -> Result<Vec<u8>, SevenError> {
+fn roman(mut value: u64, upper: bool) -> String {
+    let values = [
+        (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"),
+        (100, "C"), (90, "XC"), (50, "L"), (40, "XL"),
+        (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I"),
+    ];
+    let mut output = String::new();
+    for (number, glyph) in values {
+        while value >= number {
+            output.push_str(glyph);
+            value -= number;
+        }
+    }
+    if upper { output } else { output.to_ascii_lowercase() }
+}
+
+fn letters(mut value: u64, upper: bool) -> String {
+    let mut chars = Vec::new();
+    while value > 0 {
+        value -= 1;
+        chars.push((b'A' + (value % 26) as u8) as char);
+        value /= 26;
+    }
+    chars.reverse();
+    let output: String = chars.into_iter().collect();
+    if upper { output } else { output.to_ascii_lowercase() }
+}
+
+fn page_label_number(style: &str, value: u64) -> Result<String, SevenError> {
+    if value == 0 {
+        return Err(SevenError::OperationRejected("Número de page label deve ser maior que zero".into()));
+    }
     match style {
-        "decimal" => Ok(b"D".to_vec()),
-        "roman-lower" => Ok(b"r".to_vec()),
-        "roman-upper" => Ok(b"R".to_vec()),
-        "letters-lower" => Ok(b"a".to_vec()),
-        "letters-upper" => Ok(b"A".to_vec()),
+        "decimal" => Ok(value.to_string()),
+        "roman-lower" => Ok(roman(value, false)),
+        "roman-upper" => Ok(roman(value, true)),
+        "letters-lower" => Ok(letters(value, false)),
+        "letters-upper" => Ok(letters(value, true)),
         _ => Err(SevenError::OperationRejected("Estilo de page label inválido".into())),
     }
 }
@@ -1798,15 +1829,17 @@ pub fn set_page_labels(
     if start > end || options.start_number == 0 {
         return Err(SevenError::OperationRejected("Intervalo/numeração inválidos".into()));
     }
-    let style = page_label_style(&options.style)?;
-    let mut nums = vec![
-        (start as i64).into(),
-        Object::Dictionary(dictionary! {
-            "S" => Object::Name(style),
-            "P" => Object::string_literal(format!("{}{}", options.prefix, options.suffix)),
-            "St" => options.start_number as i64,
-        }),
-    ];
+
+    let mut nums = Vec::new();
+    for page_index in start..=end {
+        let sequence = options.start_number + (page_index - start) as u64;
+        let number = page_label_number(&options.style, sequence)?;
+        let label = format!("{}{}{}", options.prefix, number, options.suffix);
+        nums.push((page_index as i64).into());
+        nums.push(Object::Dictionary(dictionary! {
+            "P" => Object::string_literal(label),
+        }));
+    }
 
     if end + 1 < total {
         nums.push(((end + 1) as i64).into());
@@ -1816,15 +1849,13 @@ pub fn set_page_labels(
         }));
     }
 
-    let labels = dictionary! {
-        "Nums" => nums,
-    };
     document
         .catalog_mut()
         .map_err(|error| SevenError::Operation(error.to_string()))?
-        .set("PageLabels", labels);
+        .set("PageLabels", dictionary! { "Nums" => nums });
     atomic_save(document, output)
 }
+
 
 pub fn set_background(
     input: &Path,

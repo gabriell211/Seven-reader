@@ -145,6 +145,10 @@ pub struct BackgroundOptions {
     pub red: f64,
     pub green: f64,
     pub blue: f64,
+    pub opacity: f64,
+    pub image_path: Option<String>,
+    pub image_scale: f64,
+    pub position: String,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -15,8 +15,8 @@ export async function getCapabilities(): Promise<Capabilities | null> {
   return invoke<Capabilities>("get_capabilities");
 }
 
-export async function openDocument(path: string): Promise<DocumentSummary> {
-  return invoke<DocumentSummary>("open_document", { path });
+export async function openDocument(path: string, password?: string): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("open_document", { path, password: password ?? null });
 }
 
 export async function closeDocument(documentId: string): Promise<void> {
@@ -38,10 +38,7 @@ export async function searchDocument(
   return invoke("search_document", { documentId, query });
 }
 
-export async function saveCopy(
-  documentId: string,
-  destination: string,
-): Promise<void> {
+export async function saveCopy(documentId: string, destination: string): Promise<void> {
   await invoke("save_document_as", { documentId, destination });
 }
 

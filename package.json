@@ -10,9 +10,10 @@
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
     "build:assets": "node scripts/generate-brand-assets.mjs",
+    "fetch:pdfium": "node scripts/fetch-pdfium.mjs",
     "tauri": "tauri",
-    "desktop:dev": "npm run build:assets && tauri dev",
-    "desktop:build": "npm run build:assets && tauri build"
+    "desktop:dev": "npm run build:assets && npm run fetch:pdfium && tauri dev",
+    "desktop:build": "npm run build:assets && npm run fetch:pdfium && tauri build"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.0",

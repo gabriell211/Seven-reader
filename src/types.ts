@@ -171,7 +171,7 @@ export interface OcrWord {
   height: number;
 }
 
-export type AnnotationKind = "note" | "highlight" | "underline" | "strikeout" | "stamp" | "freetext";
+export type AnnotationKind = "note" | "highlight" | "underline" | "strikeout" | "stamp" | "freetext" | "ink";
 
 export interface AnnotationInput {
   pageIndex: number;
@@ -182,6 +182,13 @@ export interface AnnotationInput {
   y: number;
   width: number;
   height: number;
+}
+
+export interface InkAnnotationInput {
+  pageIndex: number;
+  author: string;
+  points: Array<[number, number]>;
+  lineWidth: number;
 }
 
 export interface AnnotationInfo {

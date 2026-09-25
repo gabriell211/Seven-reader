@@ -654,3 +654,21 @@ svg { width: 20px; height: 20px; }
 .danger-outline-button { min-height: 42px; padding: 0 16px; border: 1px solid #e2b8bf; border-radius: 11px; color: #a43d50; background: #fff8f9; cursor: pointer; font-size: 10px; font-weight: 750; }
 .danger-outline-button:hover:not(:disabled) { border-color: #d8909d; background: #fff0f2; }
 .mini-spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.45); border-top-color: white; border-radius: 50%; animation: orbit .7s linear infinite; }
+
+.action-summary { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)) auto; gap: 8px; align-items: stretch; }
+.action-summary > div { min-height: 64px; padding: 10px 12px; border: 1px solid #e3e1e9; border-radius: 11px; display: grid; gap: 3px; background: white; }
+.action-summary span { color: #8b8d96; font-size: 8.5px; text-transform: uppercase; letter-spacing: .05em; }
+.action-summary strong { font-size: 20px; }
+.pdf-action-list { display: grid; gap: 7px; }
+.pdf-action-row { padding: 11px; border: 1px solid #e2e1e7; border-radius: 11px; display: grid; grid-template-columns: 34px minmax(0,1fr); gap: 10px; background: white; }
+.pdf-action-row.blocked { border-color: #e8c7cd; background: #fff9fa; }
+.action-glyph { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; color: #6546c4; background: #f0ebff; }
+.pdf-action-row.blocked .action-glyph { color: #a43d50; background: #fff0f2; }
+.action-glyph svg { width: 17px; }
+.pdf-action-row > div { min-width: 0; display: grid; gap: 4px; }
+.action-title { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.action-title strong { font-size: 11px; }
+.action-title span { padding: 2px 6px; border-radius: 999px; color: #6847c8; background: #eee9ff; font-size: 7.5px; font-weight: 750; }
+.pdf-action-row.blocked .action-title span { color: #a43d50; background: #fde9ed; }
+.pdf-action-row p { margin: 0; overflow-wrap: anywhere; color: #686a73; font: 9px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace; }
+.pdf-action-row small { color: #9a9ca4; font-size: 8px; }

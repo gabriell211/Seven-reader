@@ -888,6 +888,19 @@ pub fn session_remove_pdf_attachment(
 }
 
 #[tauri::command]
+pub fn session_update_pdf_layer_properties(
+    state: State<'_, AppState>,
+    document_id: String,
+    update: advanced::LayerPropertiesUpdate,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "layer-properties", move |input, output| {
+        advanced::update_layer_properties(input, output, update)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn session_set_pdf_layer_visibility(
     state: State<'_, AppState>,
     document_id: String,

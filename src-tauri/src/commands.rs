@@ -501,6 +501,21 @@ pub fn session_edit_replace_text(
 }
 
 #[tauri::command]
+pub fn get_image_dimensions(path: String) -> CommandResult<[u32; 2]> {
+    let input = std::path::PathBuf::from(&path);
+    if !input.is_file() {
+        return Err(ErrorPayload::from(SevenError::NotFound(path)));
+    }
+    let extension = input.extension().and_then(|value| value.to_str()).unwrap_or_default().to_ascii_lowercase();
+    if !matches!(extension.as_str(), "png" | "jpg" | "jpeg" | "tif" | "tiff" | "bmp" | "webp") {
+        return Err(ErrorPayload::from(SevenError::UnsupportedFormat(extension)));
+    }
+    let (width, height) = image::image_dimensions(&input)
+        .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?;
+    Ok([width, height])
+}
+
+#[tauri::command]
 pub fn list_page_image_objects(
     state: State<'_, AppState>,
     document_id: String,

@@ -2,6 +2,7 @@ use crate::{
     advanced,
     annotations,
     capabilities,
+    catalog,
     error::{CommandResult, ErrorPayload, SevenError},
     jobs::{self, JobStart},
     forms,
@@ -32,6 +33,53 @@ pub struct SessionReplaceTextResult {
 pub struct SessionFormFillResult {
     pub document: pdf::DocumentSummary,
     pub changed: usize,
+}
+
+#[tauri::command]
+pub async fn build_catalog(
+    state: State<'_, AppState>,
+    name: String,
+    inputs: Vec<String>,
+) -> CommandResult<catalog::CatalogSummary> {
+    let snapshot = AppState {
+        documents: state.documents.clone(),
+        jobs: state.jobs.clone(),
+        cache_dir: state.cache_dir.clone(),
+        resource_dir: state.resource_dir.clone(),
+    };
+    tauri::async_runtime::spawn_blocking(move || catalog::build_catalog(&snapshot, &name, inputs))
+        .await
+        .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
+        .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn list_catalogs(state: State<'_, AppState>) -> CommandResult<Vec<catalog::CatalogSummary>> {
+    catalog::list_catalogs(&state).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub async fn search_catalog(
+    state: State<'_, AppState>,
+    id: String,
+    query: String,
+    match_case: bool,
+) -> CommandResult<Vec<catalog::CatalogHit>> {
+    let snapshot = AppState {
+        documents: state.documents.clone(),
+        jobs: state.jobs.clone(),
+        cache_dir: state.cache_dir.clone(),
+        resource_dir: state.resource_dir.clone(),
+    };
+    tauri::async_runtime::spawn_blocking(move || catalog::search_catalog(&snapshot, &id, &query, match_case))
+        .await
+        .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
+        .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn delete_catalog(state: State<'_, AppState>, id: String) -> CommandResult<()> {
+    catalog::delete_catalog(&state, &id).map_err(ErrorPayload::from)
 }
 
 #[tauri::command]

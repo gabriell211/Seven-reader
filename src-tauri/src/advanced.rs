@@ -2,7 +2,7 @@ use crate::error::SevenError;
 use lopdf::{dictionary, Dictionary, Document, Object, ObjectId, Stream};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::{collections::HashSet, fs, path::Path};
+use std::{collections::{HashMap, HashSet}, fs, path::Path};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -40,7 +40,23 @@ pub struct LayerInfo {
     pub object_id: String,
     pub name: String,
     pub visible: bool,
+    pub locked: bool,
+    pub depth: usize,
+    pub view_state: String,
+    pub print_state: String,
+    pub export_state: String,
     pub intent: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LayerPropertiesUpdate {
+    pub object_id: String,
+    pub name: String,
+    pub locked: bool,
+    pub view_state: String,
+    pub print_state: String,
+    pub export_state: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -334,55 +350,121 @@ fn attachment_list(document: &Document) -> Vec<AttachmentInfo> {
         .collect()
 }
 
-fn layer_list(document: &Document) -> Vec<LayerInfo> {
-    let Some(oc) = document.catalog().ok().and_then(|c| c.get(b"OCProperties").ok()) else { return Vec::new() };
-    let oc_dict = match oc {
-        Object::Dictionary(d) => Some(d),
-        Object::Reference(id) => document.get_object(*id).ok().and_then(|o| o.as_dict().ok()),
+fn resolved_dictionary<'a>(document: &'a Document, object: &'a Object) -> Option<&'a Dictionary> {
+    match object {
+        Object::Dictionary(dictionary) => Some(dictionary),
+        Object::Reference(id) => document.get_object(*id).ok()?.as_dict().ok(),
         _ => None,
+    }
+}
+
+fn usage_state(dictionary: &Dictionary, category: &[u8], key: &[u8]) -> String {
+    dictionary
+        .get(b"Usage")
+        .ok()
+        .and_then(|object| object.as_dict().ok())
+        .and_then(|usage| usage.get(category).ok())
+        .and_then(|object| object.as_dict().ok())
+        .and_then(|category| category.get(key).ok())
+        .and_then(|object| object.as_name().ok())
+        .map(|value| String::from_utf8_lossy(value).to_ascii_lowercase())
+        .filter(|value| matches!(value.as_str(), "on" | "off"))
+        .unwrap_or_else(|| "unchanged".into())
+}
+
+fn collect_layer_depths(object: &Object, depth: usize, output: &mut HashMap<ObjectId, usize>) {
+    match object {
+        Object::Reference(id) => {
+            output.entry(*id).or_insert(depth);
+        }
+        Object::Array(values) => {
+            let mut first = true;
+            for value in values {
+                if first && matches!(value, Object::String(_, _) | Object::Name(_)) {
+                    first = false;
+                    continue;
+                }
+                collect_layer_depths(value, depth + usize::from(!first), output);
+                first = false;
+            }
+        }
+        _ => {}
+    }
+}
+
+fn layer_list(document: &Document) -> Vec<LayerInfo> {
+    let Some(oc) = document.catalog().ok().and_then(|catalog| catalog.get(b"OCProperties").ok()) else {
+        return Vec::new();
     };
-    let Some(oc_dict) = oc_dict else { return Vec::new() };
-    let on_ids = oc_dict
-        .get(b"D")
-        .ok()
-        .and_then(|o| o.as_dict().ok())
-        .and_then(|d| d.get(b"ON").ok())
-        .and_then(|o| o.as_array().ok())
-        .map(|a| a.iter().filter_map(|o| o.as_reference().ok()).collect::<HashSet<_>>())
+    let Some(oc_dict) = resolved_dictionary(document, oc) else { return Vec::new() };
+    let default = oc_dict.get(b"D").ok().and_then(|object| resolved_dictionary(document, object));
+
+    let on_ids = default
+        .and_then(|dictionary| dictionary.get(b"ON").ok())
+        .and_then(|object| object.as_array().ok())
+        .map(|values| values.iter().filter_map(|object| object.as_reference().ok()).collect::<HashSet<_>>())
         .unwrap_or_default();
-    let off_ids = oc_dict
-        .get(b"D")
-        .ok()
-        .and_then(|o| o.as_dict().ok())
-        .and_then(|d| d.get(b"OFF").ok())
-        .and_then(|o| o.as_array().ok())
-        .map(|a| a.iter().filter_map(|o| o.as_reference().ok()).collect::<HashSet<_>>())
+    let off_ids = default
+        .and_then(|dictionary| dictionary.get(b"OFF").ok())
+        .and_then(|object| object.as_array().ok())
+        .map(|values| values.iter().filter_map(|object| object.as_reference().ok()).collect::<HashSet<_>>())
         .unwrap_or_default();
+    let locked_ids = default
+        .and_then(|dictionary| dictionary.get(b"Locked").ok())
+        .and_then(|object| object.as_array().ok())
+        .map(|values| values.iter().filter_map(|object| object.as_reference().ok()).collect::<HashSet<_>>())
+        .unwrap_or_default();
+    let base_on = default
+        .and_then(|dictionary| dictionary.get(b"BaseState").ok())
+        .and_then(|object| object.as_name().ok())
+        .is_none_or(|name| name != b"OFF");
+
+    let mut depths = HashMap::new();
+    if let Some(order) = default.and_then(|dictionary| dictionary.get(b"Order").ok()) {
+        collect_layer_depths(order, 0, &mut depths);
+    }
 
     oc_dict
         .get(b"OCGs")
         .ok()
-        .and_then(|o| o.as_array().ok())
-        .map(|values| values.iter().filter_map(|entry| {
-            let id = entry.as_reference().ok()?;
-            let dictionary = document.get_object(id).ok()?.as_dict().ok()?;
-            let name = dictionary.get(b"Name").ok().map(object_text).unwrap_or_else(|| id_string(id));
-            let intent = dictionary
-                .get(b"Intent")
-                .ok()
-                .map(|object| match object {
-                    Object::Name(value) => vec![String::from_utf8_lossy(value).into_owned()],
-                    Object::Array(values) => values.iter().map(object_text).filter(|v| !v.is_empty()).collect(),
-                    _ => Vec::new(),
+        .and_then(|object| object.as_array().ok())
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(|entry| {
+                    let id = entry.as_reference().ok()?;
+                    let dictionary = document.get_object(id).ok()?.as_dict().ok()?;
+                    let name = dictionary.get(b"Name").ok().map(object_text).unwrap_or_else(|| id_string(id));
+                    let intent = dictionary
+                        .get(b"Intent")
+                        .ok()
+                        .map(|object| match object {
+                            Object::Name(value) => vec![String::from_utf8_lossy(value).into_owned()],
+                            Object::Array(values) => values.iter().map(object_text).filter(|value| !value.is_empty()).collect(),
+                            _ => Vec::new(),
+                        })
+                        .unwrap_or_default();
+                    let visible = if on_ids.contains(&id) {
+                        true
+                    } else if off_ids.contains(&id) {
+                        false
+                    } else {
+                        base_on
+                    };
+                    Some(LayerInfo {
+                        object_id: id_string(id),
+                        name,
+                        visible,
+                        locked: locked_ids.contains(&id),
+                        depth: depths.get(&id).copied().unwrap_or(0),
+                        view_state: usage_state(dictionary, b"View", b"ViewState"),
+                        print_state: usage_state(dictionary, b"Print", b"PrintState"),
+                        export_state: usage_state(dictionary, b"Export", b"ExportState"),
+                        intent,
+                    })
                 })
-                .unwrap_or_default();
-            Some(LayerInfo {
-                object_id: id_string(id),
-                name,
-                visible: if off_ids.contains(&id) { false } else { on_ids.contains(&id) || !off_ids.contains(&id) },
-                intent,
-            })
-        }).collect())
+                .collect()
+        })
         .unwrap_or_default()
 }
 

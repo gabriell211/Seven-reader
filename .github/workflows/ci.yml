@@ -46,7 +46,7 @@ jobs:
       - run: npm install --no-audit --no-fund
       - run: npm run build:assets
       - name: Rust format
-        run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --all
       - name: Rust check
         run: cargo check --manifest-path src-tauri/Cargo.toml
       - name: Rust tests

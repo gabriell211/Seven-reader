@@ -574,6 +574,47 @@ pub fn session_edit_add_image(
 }
 
 #[tauri::command]
+pub fn list_pdf_links(
+    state: State<'_, AppState>,
+    document_id: String,
+) -> CommandResult<Vec<editing::LinkInfo>> {
+    let document = state
+        .documents
+        .lock()
+        .get(&document_id)
+        .cloned()
+        .ok_or_else(|| ErrorPayload::from(SevenError::DocumentNotOpen))?;
+    editing::list_links(document.active_path()).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_edit_update_link(
+    state: State<'_, AppState>,
+    document_id: String,
+    update: editing::LinkUpdate,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "update-link", move |input, output| {
+        editing::update_link(input, output, update)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_edit_remove_link(
+    state: State<'_, AppState>,
+    document_id: String,
+    page_index: usize,
+    object_id: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "remove-link", move |input, output| {
+        editing::remove_link(input, output, page_index, &object_id)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn session_edit_add_link(
     state: State<'_, AppState>,
     document_id: String,

@@ -551,6 +551,27 @@ export interface BookmarkInfo {
   pageIndex?: number;
   open: boolean;
   hasChildren: boolean;
+  bold: boolean;
+  italic: boolean;
+  color: [number, number, number];
+  actionType: string;
+  actionTarget: string;
+}
+
+export interface BookmarkUpdate {
+  objectId: string;
+  title: string;
+  actionType: "goto" | "uri" | "named" | "none";
+  targetPage?: number;
+  target: string;
+  bold: boolean;
+  italic: boolean;
+  color: [number, number, number];
+}
+
+export interface GeneratedBookmarksResult {
+  document: DocumentSummary;
+  created: number;
 }
 
 export interface BookmarkInput {

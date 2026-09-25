@@ -18,9 +18,9 @@ export const tools: ToolDefinition[] = [
   { id: "create", label: "Criar PDF", description: "Crie um documento PDF em branco com tamanho e quantidade de páginas definidos.", icon: "create", group: "Documento", implemented: true },
   { id: "organize", label: "Organizar páginas", description: "Reordene, extraia, gire ou divida páginas com processamento local.", icon: "pages", group: "Documento", capability: "qpdf", implemented: true },
   { id: "combine", label: "Combinar arquivos", description: "Mescle PDFs usando processamento local.", icon: "merge", group: "Documento", capability: "qpdf", implemented: true },
-  { id: "properties", label: "Propriedades", description: "Inspecione e altere metadados documentais em uma cópia.", icon: "form", group: "Documento", implemented: true },
-  { id: "bookmarks", label: "Marcadores", description: "Inspecione e crie destinos de navegação no outline do PDF.", icon: "bookmark", group: "Documento", implemented: true },
-  { id: "attachments", label: "Anexos", description: "Incorpore e extraia arquivos do name tree EmbeddedFiles.", icon: "attachment", group: "Documento", implemented: true },
+  { id: "properties", label: "Propriedades", description: "Inspecione e altere metadados na sessão atual com Desfazer/Refazer.", icon: "form", group: "Documento", implemented: true },
+  { id: "bookmarks", label: "Marcadores", description: "Inspecione, crie e renomeie destinos no outline com edição não destrutiva.", icon: "bookmark", group: "Documento", implemented: true },
+  { id: "attachments", label: "Anexos", description: "Incorpore e extraia arquivos EmbeddedFiles; inclusões participam do histórico de edição.", icon: "attachment", group: "Documento", implemented: true },
 
   { id: "comment", label: "Comentar", description: "Notas, marcações de texto, carimbos e texto livre persistidos como anotações PDF.", icon: "comment", group: "Revisão", implemented: true },
   { id: "fill-sign", label: "Preencher e assinar", description: "Assinatura eletrônica visual ou assinatura digital PAdES com certificado PKCS#12.", icon: "sign", group: "Revisão", implemented: true },

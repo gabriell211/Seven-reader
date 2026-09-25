@@ -65,6 +65,20 @@ pub struct FormFieldUpdate {
     pub options: Vec<String>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DuplicateFieldRequest {
+    pub object_id: String,
+    pub page_start: usize,
+    pub page_end: usize,
+    pub rows: u16,
+    pub columns: u16,
+    pub gap_x: f64,
+    pub gap_y: f64,
+    pub offset_x: f64,
+    pub offset_y: f64,
+}
+
 fn object_text(object: &Object) -> String {
     match object {
         Object::String(bytes, _) | Object::Name(bytes) => String::from_utf8_lossy(bytes).into_owned(),
@@ -498,6 +512,173 @@ pub fn delete_field(
     }
 
     document.objects.remove(&id);
+    atomic_save(document, output)
+}
+
+pub fn duplicate_field(
+    input: &Path,
+    output: &Path,
+    request: DuplicateFieldRequest,
+) -> Result<usize, SevenError> {
+    if request.rows == 0 || request.columns == 0 || request.rows > 100 || request.columns > 100 {
+        return Err(SevenError::OperationRejected(
+            "A grade deve conter entre 1 e 100 linhas/colunas".into(),
+        ));
+    }
+    if request.page_start > request.page_end {
+        return Err(SevenError::OperationRejected("Intervalo de páginas inválido".into()));
+    }
+
+    let source_id = parse_object_id(&request.object_id)?;
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let source = document
+        .get_object(source_id)
+        .map_err(|_| SevenError::OperationRejected("Campo de origem não encontrado".into()))?
+        .as_dict()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .clone();
+
+    let source_name = source.get(b"T").ok().map(object_text).unwrap_or_else(|| "campo".into());
+    let source_rect = rect_value(&source)
+        .ok_or_else(|| SevenError::OperationRejected("Campo sem /Rect editável".into()))?;
+    let width = (source_rect[2] - source_rect[0]).abs().max(1.0);
+    let height = (source_rect[3] - source_rect[1]).abs().max(1.0);
+    let pages = document.get_pages();
+    let page_count = pages.len();
+
+    if page_count == 0 || request.page_end >= page_count {
+        return Err(SevenError::OperationRejected(format!(
+            "Intervalo ultrapassa as {page_count} páginas do documento"
+        )));
+    }
+
+    let acroform_id = ensure_acroform(&mut document)?;
+    let total_requested =
+        (request.page_end - request.page_start + 1)
+            .saturating_mul(usize::from(request.rows))
+            .saturating_mul(usize::from(request.columns));
+    if total_requested > 5_000 {
+        return Err(SevenError::OperationRejected(
+            "Uma operação pode criar no máximo 5.000 campos".into(),
+        ));
+    }
+
+    let mut created = Vec::with_capacity(total_requested);
+    for page_index in request.page_start..=request.page_end {
+        let page_id = pages
+            .get(&((page_index + 1) as u32))
+            .copied()
+            .ok_or_else(|| SevenError::OperationRejected("Página de destino não existe".into()))?;
+
+        for row in 0..request.rows {
+            for column in 0..request.columns {
+                let mut clone = source.clone();
+                clone.remove(b"Kids");
+                clone.remove(b"Parent");
+                clone.remove(b"V");
+                clone.remove(b"AS");
+                clone.remove(b"AP");
+
+                let x = source_rect[0]
+                    + request.offset_x
+                    + f64::from(column) * (width + request.gap_x);
+                let y = source_rect[1]
+                    + request.offset_y
+                    - f64::from(row) * (height + request.gap_y);
+                if !x.is_finite() || !y.is_finite() {
+                    return Err(SevenError::OperationRejected("Posição calculada inválida".into()));
+                }
+
+                let name = format!(
+                    "{}_p{}_r{}_c{}",
+                    source_name,
+                    page_index + 1,
+                    row + 1,
+                    column + 1
+                );
+                clone.set("T", Object::string_literal(name));
+                clone.set("P", page_id);
+                clone.set("Rect", vec![
+                    x.into(),
+                    y.into(),
+                    (x + width).into(),
+                    (y + height).into(),
+                ]);
+
+                if clone.get(b"FT").ok().and_then(|value| value.as_name().ok()) == Some(b"Sig") {
+                    clone.remove(b"V");
+                }
+                let field_id = document.add_object(clone);
+                created.push((page_id, field_id));
+            }
+        }
+    }
+
+    for (page_id, field_id) in &created {
+        let page = document
+            .get_object_mut(*page_id)
+            .map_err(|error| SevenError::Operation(error.to_string()))?
+            .as_dict_mut()
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+        match page.get_mut(b"Annots") {
+            Ok(Object::Array(values)) => values.push((*field_id).into()),
+            Ok(_) => return Err(SevenError::Operation("Estrutura /Annots inválida".into())),
+            Err(_) => page.set("Annots", vec![(*field_id).into()]),
+        }
+    }
+
+    let acroform = document
+        .get_object_mut(acroform_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    match acroform.get_mut(b"Fields") {
+        Ok(Object::Array(fields)) => {
+            fields.extend(created.iter().map(|(_, id)| Object::Reference(*id)));
+        }
+        Ok(_) => return Err(SevenError::Operation("Estrutura Fields inválida".into())),
+        Err(_) => {
+            acroform.set(
+                "Fields",
+                created.iter().map(|(_, id)| Object::Reference(*id)).collect::<Vec<_>>(),
+            );
+        }
+    }
+    acroform.set("NeedAppearances", true);
+
+    let count = created.len();
+    atomic_save(document, output)?;
+    Ok(count)
+}
+
+pub fn set_page_tab_order(
+    input: &Path,
+    output: &Path,
+    page_index: usize,
+    order: &str,
+) -> Result<(), SevenError> {
+    let value = match order {
+        "row" => "R",
+        "column" => "C",
+        "structure" => "S",
+        _ => {
+            return Err(SevenError::OperationRejected(
+                "Ordem de tabulação deve ser row, column ou structure".into(),
+            ))
+        }
+    };
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let page_id = document
+        .get_pages()
+        .get(&((page_index + 1) as u32))
+        .copied()
+        .ok_or_else(|| SevenError::OperationRejected("Página não existe".into()))?;
+    document
+        .get_object_mut(page_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .set("Tabs", value);
     atomic_save(document, output)
 }
 

@@ -105,6 +105,7 @@ pub fn run() {
             commands::list_form_fields,
             commands::fill_form_fields,
             commands::create_form_field,
+            commands::list_pdf_actions,
             commands::get_document_metadata,
             commands::update_document_metadata,
             commands::sanitize_document,

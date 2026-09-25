@@ -7,7 +7,7 @@ export type IconName =
   | "close" | "chevronLeft" | "chevronRight" | "zoomIn" | "zoomOut" | "hand"
   | "highlight" | "text" | "draw" | "more" | "home" | "bookmark" | "attachment"
   | "layers" | "form" | "redact" | "compare" | "accessibility" | "automation"
-  | "certificate" | "lock" | "history";
+  | "certificate" | "lock" | "history" | "undo" | "redo";
 
 const paths: Record<IconName, string[]> = {
   open: ["M4 7.5h6l2 2H20v8.5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7.5Z", "M8 14h8", "m13 11 3 3-3 3"],
@@ -53,6 +53,8 @@ const paths: Record<IconName, string[]> = {
   certificate: ["M7 3h10v11H7z", "m9 7 2 2 4-4", "m10 14-1 7 3-2 3 2-1-7"],
   lock: ["M6 10h12v11H6z", "M9 10V7a3 3 0 0 1 6 0v3", "M12 14v3"],
   history: ["M12 5a7 7 0 1 1-6.3 4", "M5 5v5h5", "M12 8v5l3 2"],
+  undo: ["M9 7 4-4", "M9 7l4 4", "M9 7h5a6 6 0 0 1 0 12H9"],
+  redo: ["m15 7-4-4", "m15 7-4 4", "M15 7h-5a6 6 0 0 0 0 12h5"],
 };
 
 export function SevenIcon({ name, ...props }: { name: IconName } & SVGProps<SVGSVGElement>) {

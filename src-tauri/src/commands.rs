@@ -638,6 +638,50 @@ pub fn session_create_form_field(
 }
 
 #[tauri::command]
+pub fn export_form_data(
+    input: String,
+    destination: String,
+) -> CommandResult<usize> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let destination = std::path::PathBuf::from(destination);
+    let parent = destination.parent()
+        .ok_or_else(|| ErrorPayload::from(SevenError::InvalidPath("Destino inválido".into())))?;
+    fs::canonicalize(parent)
+        .map_err(|error| ErrorPayload::from(SevenError::InvalidPath(error.to_string())))?;
+    forms::export_form_data(&input, &destination).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_import_form_data(
+    state: State<'_, AppState>,
+    document_id: String,
+    data_path: String,
+) -> CommandResult<SessionFormFillResult> {
+    let data = std::path::PathBuf::from(&data_path);
+    if !data.is_file() {
+        return Err(ErrorPayload::from(SevenError::NotFound(data_path)));
+    }
+    session::apply_revision(&state, &document_id, "import-form-data", move |input, output| {
+        forms::import_form_data(input, output, &data)
+    })
+    .map(|(document, changed)| SessionFormFillResult { document, changed })
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_reset_form(
+    state: State<'_, AppState>,
+    document_id: String,
+    use_defaults: bool,
+) -> CommandResult<SessionFormFillResult> {
+    session::apply_revision(&state, &document_id, if use_defaults { "reset-form" } else { "clear-form" }, move |input, output| {
+        forms::reset_form(input, output, use_defaults)
+    })
+    .map(|(document, changed)| SessionFormFillResult { document, changed })
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn session_update_form_field(
     state: State<'_, AppState>,
     document_id: String,

@@ -1171,16 +1171,31 @@ pub fn delete_field_action(
     let id = parse_object_id(object_id)?;
     let trigger = trigger_key(trigger)?;
     let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let existing = document
+        .get_object(id)
+        .map_err(|_| SevenError::OperationRejected("Campo não encontrado".into()))?
+        .as_dict()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .get(b"AA")
+        .ok()
+        .cloned()
+        .ok_or_else(|| SevenError::OperationRejected("Campo não possui ações adicionais".into()))?;
+    let mut aa = match existing {
+        Object::Dictionary(dictionary) => dictionary,
+        Object::Reference(reference) => document
+            .get_object(reference)
+            .ok()
+            .and_then(|object| object.as_dict().ok())
+            .cloned()
+            .ok_or_else(|| SevenError::OperationRejected("Dicionário /AA inválido".into()))?,
+        _ => return Err(SevenError::OperationRejected("Dicionário /AA inválido".into())),
+    };
+    aa.remove(trigger.as_bytes());
     let field = document
         .get_object_mut(id)
         .map_err(|_| SevenError::OperationRejected("Campo não encontrado".into()))?
         .as_dict_mut()
         .map_err(|error| SevenError::Operation(error.to_string()))?;
-    let mut aa = match field.get(b"AA") {
-        Ok(Object::Dictionary(dictionary)) => dictionary.clone(),
-        _ => return Err(SevenError::OperationRejected("Campo não possui ações adicionais editáveis".into())),
-    };
-    aa.remove(trigger.as_bytes());
     if aa.is_empty() {
         field.remove(b"AA");
     } else {

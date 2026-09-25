@@ -8,12 +8,14 @@ import type {
   Capabilities,
   InkAnnotationInput,
   JobStatus,
+  NormalizedRect,
   DocumentSummary,
   RenderResult,
   SearchHit,
   ToolId,
 } from "../types";
-import { nativeAssetUrl } from "../lib/native";
+import { cropPageSelection, extractTextInRect, nativeAssetUrl } from "../lib/native";
+import { writeImage, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { ProtectedViewBanner } from "./ProtectedViewBanner";
 import type { QuickToolId, SidePanelId } from "../lib/settings";
 
@@ -129,6 +131,10 @@ export function DocumentWorkspace({
   const pageRef = useRef<HTMLDivElement>(null);
   const [inkPoints, setInkPoints] = useState<Array<[number, number]>>([]);
   const [inkWidth, setInkWidth] = useState(2.5);
+  const [selectionStart, setSelectionStart] = useState<[number, number] | null>(null);
+  const [selectionRect, setSelectionRect] = useState<NormalizedRect | null>(null);
+  const [selectedText, setSelectedText] = useState("");
+  const [selectionBusy, setSelectionBusy] = useState(false);
   const [toolbarPosition, setToolbarPosition] = useState(quickToolsPosition);
   const toolbarDragRef = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null);
   const drawingRef = useRef(false);
@@ -138,7 +144,12 @@ export function DocumentWorkspace({
     window.addEventListener("seven:focus-search", focus);
     return () => window.removeEventListener("seven:focus-search", focus);
   }, []);
-  useEffect(() => setPageInput(String(page + 1)), [page]);
+  useEffect(() => {
+    setPageInput(String(page + 1));
+    setSelectionStart(null);
+    setSelectionRect(null);
+    setSelectedText("");
+  }, [page]);
   useEffect(() => setToolbarPosition(quickToolsPosition), [quickToolsPosition]);
   useEffect(() => {
     if (!tabMenu) return;
@@ -150,6 +161,28 @@ export function DocumentWorkspace({
       window.removeEventListener("blur", close);
     };
   }, [tabMenu]);
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const editing = target?.matches("input, textarea, select, [contenteditable='true']");
+      if (editing || viewerTool !== "select") return;
+      const modifier = event.ctrlKey || event.metaKey;
+      if (modifier && event.key.toLowerCase() === "a") {
+        event.preventDefault();
+        selectWholePage();
+      }
+      if (modifier && event.key.toLowerCase() === "c" && selectedText) {
+        event.preventDefault();
+        void copySelectedText();
+      }
+      if (event.key === "Escape" && selectionRect) {
+        event.preventDefault();
+        clearSelection();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [viewerTool, selectedText, selectionRect, page, document.id, rendered?.width]);
   const [viewerTool, setViewerTool] = useState<"select" | "hand" | "draw">("select");
 
   const filteredTools = useMemo(() => {
@@ -300,6 +333,86 @@ export function DocumentWorkspace({
       Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)),
       Math.max(0, Math.min(1, (clientY - rect.top) / rect.height)),
     ];
+  };
+
+  const rectFromPoints = (start: [number, number], end: [number, number]): NormalizedRect => ({
+    x: Math.min(start[0], end[0]),
+    y: Math.min(start[1], end[1]),
+    width: Math.abs(end[0] - start[0]),
+    height: Math.abs(end[1] - start[1]),
+  });
+
+  const loadSelectionText = async (rect: NormalizedRect) => {
+    if (rect.width < 0.002 || rect.height < 0.002) {
+      setSelectedText("");
+      return;
+    }
+    setSelectionBusy(true);
+    try {
+      const result = await extractTextInRect(document.id, page, rect);
+      setSelectedText(result.text);
+    } catch {
+      setSelectedText("");
+    } finally {
+      setSelectionBusy(false);
+    }
+  };
+
+  const beginSelection = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (viewerTool !== "select") return;
+    const point = normalizedPoint(event.clientX, event.clientY);
+    if (!point) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setSelectionStart(point);
+    setSelectionRect({ x: point[0], y: point[1], width: 0, height: 0 });
+    setSelectedText("");
+  };
+
+  const moveSelection = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (viewerTool !== "select" || !selectionStart) return;
+    const point = normalizedPoint(event.clientX, event.clientY);
+    if (!point) return;
+    setSelectionRect(rectFromPoints(selectionStart, point));
+  };
+
+  const finishSelection = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (viewerTool !== "select" || !selectionStart) return;
+    const point = normalizedPoint(event.clientX, event.clientY);
+    const rect = point ? rectFromPoints(selectionStart, point) : selectionRect;
+    setSelectionStart(null);
+    try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* already released */ }
+    if (rect) {
+      setSelectionRect(rect);
+      void loadSelectionText(rect);
+    }
+  };
+
+  const selectWholePage = () => {
+    const rect: NormalizedRect = { x: 0, y: 0, width: 1, height: 1 };
+    setSelectionRect(rect);
+    void loadSelectionText(rect);
+  };
+
+  const clearSelection = () => {
+    setSelectionStart(null);
+    setSelectionRect(null);
+    setSelectedText("");
+  };
+
+  const copySelectedText = async () => {
+    if (!selectedText) return;
+    await writeText(selectedText);
+  };
+
+  const copySelectionImage = async () => {
+    if (!selectionRect || !rendered) return;
+    setSelectionBusy(true);
+    try {
+      const path = await cropPageSelection(document.id, page, rendered.width, selectionRect);
+      await writeImage(path);
+    } finally {
+      setSelectionBusy(false);
+    }
   };
 
   const beginInk = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -563,15 +676,52 @@ export function DocumentWorkspace({
           <div className="document-canvas">
             {rendered ? (
               <div
-                className={viewerTool === "draw" ? "rendered-page drawing-active" : "rendered-page"}
+                className={viewerTool === "draw" ? "rendered-page drawing-active" : viewerTool === "select" ? "rendered-page selection-active" : "rendered-page"}
                 style={{ width: rendered.width }}
                 ref={pageRef}
-                onPointerDown={beginInk}
-                onPointerMove={moveInk}
-                onPointerUp={finishInk}
-                onPointerCancel={finishInk}
+                onPointerDown={(event) => {
+                  beginInk(event);
+                  beginSelection(event);
+                }}
+                onPointerMove={(event) => {
+                  moveInk(event);
+                  moveSelection(event);
+                }}
+                onPointerUp={(event) => {
+                  finishInk(event);
+                  finishSelection(event);
+                }}
+                onPointerCancel={(event) => {
+                  finishInk(event);
+                  finishSelection(event);
+                }}
               >
                 <img src={nativeAssetUrl(rendered.cachePath)} alt={`Página ${page + 1}`} draggable={false} />
+                {viewerTool === "select" && selectionRect && (
+                  <div
+                    className="selection-rect"
+                    style={{
+                      left: `${selectionRect.x * 100}%`,
+                      top: `${selectionRect.y * 100}%`,
+                      width: `${selectionRect.width * 100}%`,
+                      height: `${selectionRect.height * 100}%`,
+                    }}
+                    aria-hidden="true"
+                  />
+                )}
+                {viewerTool === "select" && selectionRect && selectionRect.width > 0.002 && selectionRect.height > 0.002 && (
+                  <div className="selection-actions">
+                    <button disabled={!selectedText || selectionBusy} onClick={() => void copySelectedText()}>
+                      <SevenIcon name="text" /> Copiar texto
+                    </button>
+                    <button disabled={selectionBusy} onClick={() => void copySelectionImage()}>
+                      <SevenIcon name="open" /> Copiar imagem
+                    </button>
+                    <button disabled={selectionBusy} onClick={selectWholePage}>Página inteira</button>
+                    <button onClick={clearSelection} aria-label="Limpar seleção"><SevenIcon name="close" /></button>
+                    <small>{selectionBusy ? "Lendo seleção…" : selectedText ? `${selectedText.trim().length} caracteres` : "Sem texto na área"}</small>
+                  </div>
+                )}
                 {viewerTool === "draw" && inkPoints.length > 0 && (
                   <svg className="ink-preview" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
                     <polyline

@@ -10,6 +10,10 @@ interface HomeProps {
   onOpen: () => void;
   onOpenRecent: (path: string) => void;
   onClearRecent: () => void;
+  onTogglePinned: (path: string) => void;
+  onToggleFavorite: (path: string) => void;
+  onRemoveRecent: (path: string) => void;
+  onRevealRecent: (path: string) => void;
   onTool: (id: ToolId) => void;
   onSettings: () => void;
 }
@@ -30,6 +34,10 @@ export function Home({
   onOpen,
   onOpenRecent,
   onClearRecent,
+  onTogglePinned,
+  onToggleFavorite,
+  onRemoveRecent,
+  onRevealRecent,
   onTool,
   onSettings,
 }: HomeProps) {
@@ -120,13 +128,34 @@ export function Home({
               </button>
             ) : (
               <div className="recent-list">
-                {recents.slice(0, 6).map((item) => (
-                  <button className="recent-row" key={item.path} onClick={() => onOpenRecent(item.path)}>
-                    <span className="file-tile">PDF</span>
-                    <span className="recent-meta"><strong>{item.name}</strong><small>{item.path}</small></span>
-                    <SevenIcon name="chevronRight" />
-                  </button>
-                ))}
+                {[...recents]
+                  .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || b.lastOpenedAt - a.lastOpenedAt)
+                  .slice(0, 8)
+                  .map((item) => (
+                    <div className="recent-row" key={item.path}>
+                      <button className="recent-open" onClick={() => onOpenRecent(item.path)} title={item.path}>
+                        <span className="file-tile">PDF</span>
+                        <span className="recent-meta">
+                          <strong>{item.name}</strong>
+                          <small>{item.path}</small>
+                        </span>
+                      </button>
+                      <div className="recent-actions" aria-label={`Ações de ${item.name}`}>
+                        <button className={item.pinned ? "active" : ""} onClick={() => onTogglePinned(item.path)} aria-label={item.pinned ? "Desafixar" : "Fixar"} title={item.pinned ? "Desafixar" : "Fixar"}>
+                          <SevenIcon name="pin" />
+                        </button>
+                        <button className={item.favorite ? "active" : ""} onClick={() => onToggleFavorite(item.path)} aria-label={item.favorite ? "Remover dos favoritos" : "Favoritar"} title={item.favorite ? "Remover dos favoritos" : "Favoritar"}>
+                          <SevenIcon name="star" />
+                        </button>
+                        <button onClick={() => onRevealRecent(item.path)} aria-label="Abrir localização" title="Abrir localização">
+                          <SevenIcon name="folder" />
+                        </button>
+                        <button onClick={() => onRemoveRecent(item.path)} aria-label="Remover da lista" title="Remover da lista">
+                          <SevenIcon name="close" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
               </div>
             )}
           </div>

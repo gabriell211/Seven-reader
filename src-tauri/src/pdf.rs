@@ -43,6 +43,47 @@ pub struct SearchHit {
     pub occurrences: usize,
 }
 
+#[derive(Debug, Clone, serde::Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NormalizedRect {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+impl NormalizedRect {
+    fn validated(&self) -> Result<Self, SevenError> {
+        let values = [self.x, self.y, self.width, self.height];
+        if values.iter().any(|value| !value.is_finite())
+            || self.width <= 0.0
+            || self.height <= 0.0
+            || self.x < 0.0
+            || self.y < 0.0
+            || self.x + self.width > 1.0001
+            || self.y + self.height > 1.0001
+        {
+            return Err(SevenError::OperationRejected(
+                "Área de seleção inválida".into(),
+            ));
+        }
+        Ok(Self {
+            x: self.x.clamp(0.0, 1.0),
+            y: self.y.clamp(0.0, 1.0),
+            width: self.width.clamp(0.0, 1.0),
+            height: self.height.clamp(0.0, 1.0),
+        })
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TextSelectionResult {
+    pub text: String,
+    pub page_index: usize,
+    pub rect: NormalizedRect,
+}
+
 pub fn validate_pdf_path(path: &str) -> Result<PathBuf, SevenError> {
     let input = Path::new(path);
     if !input.exists() {
@@ -223,6 +264,116 @@ pub fn search_document(
     Ok(hits)
 }
 
+
+pub fn extract_text_in_rect(
+    state: &AppState,
+    document: &OpenDocument,
+    page_index: usize,
+    rect: NormalizedRect,
+) -> Result<TextSelectionResult, SevenError> {
+    if page_index >= document.page_count {
+        return Err(SevenError::OperationRejected(format!(
+            "Página {} não existe",
+            page_index + 1
+        )));
+    }
+    let rect = rect.validated()?;
+    let pdfium = bind_pdfium(&state.resource_dir).map_err(SevenError::PdfEngineUnavailable)?;
+    let pdf = pdfium
+        .load_pdf_from_file(&document.path, document.password.as_deref())
+        .map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let page = pdf
+        .pages()
+        .get(page_index as PdfPageIndex)
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+
+    let page_width = page.width().value;
+    let page_height = page.height().value;
+    let left = rect.x * page_width;
+    let right = (rect.x + rect.width) * page_width;
+    let top = (1.0 - rect.y) * page_height;
+    let bottom = (1.0 - rect.y - rect.height) * page_height;
+    let pdf_rect = PdfRect::new_from_values(bottom, left, top, right);
+    let text = page
+        .text()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .inside_rect(pdf_rect);
+
+    Ok(TextSelectionResult {
+        text,
+        page_index,
+        rect,
+    })
+}
+
+pub fn crop_rendered_page(
+    state: &AppState,
+    document: &OpenDocument,
+    page_index: usize,
+    target_width: u16,
+    rect: NormalizedRect,
+) -> Result<String, SevenError> {
+    let rect = rect.validated()?;
+    let rendered = render_page(state, document, page_index, target_width.clamp(900, 6000))?;
+    let image = image::open(&rendered.cache_path)
+        .map_err(|error| SevenError::Render(error.to_string()))?;
+
+    let width = image.width();
+    let height = image.height();
+    let x = ((rect.x * width as f32).floor() as u32).min(width.saturating_sub(1));
+    let y = ((rect.y * height as f32).floor() as u32).min(height.saturating_sub(1));
+    let right = (((rect.x + rect.width) * width as f32).ceil() as u32).clamp(x + 1, width);
+    let bottom = (((rect.y + rect.height) * height as f32).ceil() as u32).clamp(y + 1, height);
+    let cropped = image.crop_imm(x, y, right - x, bottom - y);
+
+    let mut hasher = Sha256::new();
+    hasher.update(document.id.as_bytes());
+    hasher.update(page_index.to_le_bytes());
+    hasher.update(target_width.to_le_bytes());
+    hasher.update(rect.x.to_le_bytes());
+    hasher.update(rect.y.to_le_bytes());
+    hasher.update(rect.width.to_le_bytes());
+    hasher.update(rect.height.to_le_bytes());
+    let key = hex::encode(hasher.finalize());
+    let output = state.cache_dir.join("render").join(format!("selection-{key}.png"));
+    cropped
+        .save(&output)
+        .map_err(|error| SevenError::Render(error.to_string()))?;
+    Ok(output.to_string_lossy().into_owned())
+}
+
+pub fn create_pdf_from_rgba(
+    destination: &Path,
+    rgba: Vec<u8>,
+    width: u32,
+    height: u32,
+    dpi: u16,
+) -> Result<(), SevenError> {
+    if width == 0 || height == 0 || width > 20_000 || height > 20_000 {
+        return Err(SevenError::OperationRejected(
+            "Dimensões da imagem do clipboard são inválidas".into(),
+        ));
+    }
+    let expected = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|pixels| pixels.checked_mul(4))
+        .ok_or_else(|| SevenError::OperationRejected("Imagem do clipboard é grande demais".into()))?;
+    if rgba.len() != expected || expected > 512 * 1024 * 1024 {
+        return Err(SevenError::OperationRejected(
+            "Buffer RGBA do clipboard é inválido ou excede o limite seguro".into(),
+        ));
+    }
+
+    let image = image::RgbaImage::from_raw(width, height, rgba)
+        .ok_or_else(|| SevenError::OperationRejected("Buffer RGBA inválido".into()))?;
+    let temp = destination.with_extension("seven-clipboard.png");
+    image
+        .save(&temp)
+        .map_err(|error| SevenError::Io(error.to_string()))?;
+    let result = create_pdf_from_images(&[temp.clone()], destination, dpi);
+    let _ = fs::remove_file(&temp);
+    result
+}
 
 pub fn create_blank_pdf(
     destination: &Path,

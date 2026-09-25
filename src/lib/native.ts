@@ -160,6 +160,37 @@ export async function startRotatePages(
   return invoke<JobStart>("start_rotate_pages", { input, output, pageRange, angle });
 }
 
+export async function startDeletePages(
+  input: string,
+  output: string,
+  pageRange: string,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_delete_pages", { input, output, pageRange });
+}
+
+export async function startInsertPages(
+  input: string,
+  output: string,
+  source: string,
+  sourceRange: string,
+  insertAfter: number,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_insert_pages", { input, output, source, sourceRange, insertAfter });
+}
+
+export async function startReplacePages(
+  input: string,
+  output: string,
+  source: string,
+  targetStart: number,
+  sourceStart: number,
+  count: number,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_replace_pages", {
+    input, output, source, targetStart, sourceStart, count,
+  });
+}
+
 export async function startOcr(
   input: string,
   output: string,

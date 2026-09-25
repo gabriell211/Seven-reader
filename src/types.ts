@@ -162,6 +162,9 @@ export interface SanitizeOptions {
   removeEmbeddedFiles: boolean;
   removeMetadata: boolean;
   removeXfa: boolean;
+  removeAnnotations: boolean;
+  removeForms: boolean;
+  removeMultimedia: boolean;
 }
 
 export interface SanitizeReport {

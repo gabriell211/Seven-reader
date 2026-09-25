@@ -28,7 +28,6 @@ import {
   cancelJob,
   closeDocument,
   compareDocuments,
-  createFormField,
   createPdfFromImages,
   createPdfFromClipboardImage,
   createPdfFromText,
@@ -49,15 +48,8 @@ import {
   renderPage,
   revealInFileManager,
   deleteAnnotation,
-  fillFormFields,
   findRedactionMatches,
   applyRedactions,
-  editAddImage,
-  editAddLink,
-  editAddText,
-  editOverlayText,
-  editReplaceText,
-  editSetBackground,
   reviewOcrPage,
   sanitizeDocument,
   scanPageToPdf,
@@ -69,6 +61,14 @@ import {
   sessionDeleteAnnotation,
   sessionAddInk,
   sessionAddMarkup,
+  sessionEditAddText,
+  sessionEditReplaceText,
+  sessionEditAddImage,
+  sessionEditAddLink,
+  sessionEditOverlayText,
+  sessionEditSetBackground,
+  sessionFillFormFields,
+  sessionCreateFormField,
   searchDocument,
   searchDocumentAdvanced,
   startCombine,
@@ -1093,43 +1093,68 @@ export default function App() {
     }
   };
 
-  const saveEditedAndOpen = async (operation: () => Promise<void>, output: string, messageText: string) => {
-    try {
-      await operation();
-      setEditingOpen(false);
-      setNotice(messageText);
-      await openPath(output);
-    } catch (error) {
-      setNotice(errorMessage(error));
-    }
-  };
-
-  const runEditAddText = (output: string, placement: TextPlacement) =>
-    saveEditedAndOpen(() => editAddText(document!.activePath, output, placement), output, "Texto inserido no PDF.");
-
-  const runEditReplaceText = async (output: string, find: string, replacement: string, allPages: boolean) => {
+  const runEditAddText = async (placement: TextPlacement) => {
     if (!document) return;
     try {
-      const report = await editReplaceText(document.activePath, output, find, replacement, allPages, page);
-      setEditingOpen(false);
-      setNotice(`${report.replacements} substituição(ões) em ${report.pagesChanged} página(s).`);
-      await openPath(output);
+      const summary = await sessionEditAddText(document.id, placement);
+      await acceptDocumentRevision(summary, "Texto inserido na sessão.");
     } catch (error) {
       setNotice(errorMessage(error));
     }
   };
 
-  const runEditAddImage = (output: string, placement: ImagePlacement) =>
-    saveEditedAndOpen(() => editAddImage(document!.activePath, output, placement), output, "Imagem inserida no PDF.");
+  const runEditReplaceText = async (find: string, replacement: string, allPages: boolean) => {
+    if (!document) return;
+    try {
+      const result = await sessionEditReplaceText(document.id, find, replacement, allPages, page);
+      await acceptDocumentRevision(
+        result.document,
+        `${result.report.replacements} substituição(ões) em ${result.report.pagesChanged} página(s).`,
+      );
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
 
-  const runEditAddLink = (output: string, link: LinkPlacement) =>
-    saveEditedAndOpen(() => editAddLink(document!.activePath, output, link), output, "Link inserido no PDF.");
+  const runEditAddImage = async (placement: ImagePlacement) => {
+    if (!document) return;
+    try {
+      const summary = await sessionEditAddImage(document.id, placement);
+      await acceptDocumentRevision(summary, "Imagem inserida na sessão.");
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
 
-  const runEditOverlay = (output: string, options: OverlayTextOptions) =>
-    saveEditedAndOpen(() => editOverlayText(document!.activePath, output, options), output, "Conteúdo aplicado às páginas.");
+  const runEditAddLink = async (link: LinkPlacement) => {
+    if (!document) return;
+    try {
+      const summary = await sessionEditAddLink(document.id, link);
+      await acceptDocumentRevision(summary, "Link inserido na sessão.");
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
 
-  const runEditBackground = (output: string, options: BackgroundOptions) =>
-    saveEditedAndOpen(() => editSetBackground(document!.activePath, output, options), output, "Fundo aplicado às páginas.");
+  const runEditOverlay = async (options: OverlayTextOptions) => {
+    if (!document) return;
+    try {
+      const summary = await sessionEditOverlayText(document.id, options);
+      await acceptDocumentRevision(summary, "Conteúdo aplicado às páginas na sessão.");
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runEditBackground = async (options: BackgroundOptions) => {
+    if (!document) return;
+    try {
+      const summary = await sessionEditSetBackground(document.id, options);
+      await acceptDocumentRevision(summary, "Fundo aplicado às páginas na sessão.");
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
 
   const runElectronicSignature = async (output: string, annotation: AnnotationInput) => {
     if (!document) return;
@@ -1216,25 +1241,23 @@ export default function App() {
     }
   };
 
-  const runFillForm = async (output: string, values: FormValue[]) => {
+  const runFillForm = async (values: FormValue[]) => {
     if (!document) return;
     try {
-      const changed = await fillFormFields(document.activePath, output, values);
-      setFormsOpen(false);
-      setNotice(`${changed} campo(s) preenchido(s).`);
-      await openPath(output);
+      const result = await sessionFillFormFields(document.id, values);
+      await acceptDocumentRevision(result.document, `${result.changed} campo(s) preenchido(s) na sessão.`);
+      setFormFields(await listFormFields(result.document.activePath));
     } catch (error) {
       setNotice(errorMessage(error));
     }
   };
 
-  const runCreateFormField = async (output: string, field: NewFormField) => {
+  const runCreateFormField = async (field: NewFormField) => {
     if (!document) return;
     try {
-      await createFormField(document.activePath, output, field);
-      setFormsOpen(false);
-      setNotice(`Campo "${field.name}" criado no AcroForm.`);
-      await openPath(output);
+      const summary = await sessionCreateFormField(document.id, field);
+      await acceptDocumentRevision(summary, `Campo "${field.name}" criado no AcroForm.`);
+      setFormFields(await listFormFields(summary.activePath));
     } catch (error) {
       setNotice(errorMessage(error));
     }
@@ -1647,16 +1670,15 @@ export default function App() {
       )}
       {editingOpen && document && (
         <EditingDialog
-          documentPath={document.path}
           pageIndex={page}
           pageCount={document.pageCount}
           onClose={() => setEditingOpen(false)}
-          onAddText={(output, placement) => void runEditAddText(output, placement)}
-          onReplaceText={(output, find, replacement, allPages) => void runEditReplaceText(output, find, replacement, allPages)}
-          onAddImage={(output, placement) => void runEditAddImage(output, placement)}
-          onAddLink={(output, link) => void runEditAddLink(output, link)}
-          onOverlay={(output, options) => void runEditOverlay(output, options)}
-          onBackground={(output, options) => void runEditBackground(output, options)}
+          onAddText={(placement) => void runEditAddText(placement)}
+          onReplaceText={(find, replacement, allPages) => void runEditReplaceText(find, replacement, allPages)}
+          onAddImage={(placement) => void runEditAddImage(placement)}
+          onAddLink={(link) => void runEditAddLink(link)}
+          onOverlay={(options) => void runEditOverlay(options)}
+          onBackground={(options) => void runEditBackground(options)}
         />
       )}
       {signatureTab && document && (
@@ -1674,7 +1696,6 @@ export default function App() {
       )}
       {commentsOpen && document && (
         <CommentsDialog
-          documentPath={document.path}
           pageIndex={page}
           annotations={annotations}
           loading={annotationsLoading}
@@ -1686,14 +1707,13 @@ export default function App() {
       )}
       {formsOpen && document && (
         <FormsDialog
-          documentPath={document.path}
           pageIndex={page}
           fields={formFields}
           loading={formsLoading}
           onClose={() => setFormsOpen(false)}
           onReload={() => void reloadFormFields()}
-          onFill={(output, values) => void runFillForm(output, values)}
-          onCreate={(output, field) => void runCreateFormField(output, field)}
+          onFill={(values) => void runFillForm(values)}
+          onCreate={(field) => void runCreateFormField(field)}
         />
       )}
       {ocrOpen && (

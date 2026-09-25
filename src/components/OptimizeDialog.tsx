@@ -32,6 +32,15 @@ const defaultOptions: OptimizeOptions = {
   embedFonts: true,
   subsetFonts: true,
   linearize: true,
+  cleanup: true,
+  removeJavascript: false,
+  removeOpenActions: false,
+  removeEmbeddedFiles: false,
+  removeMetadata: false,
+  removeXfa: false,
+  removeAnnotations: false,
+  removeForms: false,
+  removeMultimedia: false,
 };
 
 function loadPresets(): SavedPreset[] {
@@ -64,6 +73,23 @@ export function OptimizeDialog({
 
   useEffect(() => { onAudit(); }, [onAudit]);
   useEffect(() => localStorage.setItem(KEY, JSON.stringify(presets)), [presets]);
+
+  const estimatedSize = useMemo(() => {
+    if (!audit) return null;
+    const imageBytes = audit.imageStreamBytes;
+    const nonImageBytes = Math.max(0, audit.fileSize - imageBytes);
+    const dpiScale = Math.min(1, Math.max(0.08, (options.colorDpi / 300) ** 1.55));
+    const qualityScale =
+      options.colorCompression === "jpeg" || options.grayscaleCompression === "jpeg"
+        ? Math.max(0.16, options.jpegQuality / 100)
+        : 0.88;
+    const imageEstimate = imageBytes * dpiScale * qualityScale;
+    const cleanupScale = options.cleanup ? 0.93 : 1;
+    const discardBytes =
+      (options.removeEmbeddedFiles ? audit.embeddedFileBytes : 0)
+      + (options.removeAnnotations || options.removeForms || options.removeMultimedia || options.removeMetadata ? audit.otherStreamBytes * 0.08 : 0);
+    return Math.max(1024, (nonImageBytes + imageEstimate - discardBytes) * cleanupScale);
+  }, [audit, options]);
 
   const categories = useMemo(() => audit ? [
     ["Imagens", audit.imageStreamBytes, `${audit.imageCount} imagem(ns)`],
@@ -117,6 +143,13 @@ export function OptimizeDialog({
             {!loading && audit && (
               <>
                 <div className="audit-total"><span>Tamanho atual</span><strong>{bytes(audit.fileSize)}</strong><small>{audit.objectCount} objetos · {bytes(audit.streamBytes)} em streams</small></div>
+                {estimatedSize !== null && (
+                  <div className="audit-estimate">
+                    <span>Estimativa com as opções atuais</span>
+                    <strong>{bytes(Math.round(estimatedSize))}</strong>
+                    <small>Estimativa heurística; o tamanho real só é conhecido após processar.</small>
+                  </div>
+                )}
                 <div className="audit-categories">
                   {categories.map(([label, size, detail]) => (
                     <div key={label}><span>{label}<small>{detail}</small></span><strong>{bytes(size)}</strong></div>
@@ -142,6 +175,7 @@ export function OptimizeDialog({
                 <label className="workflow-field"><span>Versão PDF alvo</span><select value={options.compatibility} onChange={(event) => patch("compatibility", event.target.value as OptimizeOptions["compatibility"])}><option value="1.4">PDF 1.4</option><option value="1.5">PDF 1.5</option><option value="1.6">PDF 1.6</option><option value="1.7">PDF 1.7</option><option value="2.0">PDF 2.0</option></select></label>
                 <label className="toggle-row"><input type="checkbox" checked={options.linearize} onChange={(event) => patch("linearize", event.target.checked)} /><span><strong>Fast Web View</strong><small>Executa qpdf --linearize após a otimização.</small></span></label>
               </div>
+              <label className="toggle-row"><input type="checkbox" checked={options.cleanup} onChange={(event) => patch("cleanup", event.target.checked)} /><span><strong>Clean Up estrutural</strong><small>Recomprime Flate em nível 9, gera object streams e compacta streams com qpdf.</small></span></label>
             </section>
 
             <section className="optimizer-section">
@@ -164,6 +198,31 @@ export function OptimizeDialog({
               <div className="two-column-fields">
                 <label className="toggle-row"><input type="checkbox" checked={options.embedFonts} onChange={(event) => patch("embedFonts", event.target.checked)} /><span><strong>Incorporar fontes</strong><small>Solicita incorporação ao pdfwrite.</small></span></label>
                 <label className="toggle-row"><input type="checkbox" checked={options.subsetFonts} onChange={(event) => patch("subsetFonts", event.target.checked)} /><span><strong>Subset fonts</strong><small>Reduz fontes incorporadas ao conjunto usado.</small></span></label>
+              </div>
+            </section>
+
+            <section className="optimizer-section">
+              <div className="section-mini-title">Discard User Data</div>
+              <div className="optimizer-discard-grid">
+                {([
+                  ["removeJavascript", "JavaScript", "Remove /JS e árvores JavaScript."],
+                  ["removeOpenActions", "Ações automáticas", "Remove OpenAction, AA, Launch e ações automáticas."],
+                  ["removeEmbeddedFiles", "Anexos", "Remove referências a arquivos incorporados."],
+                  ["removeMetadata", "Metadados", "Remove Info, XMP Metadata e PieceInfo."],
+                  ["removeXfa", "XFA", "Remove pacotes XFA híbridos."],
+                  ["removeAnnotations", "Comentários/anotações", "Remove anotações que não são widgets/multimídia."],
+                  ["removeForms", "Formulários", "Remove widgets e AcroForm."],
+                  ["removeMultimedia", "Multimídia/3D", "Remove RichMedia, 3D, Movie, Sound e Renditions."],
+                ] as const).map(([key, label, detail]) => (
+                  <label className="check-row" key={key}>
+                    <input type="checkbox" checked={options[key]} onChange={(event) => patch(key, event.target.checked)} />
+                    <span><strong>{label}</strong><small>{detail}</small></span>
+                  </label>
+                ))}
+              </div>
+              <div className="organizer-note organizer-note--warning">
+                <SevenIcon name="shield" />
+                <span>Itens marcados são removidos da cópia otimizada antes da compactação. O documento original permanece intacto.</span>
               </div>
             </section>
 

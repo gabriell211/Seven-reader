@@ -812,3 +812,13 @@ svg { width: 20px; height: 20px; }
 .field-appearance-box { padding:13px; border:1px solid #e0dfe6; border-radius:11px; display:grid; gap:11px; background:#fbfbfd; }
 .field-appearance-box input[type="color"] { width:100%; min-height:38px; padding:3px; border:1px solid #d9d8df; border-radius:8px; background:white; }
 .field-appearance-box select { min-height:38px; padding:0 8px; border:1px solid #d9d8df; border-radius:8px; background:white; font-size:9.5px; }
+
+.field-action-list { max-height:340px; overflow:auto; display:grid; gap:6px; }
+.field-action-row { min-height:58px; padding:9px; border:1px solid #e2e1e7; border-radius:10px; display:grid; grid-template-columns:32px minmax(0,1fr) auto; gap:9px; align-items:center; background:white; }
+.field-action-row.blocked { border-color:#ead6da; background:#fffafb; }
+.field-action-row > span { width:30px; height:30px; border-radius:8px; display:grid; place-items:center; color:#6947cb; background:#f0ebff; }
+.field-action-row.blocked > span { color:#a85260; background:#fff0f2; }
+.field-action-row > span svg { width:14px; }
+.field-action-row > div { min-width:0; display:grid; gap:2px; }
+.field-action-row strong { font-size:9.8px; }
+.field-action-row small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#8d8f98; font-size:8.3px; }

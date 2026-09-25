@@ -1405,6 +1405,80 @@ pub fn update_layer_properties(
     atomic_save(document, output)
 }
 
+pub fn apply_layer_usage_overrides(
+    input: &Path,
+    output: &Path,
+    context: &str,
+) -> Result<usize, SevenError> {
+    let (category, state_key) = match context {
+        "view" => (b"View".as_slice(), b"ViewState".as_slice()),
+        "print" => (b"Print".as_slice(), b"PrintState".as_slice()),
+        "export" => (b"Export".as_slice(), b"ExportState".as_slice()),
+        _ => return Err(SevenError::OperationRejected("Contexto de layer inválido".into())),
+    };
+
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let (oc_id, default_id) = ensure_oc_config_ids(&mut document)?;
+    let layer_ids = document
+        .get_object(oc_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .get(b"OCGs")
+        .ok()
+        .and_then(|object| object.as_array().ok())
+        .map(|values| values.iter().filter_map(|value| value.as_reference().ok()).collect::<Vec<_>>())
+        .unwrap_or_default();
+
+    let mut changes = Vec::new();
+    for id in layer_ids {
+        let state = document
+            .get_object(id)
+            .ok()
+            .and_then(|object| object.as_dict().ok())
+            .and_then(|layer| layer.get(b"Usage").ok())
+            .and_then(|object| object.as_dict().ok())
+            .and_then(|usage| usage.get(category).ok())
+            .and_then(|object| object.as_dict().ok())
+            .and_then(|usage_category| usage_category.get(state_key).ok())
+            .and_then(|object| object.as_name().ok())
+            .map(|value| value.to_vec());
+        match state.as_deref() {
+            Some(b"ON") => changes.push((id, true)),
+            Some(b"OFF") => changes.push((id, false)),
+            _ => {}
+        }
+    }
+
+    let default = document
+        .get_object_mut(default_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    for (id, visible) in &changes {
+        set_visibility_arrays(default, *id, *visible);
+    }
+    let count = changes.len();
+    atomic_save(document, output)?;
+    Ok(count)
+}
+
+pub fn reset_layer_visibility_to_base(
+    input: &Path,
+    output: &Path,
+) -> Result<(), SevenError> {
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let (_, default_id) = ensure_oc_config_ids(&mut document)?;
+    let default = document
+        .get_object_mut(default_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    default.remove(b"ON");
+    default.remove(b"OFF");
+    atomic_save(document, output)
+}
+
 pub fn set_layer_visibility(input: &Path, output: &Path, object_id: &str, visible: bool) -> Result<(), SevenError> {
     let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
     let target = parse_id(object_id)?;

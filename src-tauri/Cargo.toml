@@ -35,6 +35,7 @@ image = "0.25"
 underskrift = "0.1.4"
 encoding_rs = "0.8"
 regex = "1"
+quick-xml = "0.38"
 
 [profile.release]
 codegen-units = 1

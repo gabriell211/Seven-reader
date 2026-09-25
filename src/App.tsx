@@ -20,6 +20,7 @@ import { RedactionDialog } from "./components/RedactionDialog";
 import { AdvancedPdfDialog } from "./components/AdvancedPdfDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { UnsavedChangesDialog } from "./components/UnsavedChangesDialog";
+import { ActionsDialog } from "./components/ActionsDialog";
 import { applyAppearance, isTrustedPath, loadSettings, saveSettings, type SevenSettings } from "./lib/settings";
 import {
   addAnnotation,
@@ -39,6 +40,7 @@ import {
   listPdfFilesInFolder,
   listAnnotations,
   listFormFields,
+  listPdfActions,
   extractPdfAttachment,
   openDocument,
   printDocument,
@@ -118,6 +120,7 @@ import type {
   OcrOptions,
   OcrWord,
   OverlayTextOptions,
+  PdfActionInfo,
   RecentDocument,
   RedactionArea,
   RenderResult,
@@ -241,6 +244,9 @@ export default function App() {
   const [advancedTab, setAdvancedTab] = useState<"overview"|"bookmarks"|"attachments"|"layers"|null>(null);
   const [advancedReport, setAdvancedReport] = useState<AdvancedPdfReport|null>(null);
   const [advancedLoading, setAdvancedLoading] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [pdfActions, setPdfActions] = useState<PdfActionInfo[]>([]);
+  const [actionsLoading, setActionsLoading] = useState(false);
   const [settings, setSettings] = useState<SevenSettings>(loadSettings);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [protectedView, setProtectedView] = useState(false);
@@ -985,6 +991,16 @@ export default function App() {
         return;
       }
 
+      if (tool === "javascript") {
+        if (!document) {
+          setNotice("Abra um PDF para inspecionar JavaScript e ações.");
+          return;
+        }
+        setPdfActions([]);
+        setActionsOpen(true);
+        return;
+      }
+
       if (tool === "redact") {
         if (!document) {
           setNotice("Abra um PDF para redigir conteúdo.");
@@ -1143,6 +1159,18 @@ export default function App() {
 
 
 
+
+  const reloadPdfActions = async () => {
+    if (!document) return;
+    try {
+      setActionsLoading(true);
+      setPdfActions(await listPdfActions(document.activePath));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    } finally {
+      setActionsLoading(false);
+    }
+  };
 
   const trustCurrentOnce = () => {
     if (!document) return;
@@ -1825,6 +1853,14 @@ export default function App() {
         />
       )}
       {settingsOpen && <SettingsDialog settings={settings} onClose={() => setSettingsOpen(false)} onChange={setSettings} />}
+      {actionsOpen && document && (
+        <ActionsDialog
+          actions={pdfActions}
+          loading={actionsLoading}
+          onClose={() => setActionsOpen(false)}
+          onReload={() => void reloadPdfActions()}
+        />
+      )}
       {advancedTab && document && (
         <AdvancedPdfDialog
           pageIndex={page}

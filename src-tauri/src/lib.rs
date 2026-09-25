@@ -8,6 +8,7 @@ mod forms;
 mod jobs;
 mod ocr;
 mod pdf;
+mod redaction;
 mod signatures;
 mod state;
 
@@ -48,6 +49,8 @@ pub fn run() {
             commands::start_rotate_pages,
             commands::start_ocr,
             commands::start_optimize_pdf,
+            commands::find_redaction_matches,
+            commands::apply_redactions,
             commands::edit_add_text,
             commands::edit_replace_text,
             commands::edit_add_image,

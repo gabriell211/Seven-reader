@@ -8,6 +8,7 @@ use crate::{
     document_ops,
     editing,
     pdf,
+    redaction,
     signatures,
     state::{AppState, JobStatus},
 };
@@ -439,6 +440,52 @@ pub fn start_optimize_pdf(
         input.to_string_lossy().into_owned(),
     ];
     Ok(jobs::start_process_job(app, &state, "optimize", executable, args, Some(output)))
+}
+
+#[tauri::command]
+pub async fn find_redaction_matches(
+    state: State<'_, AppState>,
+    input: String,
+    query: String,
+    match_case: bool,
+    whole_word: bool,
+) -> CommandResult<Vec<redaction::RedactionArea>> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let snapshot = AppState {
+        documents: state.documents.clone(),
+        jobs: state.jobs.clone(),
+        cache_dir: state.cache_dir.clone(),
+        resource_dir: state.resource_dir.clone(),
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        redaction::find_text_matches(&snapshot, &input, &query, match_case, whole_word)
+    })
+    .await
+    .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub async fn apply_redactions(
+    state: State<'_, AppState>,
+    input: String,
+    output: String,
+    areas: Vec<redaction::RedactionArea>,
+) -> CommandResult<redaction::RedactionReport> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    let snapshot = AppState {
+        documents: state.documents.clone(),
+        jobs: state.jobs.clone(),
+        cache_dir: state.cache_dir.clone(),
+        resource_dir: state.resource_dir.clone(),
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        redaction::apply_redactions(&snapshot, &input, &output, &areas)
+    })
+    .await
+    .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
+    .map_err(ErrorPayload::from)
 }
 
 #[tauri::command]

@@ -98,6 +98,8 @@ import {
   sessionAddPdfBookmark,
   sessionRenamePdfBookmark,
   sessionAddPdfAttachment,
+  sessionUpdatePdfAttachment,
+  sessionRemovePdfAttachment,
   sessionSetPdfLayerVisibility,
   sessionUpdateDocumentMetadata,
   sessionSetPageBoxes,
@@ -1371,6 +1373,28 @@ export default function App() {
     }
   };
 
+  const runUpdateAttachment = async (objectId: string, name: string, description: string) => {
+    if (!document) return;
+    try {
+      const summary = await sessionUpdatePdfAttachment(document.id, objectId, name, description);
+      await acceptDocumentRevision(summary, "Anexo atualizado na sessão.");
+      await refreshAdvancedFrom(summary);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runRemoveAttachment = async (objectId: string) => {
+    if (!document) return;
+    try {
+      const summary = await sessionRemovePdfAttachment(document.id, objectId);
+      await acceptDocumentRevision(summary, "Anexo removido da sessão.");
+      await refreshAdvancedFrom(summary);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
   const runExtractAttachment = async (objectId: string, destination: string) => {
     if (!document) return;
     try {
@@ -2240,6 +2264,8 @@ export default function App() {
           onAddBookmark={(title,pageIndex)=>void runAddBookmark(title,pageIndex)}
           onRenameBookmark={(objectId,title)=>void runRenameBookmark(objectId,title)}
           onAddAttachment={(filePath,displayName,description)=>void runAddAttachment(filePath,displayName,description)}
+          onUpdateAttachment={(objectId,name,description)=>void runUpdateAttachment(objectId,name,description)}
+          onRemoveAttachment={(objectId)=>void runRemoveAttachment(objectId)}
           onExtractAttachment={(objectId,destination)=>void runExtractAttachment(objectId,destination)}
           onLayerVisibility={(objectId,visible)=>void runLayerVisibility(objectId,visible)}
         />

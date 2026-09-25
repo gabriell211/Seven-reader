@@ -20,6 +20,7 @@ import type {
   LinkPlacement,
   MetadataUpdate,
   NewFormField,
+  NormalizedRect,
   OcrOptions,
   OcrWord,
   OverlayTextOptions,
@@ -32,6 +33,7 @@ import type {
   SignatureValidationReport,
   SanitizeReport,
   TextPlacement,
+  TextSelectionResult,
   SearchHit,
 } from "../types";
 
@@ -76,6 +78,23 @@ export async function searchDocumentAdvanced(
   return invoke<AdvancedSearchHit[]>("search_document_advanced", { documentId, options });
 }
 
+export async function extractTextInRect(
+  documentId: string,
+  pageIndex: number,
+  rect: NormalizedRect,
+): Promise<TextSelectionResult> {
+  return invoke<TextSelectionResult>("extract_text_in_rect", { documentId, pageIndex, rect });
+}
+
+export async function cropPageSelection(
+  documentId: string,
+  pageIndex: number,
+  targetWidth: number,
+  rect: NormalizedRect,
+): Promise<string> {
+  return invoke<string>("crop_page_selection", { documentId, pageIndex, targetWidth, rect });
+}
+
 export async function saveCopy(documentId: string, destination: string): Promise<void> {
   await invoke("save_document_as", { documentId, destination });
 }
@@ -111,6 +130,16 @@ export async function createPdfFromText(
   fontSize: number,
 ): Promise<void> {
   await invoke("create_pdf_from_text", { destination, text, pageSize, fontSize });
+}
+
+export async function createPdfFromClipboardImage(
+  destination: string,
+  rgba: number[],
+  width: number,
+  height: number,
+  dpi: number,
+): Promise<void> {
+  await invoke("create_pdf_from_clipboard_image", { destination, rgba, width, height, dpi });
 }
 
 export async function startWebToPdf(url: string, output: string): Promise<JobStart> {

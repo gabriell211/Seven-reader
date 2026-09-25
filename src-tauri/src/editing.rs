@@ -96,6 +96,14 @@ pub struct LinkUpdate {
     pub border_color: [f64; 3],
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NamedDestinationInfo {
+    pub name: String,
+    pub page_index: Option<usize>,
+    pub editable: bool,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OverlayTextOptions {
@@ -927,6 +935,203 @@ pub fn remove_link(
         return Err(SevenError::OperationRejected("Link não encontrado na página".into()));
     }
     document.objects.remove(&id);
+    atomic_save(document, output)
+}
+
+fn destination_page_index(document: &Document, object: &Object) -> Option<usize> {
+    let resolved = match object {
+        Object::Reference(id) => document.get_object(*id).ok()?,
+        other => other,
+    };
+    let destination = match resolved {
+        Object::Array(values) => Some(values),
+        Object::Dictionary(dictionary) => dictionary.get(b"D").ok()?.as_array().ok(),
+        _ => None,
+    }?;
+    let page_id = destination.first()?.as_reference().ok()?;
+    page_index_for_id(document, page_id)
+}
+
+fn collect_destination_name_tree(
+    document: &Document,
+    object: &Object,
+    output: &mut Vec<NamedDestinationInfo>,
+    visited: &mut std::collections::HashSet<ObjectId>,
+) {
+    match object {
+        Object::Reference(id) => {
+            if !visited.insert(*id) { return; }
+            if let Ok(value) = document.get_object(*id) {
+                collect_destination_name_tree(document, value, output, visited);
+            }
+        }
+        Object::Dictionary(dictionary) => {
+            if let Ok(Object::Array(names)) = dictionary.get(b"Names") {
+                for pair in names.chunks(2) {
+                    if pair.len() != 2 { continue; }
+                    let name = match &pair[0] {
+                        Object::String(bytes, _) | Object::Name(bytes) => String::from_utf8_lossy(bytes).into_owned(),
+                        _ => continue,
+                    };
+                    output.push(NamedDestinationInfo {
+                        name,
+                        page_index: destination_page_index(document, &pair[1]),
+                        editable: false,
+                    });
+                }
+            }
+            if let Ok(Object::Array(kids)) = dictionary.get(b"Kids") {
+                for kid in kids {
+                    collect_destination_name_tree(document, kid, output, visited);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+pub fn list_named_destinations(input: &Path) -> Result<Vec<NamedDestinationInfo>, SevenError> {
+    let document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let catalog = document.catalog().map_err(|error| SevenError::Operation(error.to_string()))?;
+    let mut output = Vec::new();
+
+    if let Ok(dests_object) = catalog.get(b"Dests") {
+        let dests = match dests_object {
+            Object::Dictionary(dictionary) => Some(dictionary),
+            Object::Reference(id) => document.get_object(*id).ok().and_then(|object| object.as_dict().ok()),
+            _ => None,
+        };
+        if let Some(dests) = dests {
+            for (name, value) in dests.iter() {
+                output.push(NamedDestinationInfo {
+                    name: String::from_utf8_lossy(name).into_owned(),
+                    page_index: destination_page_index(&document, value),
+                    editable: true,
+                });
+            }
+        }
+    }
+
+    if let Ok(names_object) = catalog.get(b"Names") {
+        let names = match names_object {
+            Object::Dictionary(dictionary) => Some(dictionary),
+            Object::Reference(id) => document.get_object(*id).ok().and_then(|object| object.as_dict().ok()),
+            _ => None,
+        };
+        if let Some(names) = names {
+            if let Ok(dests) = names.get(b"Dests") {
+                collect_destination_name_tree(
+                    &document,
+                    dests,
+                    &mut output,
+                    &mut std::collections::HashSet::new(),
+                );
+            }
+        }
+    }
+
+    output.sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
+    output.dedup_by(|left, right| left.name == right.name);
+    Ok(output)
+}
+
+fn ensure_legacy_dests_id(document: &mut Document) -> Result<ObjectId, SevenError> {
+    let root_id = document
+        .trailer
+        .get(b"Root")
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_reference()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    let existing = document
+        .get_object(root_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .get(b"Dests")
+        .ok()
+        .cloned();
+
+    match existing {
+        Some(Object::Reference(id)) => Ok(id),
+        Some(Object::Dictionary(dictionary)) => {
+            let id = document.add_object(dictionary);
+            document
+                .get_object_mut(root_id)
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .as_dict_mut()
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .set("Dests", id);
+            Ok(id)
+        }
+        Some(_) => Err(SevenError::Operation("Catálogo /Dests inválido".into())),
+        None => {
+            let id = document.add_object(Dictionary::new());
+            document
+                .get_object_mut(root_id)
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .as_dict_mut()
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .set("Dests", id);
+            Ok(id)
+        }
+    }
+}
+
+pub fn upsert_named_destination(
+    input: &Path,
+    output: &Path,
+    old_name: Option<&str>,
+    name: &str,
+    page_index: usize,
+) -> Result<(), SevenError> {
+    let name = name.trim();
+    if name.is_empty() || name.chars().count() > 500 {
+        return Err(SevenError::OperationRejected("Nome do destino inválido".into()));
+    }
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let target_page = page_id(&document, page_index)?;
+    let dests_id = ensure_legacy_dests_id(&mut document)?;
+
+    let dests = document
+        .get_object_mut(dests_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    if let Some(old_name) = old_name.map(str::trim).filter(|value| !value.is_empty()) {
+        if old_name != name {
+            if dests.remove(old_name.as_bytes()).is_none() {
+                return Err(SevenError::OperationRejected(
+                    "Destino pertence a uma name tree externa e não pode ser renomeado por este editor".into(),
+                ));
+            }
+        }
+    }
+    dests.set(
+        name,
+        vec![Object::Reference(target_page), Object::Name(b"Fit".to_vec())],
+    );
+    atomic_save(document, output)
+}
+
+pub fn remove_named_destination(
+    input: &Path,
+    output: &Path,
+    name: &str,
+) -> Result<(), SevenError> {
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let dests_id = ensure_legacy_dests_id(&mut document)?;
+    let removed = document
+        .get_object_mut(dests_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .remove(name.as_bytes())
+        .is_some();
+    if !removed {
+        return Err(SevenError::OperationRejected(
+            "Destino não pertence ao dicionário editável /Dests".into(),
+        ));
+    }
     atomic_save(document, output)
 }
 

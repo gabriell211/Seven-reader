@@ -33,6 +33,7 @@ export interface RecentDocument {
 export interface DocumentSummary {
   id: string;
   path: string;
+  activePath: string;
   name: string;
   pageCount: number;
   fileSize: number;

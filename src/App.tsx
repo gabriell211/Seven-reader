@@ -101,6 +101,9 @@ import {
   sessionResetForm,
   sessionUpdateFormField,
   sessionDeleteFormField,
+  sessionUpdatePdfBookmark,
+  sessionSetAllPdfBookmarksOpen,
+  sessionGeneratePdfBookmarksFromStructure,
   sessionAddPdfBookmark,
   sessionRenamePdfBookmark,
   sessionDeletePdfBookmark,
@@ -1371,6 +1374,39 @@ export default function App() {
     }
   };
 
+  const runUpdateBookmark = async (update: BookmarkUpdate) => {
+    if (!document) return;
+    try {
+      const summary = await sessionUpdatePdfBookmark(document.id, update);
+      await acceptDocumentRevision(summary, "Marcador atualizado.");
+      await refreshAdvancedFrom(summary);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runSetAllBookmarksOpen = async (open: boolean) => {
+    if (!document) return;
+    try {
+      const summary = await sessionSetAllPdfBookmarksOpen(document.id, open);
+      await acceptDocumentRevision(summary, open ? "Todos os grupos de marcadores expandidos." : "Todos os grupos de marcadores recolhidos.");
+      await refreshAdvancedFrom(summary);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runGenerateBookmarksFromStructure = async () => {
+    if (!document) return;
+    try {
+      const result = await sessionGeneratePdfBookmarksFromStructure(document.id);
+      await acceptDocumentRevision(result.document, `${result.created} marcador(es) gerado(s) a partir da estrutura Tagged PDF.`);
+      await refreshAdvancedFrom(result.document);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
   const runRenameBookmark = async (objectId: string, title: string) => {
     if (!document) return;
     try {
@@ -2422,6 +2458,9 @@ export default function App() {
           onReload={() => void reloadAdvanced()}
           onAddBookmark={(title,pageIndex)=>void runAddBookmark(title,pageIndex)}
           onRenameBookmark={(objectId,title)=>void runRenameBookmark(objectId,title)}
+          onUpdateBookmark={(update)=>void runUpdateBookmark(update)}
+          onSetAllBookmarksOpen={(open)=>void runSetAllBookmarksOpen(open)}
+          onGenerateBookmarksFromStructure={()=>void runGenerateBookmarksFromStructure()}
           onDeleteBookmark={(objectId)=>void runDeleteBookmark(objectId)}
           onMoveBookmark={(objectId,direction)=>void runMoveBookmark(objectId,direction)}
           onSetBookmarkOpen={(objectId,open)=>void runSetBookmarkOpen(objectId,open)}

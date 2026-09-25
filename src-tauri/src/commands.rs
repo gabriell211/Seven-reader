@@ -804,6 +804,47 @@ pub fn session_rename_pdf_bookmark(
 }
 
 #[tauri::command]
+pub fn session_delete_pdf_bookmark(
+    state: State<'_, AppState>,
+    document_id: String,
+    object_id: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "delete-bookmark", move |input, output| {
+        advanced::delete_bookmark(input, output, &object_id)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_move_pdf_bookmark(
+    state: State<'_, AppState>,
+    document_id: String,
+    object_id: String,
+    direction: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "move-bookmark", move |input, output| {
+        advanced::move_bookmark(input, output, &object_id, &direction)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_set_pdf_bookmark_open(
+    state: State<'_, AppState>,
+    document_id: String,
+    object_id: String,
+    open: bool,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "bookmark-open", move |input, output| {
+        advanced::set_bookmark_open(input, output, &object_id, open)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn session_add_pdf_attachment(
     state: State<'_, AppState>,
     document_id: String,

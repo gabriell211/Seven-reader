@@ -62,6 +62,7 @@ pub fn run() {
             commands::session_add_markup,
             commands::session_edit_add_text,
             commands::session_edit_replace_text,
+            commands::get_image_dimensions,
             commands::list_page_image_objects,
             commands::session_replace_image_object,
             commands::session_remove_image_object,

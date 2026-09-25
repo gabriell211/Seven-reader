@@ -70,6 +70,14 @@ export async function saveCopy(documentId: string, destination: string): Promise
   await invoke("save_document_as", { documentId, destination });
 }
 
+export async function printDocument(input: string): Promise<JobStart> {
+  return invoke<JobStart>("start_print_document", { input });
+}
+
+export async function revealInFileManager(path: string): Promise<void> {
+  await invoke("reveal_in_file_manager", { path });
+}
+
 export async function createBlankDocument(
   destination: string,
   pageSize: "a4" | "letter" | "legal",

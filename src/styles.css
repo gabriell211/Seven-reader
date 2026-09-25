@@ -496,3 +496,15 @@ svg { width: 20px; height: 20px; }
 :root[data-theme="dark"] .home-shell,:root[data-theme="dark"] .workspace,:root[data-theme="dark"] .app-header,:root[data-theme="dark"] .workspace-topbar,:root[data-theme="dark"] .global-bar,:root[data-theme="dark"] .left-panel,:root[data-theme="dark"] .tools-drawer,:root[data-theme="dark"] .workflow-dialog,:root[data-theme="dark"] .page-organizer,:root[data-theme="dark"] .create-dialog { background:#202126; color:#e9e8ee; border-color:#35363e; }
 :root[data-theme="dark"] .quick-card,:root[data-theme="dark"] .tool-card,:root[data-theme="dark"] .recent-panel,:root[data-theme="dark"] .capability-panel,:root[data-theme="dark"] .format-card,:root[data-theme="dark"] .workflow-feature,:root[data-theme="dark"] .structure-row,:root[data-theme="dark"] .safe-inspection-list>div { background:#26272d; border-color:#3b3c45; }
 @media(max-width:760px){.protected-banner{left:54px;grid-template-columns:28px 1fr}.protected-banner button{grid-column:2}.settings-scroll{padding-inline:16px}}
+
+.page-organizer--wide { width: min(920px,100%); }
+.operation-tabs--pages { grid-template-columns: repeat(4,minmax(0,1fr)); }
+.image-drop--compact { min-height: 96px; padding: 16px; grid-template-columns: 34px minmax(0,1fr); justify-items: start; text-align: left; }
+.image-drop--compact svg { grid-row: 1 / 3; align-self: center; }
+.image-drop--compact strong, .image-drop--compact small { min-width: 0; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.three-column-fields { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 13px; }
+.workflow-inline-help { margin-top: -8px; color: #8c8e96; font-size: 9px; }
+@media (max-width: 760px) {
+  .operation-tabs--pages { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .three-column-fields { grid-template-columns: 1fr; }
+}

@@ -7,6 +7,7 @@ import type {
   AdvancedSearchOptions,
   Capabilities,
   InkAnnotationInput,
+  JobStatus,
   DocumentSummary,
   RenderResult,
   SearchHit,

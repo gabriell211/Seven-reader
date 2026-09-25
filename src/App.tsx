@@ -28,6 +28,7 @@ import {
   compareDocuments,
   createFormField,
   createPdfFromImages,
+  createPdfFromText,
   createBlankDocument,
   getAccessibilityReport,
   getCapabilities,
@@ -68,6 +69,7 @@ import {
   startReorderPages,
   startRotatePages,
   startSplitPages,
+  startWebToPdf,
   startDeletePages,
   startInsertPages,
   startReplacePages,
@@ -935,6 +937,49 @@ export default function App() {
     }
   };
 
+  const createTextPdf = async (text: string, pageSize: BlankPageSize, fontSize: number) => {
+    const destination = await save({
+      title: "Criar PDF a partir de texto",
+      defaultPath: "Texto-Seven.pdf",
+      filters: [{ name: "Documento PDF", extensions: ["pdf"] }],
+    });
+    if (!destination) return;
+    try {
+      await createPdfFromText(destination, text, pageSize, fontSize);
+      setCreateDialogOpen(false);
+      setNotice("PDF de texto criado com conteúdo pesquisável.");
+      await openPath(destination);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const createFilePdf = async (input: string, outputDirectory: string) => {
+    try {
+      const started = await startConvertToPdf(input, outputDirectory);
+      setCreateDialogOpen(false);
+      setNotice(`Conversão para PDF iniciada · job ${started.jobId.slice(0, 8)}`);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const createWebPdf = async (url: string) => {
+    const destination = await save({
+      title: "Criar PDF a partir da Web",
+      defaultPath: "Pagina-Web-Seven.pdf",
+      filters: [{ name: "Documento PDF", extensions: ["pdf"] }],
+    });
+    if (!destination) return;
+    try {
+      const started = await startWebToPdf(url, destination);
+      setCreateDialogOpen(false);
+      setNotice(`Captura da página iniciada · job ${started.jobId.slice(0, 8)}`);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
   const runAdvancedOcr = async (output: string, options: OcrOptions) => {
     if (!document) return;
     try {
@@ -1346,9 +1391,13 @@ export default function App() {
       )}
       {createDialogOpen && (
         <CreatePdfDialog
+          capabilities={capabilities}
           onClose={() => setCreateDialogOpen(false)}
           onCreate={(pageSize, pageCount) => void createBlankPdf(pageSize, pageCount)}
           onCreateImages={(inputs, dpi) => void createImagesPdf(inputs, dpi)}
+          onCreateText={(text, pageSize, fontSize) => void createTextPdf(text, pageSize, fontSize)}
+          onCreateFile={(input, outputDirectory) => void createFilePdf(input, outputDirectory)}
+          onCreateWeb={(url) => void createWebPdf(url)}
         />
       )}
       {organizerOpen && (

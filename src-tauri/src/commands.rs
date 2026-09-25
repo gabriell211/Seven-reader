@@ -638,6 +638,32 @@ pub fn session_create_form_field(
 }
 
 #[tauri::command]
+pub fn session_update_form_field(
+    state: State<'_, AppState>,
+    document_id: String,
+    update: forms::FormFieldUpdate,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "update-field", move |input, output| {
+        forms::update_field(input, output, update)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_delete_form_field(
+    state: State<'_, AppState>,
+    document_id: String,
+    object_id: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "delete-field", move |input, output| {
+        forms::delete_field(input, output, &object_id)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn session_add_pdf_bookmark(
     state: State<'_, AppState>,
     document_id: String,

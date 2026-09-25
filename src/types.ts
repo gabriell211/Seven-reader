@@ -9,7 +9,8 @@ export type CapabilityKey =
   | "certificates"
   | "pdftotext"
   | "openssl"
-  | "tesseract";
+  | "tesseract"
+  | "web_pdf";
 
 export interface Capability {
   available: boolean;

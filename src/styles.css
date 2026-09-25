@@ -808,3 +808,7 @@ svg { width: 20px; height: 20px; }
 .form-tab-order-box small { color:#8c8e96; font-size:8.5px; }
 .form-tab-order-box .segmented { min-width:270px; }
 @media (max-width:720px) { .form-tab-order-box { grid-template-columns:1fr; } .form-tab-order-box .segmented { min-width:0; } }
+
+.field-appearance-box { padding:13px; border:1px solid #e0dfe6; border-radius:11px; display:grid; gap:11px; background:#fbfbfd; }
+.field-appearance-box input[type="color"] { width:100%; min-height:38px; padding:3px; border:1px solid #d9d8df; border-radius:8px; background:white; }
+.field-appearance-box select { min-height:38px; padding:0 8px; border:1px solid #d9d8df; border-radius:8px; background:white; font-size:9.5px; }

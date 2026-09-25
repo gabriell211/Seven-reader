@@ -83,6 +83,9 @@ import {
   sessionEditSetBackground,
   sessionFillFormFields,
   sessionCreateFormField,
+  exportFormData,
+  sessionImportFormData,
+  sessionResetForm,
   sessionUpdateFormField,
   sessionDeleteFormField,
   sessionAddPdfBookmark,
@@ -1665,6 +1668,41 @@ export default function App() {
     } catch (error) { setNotice(errorMessage(error)); }
   };
 
+  const runExportFormData = async (destination: string) => {
+    if (!document) return;
+    try {
+      const count = await exportFormData(document.activePath, destination);
+      setNotice(`${count} campo(s) exportado(s).`);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runImportFormData = async (dataPath: string) => {
+    if (!document) return;
+    try {
+      const result = await sessionImportFormData(document.id, dataPath);
+      await acceptDocumentRevision(result.document, `${result.changed} campo(s) importado(s).`);
+      setFormFields(await listFormFields(result.document.activePath));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runResetForm = async (useDefaults: boolean) => {
+    if (!document) return;
+    try {
+      const result = await sessionResetForm(document.id, useDefaults);
+      await acceptDocumentRevision(
+        result.document,
+        useDefaults ? "Formulário restaurado para os valores padrão." : "Formulário limpo.",
+      );
+      setFormFields(await listFormFields(result.document.activePath));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
   const runUpdateFormField = async (update: FormFieldUpdate) => {
     if (!document) return;
     try {
@@ -2180,6 +2218,9 @@ export default function App() {
           onCreate={(field) => void runCreateFormField(field)}
           onUpdate={(update) => void runUpdateFormField(update)}
           onDelete={(objectId) => void runDeleteFormField(objectId)}
+          onExportData={(destination) => void runExportFormData(destination)}
+          onImportData={(path) => void runImportFormData(path)}
+          onReset={(useDefaults) => void runResetForm(useDefaults)}
         />
       )}
       {ocrOpen && (

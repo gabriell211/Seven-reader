@@ -109,6 +109,61 @@ pub fn create_blank_document(
 }
 
 #[tauri::command]
+pub fn create_pdf_from_text(
+    destination: String,
+    text: String,
+    page_size: String,
+    font_size: u16,
+) -> CommandResult<()> {
+    let output = jobs::validated_output(&destination, "pdf").map_err(ErrorPayload::from)?;
+    pdf::create_pdf_from_text(&output, &text, &page_size, font_size).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn start_web_to_pdf(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    url: String,
+    output: String,
+) -> CommandResult<JobStart> {
+    let trimmed = url.trim();
+    if trimmed.len() > 4096
+        || trimmed.contains(['\r', '\n', '\0'])
+        || !(trimmed.starts_with("https://") || trimmed.starts_with("http://"))
+    {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "Use uma URL HTTP ou HTTPS válida".into(),
+        )));
+    }
+
+    let browser = capabilities::find_browser().ok_or_else(|| {
+        ErrorPayload::from(SevenError::CapabilityUnavailable(
+            "Chrome, Chromium ou Edge não detectado".into(),
+        ))
+    })?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+
+    let args = vec![
+        "--headless=new".into(),
+        "--disable-gpu".into(),
+        "--disable-extensions".into(),
+        "--incognito".into(),
+        "--no-pdf-header-footer".into(),
+        format!("--print-to-pdf={}", output.to_string_lossy()),
+        trimmed.to_owned(),
+    ];
+
+    Ok(jobs::start_process_job(
+        app,
+        &state,
+        "web-to-pdf",
+        browser,
+        args,
+        Some(output),
+    ))
+}
+
+#[tauri::command]
 pub fn start_combine_documents(
     app: AppHandle,
     state: State<'_, AppState>,

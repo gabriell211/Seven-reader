@@ -608,20 +608,135 @@ export function EditingDialog({
           </>}
 
           {mode === "overlay" && <>
-            <label className="workflow-field"><span>Tipo</span><select value={overlayKind} onChange={(e) => setOverlayKind(e.target.value as OverlayTextOptions["kind"])}><option value="header">Cabeçalho</option><option value="footer">Rodapé</option><option value="page-number">Número de página</option><option value="watermark">Marca d’água</option><option value="bates">Numeração Bates</option></select></label>
-            {overlayKind !== "page-number" && overlayKind !== "bates" && <label className="workflow-field"><span>Texto</span><input value={text} onChange={(e) => setText(e.target.value)} /></label>}
-            {overlayKind === "bates" && <div className="three-column-fields"><label className="workflow-field"><span>Prefixo</span><input value={prefix} onChange={(e) => setPrefix(e.target.value)} /></label><label className="workflow-field"><span>Número inicial</span><input type="number" min={0} value={startNumber} onChange={(e) => setStartNumber(Number(e.target.value))} /></label><label className="workflow-field"><span>Dígitos</span><input type="number" min={1} max={20} value={digits} onChange={(e) => setDigits(Number(e.target.value))} /></label></div>}
-            <div className="three-column-fields"><label className="workflow-field"><span>Fonte</span><input type="number" min={1} max={200} value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))} /></label><label className="workflow-field"><span>Da página</span><input type="number" min={1} max={pageCount} value={pageStart} onChange={(e) => setPageStart(Number(e.target.value))} /></label><label className="workflow-field"><span>Até</span><input type="number" min={1} max={pageCount} value={pageEnd} onChange={(e) => setPageEnd(Number(e.target.value))} /></label></div>
+            <div className="workflow-tabs inline">
+              <button className={overlaySection === "create" ? "active" : ""} onClick={() => { setOverlaySection("create"); setEditingManagedId(""); }}>Criar / editar</button>
+              <button className={overlaySection === "manage" ? "active" : ""} onClick={() => { setOverlaySection("manage"); onReloadManagedElements(); }}>Gerenciar</button>
+              <button className={overlaySection === "labels" ? "active" : ""} onClick={() => setOverlaySection("labels")}>Rótulos de página</button>
+            </div>
+
+            {overlaySection === "create" ? (
+              <>
+                {editingManagedId && <div className="managed-edit-banner"><SevenIcon name="edit" /><span>Editando elemento {editingManagedId.slice(0, 8)}…</span><button onClick={() => setEditingManagedId("")}>Criar novo</button></div>}
+                <label className="workflow-field"><span>Tipo</span><select value={overlayKind} onChange={(e) => setOverlayKind(e.target.value as OverlayTextOptions["kind"])}><option value="header">Cabeçalho</option><option value="footer">Rodapé</option><option value="page-number">Número visual de página</option><option value="watermark">Marca d’água</option><option value="bates">Numeração Bates</option></select></label>
+
+                {(overlayKind === "header" || overlayKind === "footer" || overlayKind === "watermark") && (
+                  <label className="workflow-field">
+                    <span>Texto</span>
+                    <input value={text} onChange={(e) => setText(e.target.value)} placeholder={overlayKind === "watermark" ? "CONFIDENCIAL" : "Use {page}, {total} e {date}"} />
+                    <small>Templates disponíveis: {"{page}"} página atual, {"{total}"} total, {"{date}"} data da aplicação.</small>
+                  </label>
+                )}
+
+                {(overlayKind === "page-number" || overlayKind === "bates") && (
+                  <div className="four-column-fields">
+                    <label className="workflow-field"><span>Prefixo</span><input value={prefix} onChange={(e) => setPrefix(e.target.value)} /></label>
+                    <label className="workflow-field"><span>Sufixo</span><input value={suffix} onChange={(e) => setSuffix(e.target.value)} /></label>
+                    <label className="workflow-field"><span>Número inicial</span><input type="number" min={1} value={startNumber} onChange={(e) => setStartNumber(Math.max(1, Number(e.target.value) || 1))} /></label>
+                    <label className="workflow-field"><span>Dígitos</span><input type="number" min={1} max={20} disabled={overlayKind !== "bates"} value={digits} onChange={(e) => setDigits(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} /></label>
+                  </div>
+                )}
+
+                {overlayKind === "watermark" && (
+                  <>
+                    <button className="secondary-light-button choose-wide" onClick={() => void chooseOverlayImage("watermark")}><SevenIcon name="open" /> {overlayImagePath || "Usar imagem opcional na marca d'água"}</button>
+                    <div className="two-column-fields">
+                      <label className="workflow-field"><span>Escala da imagem</span><input type="number" min={0.01} max={10} step={0.05} value={overlayImageScale} onChange={(e) => setOverlayImageScale(Math.max(0.01, Math.min(10, Number(e.target.value) || 1)))} /></label>
+                      <button className="secondary-light-button" disabled={!overlayImagePath} onClick={() => setOverlayImagePath("")}>Remover imagem</button>
+                    </div>
+                  </>
+                )}
+
+                <div className="four-column-fields">
+                  <label className="workflow-field"><span>Fonte</span><input type="number" min={1} max={200} value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))} /></label>
+                  <label className="workflow-field"><span>Rotação</span><input type="number" min={-360} max={360} value={rotation} onChange={(e) => setRotation(Number(e.target.value))} /></label>
+                  <label className="workflow-field"><span>Opacidade</span><input type="number" min={0} max={1} step={0.05} value={overlayOpacity} onChange={(e) => setOverlayOpacity(Math.max(0, Math.min(1, Number(e.target.value))))} /></label>
+                  <label className="workflow-field"><span>Alinhamento</span><select value={overlayPosition} onChange={(e) => setOverlayPosition(e.target.value as OverlayTextOptions["position"])}><option value="left">Esquerda</option><option value="center">Centro</option><option value="right">Direita</option></select></label>
+                </div>
+
+                <div className="four-column-fields">
+                  <label className="workflow-field"><span>Margem X</span><input type="number" min={0} value={marginX} onChange={(e) => setMarginX(Math.max(0, Number(e.target.value) || 0))} /></label>
+                  <label className="workflow-field"><span>Margem Y</span><input type="number" min={0} value={marginY} onChange={(e) => setMarginY(Math.max(0, Number(e.target.value) || 0))} /></label>
+                  <label className="workflow-field"><span>Da página</span><input type="number" min={1} max={pageCount} value={pageStart} onChange={(e) => setPageStart(Math.max(1, Math.min(pageCount, Number(e.target.value) || 1)))} /></label>
+                  <label className="workflow-field"><span>Até</span><input type="number" min={1} max={pageCount} value={pageEnd} onChange={(e) => setPageEnd(Math.max(1, Math.min(pageCount, Number(e.target.value) || pageCount)))} /></label>
+                </div>
+
+                <label className="workflow-field"><span>Páginas</span><select value={overlayParity} onChange={(e) => setOverlayParity(e.target.value as OverlayTextOptions["parity"])}><option value="all">Todas</option><option value="odd">Somente ímpares</option><option value="even">Somente pares</option></select></label>
+
+                <div className="decoration-preview">
+                  <span>Preview lógico</span>
+                  <strong>{overlayKind === "bates" ? `${prefix}${String(startNumber).padStart(digits, "0")}${suffix}` : overlayKind === "page-number" ? `${prefix}${startNumber}${suffix}` : text.replace("{page}", String(pageStart)).replace("{total}", String(pageCount)).replace("{date}", new Date().toISOString().slice(0, 10)) || (overlayImagePath ? "Imagem" : "—")}</strong>
+                  <small>{overlayParity === "all" ? "todas as páginas do intervalo" : overlayParity === "odd" ? "somente páginas ímpares" : "somente páginas pares"} · opacidade {Math.round(overlayOpacity * 100)}%</small>
+                </div>
+              </>
+            ) : overlaySection === "manage" ? (
+              <>
+                <div className="managed-element-list">
+                  {managedElements.filter((element) => element.kind !== "background").map((element) => (
+                    <article key={element.id}>
+                      <span><SevenIcon name="pages" /></span>
+                      <div><strong>{element.kind}</strong><small>{element.pageIndices.length} página(s) · {element.id.slice(0, 12)}…</small></div>
+                      <button onClick={() => loadManagedElement(element)}>Editar</button>
+                      <button className="danger-quiet" onClick={() => onRemoveManagedElement(element.id)}>Remover</button>
+                    </article>
+                  ))}
+                  {managedElements.filter((element) => element.kind !== "background").length === 0 && <div className="empty-panel">Nenhum cabeçalho, rodapé, watermark, número visual ou Bates gerenciado pelo Seven.</div>}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="two-column-fields">
+                  <label className="workflow-field"><span>Estilo</span><select value={pageLabelStyle} onChange={(e) => setPageLabelStyle(e.target.value as PageLabelOptions["style"])}><option value="decimal">1, 2, 3…</option><option value="roman-lower">i, ii, iii…</option><option value="roman-upper">I, II, III…</option><option value="letters-lower">a, b, c…</option><option value="letters-upper">A, B, C…</option></select></label>
+                  <label className="workflow-field"><span>Número inicial</span><input type="number" min={1} value={pageLabelStartNumber} onChange={(e) => setPageLabelStartNumber(Math.max(1, Number(e.target.value) || 1))} /></label>
+                </div>
+                <div className="two-column-fields">
+                  <label className="workflow-field"><span>Prefixo</span><input value={pageLabelPrefix} onChange={(e) => setPageLabelPrefix(e.target.value)} /></label>
+                  <label className="workflow-field"><span>Sufixo</span><input value={pageLabelSuffix} onChange={(e) => setPageLabelSuffix(e.target.value)} /></label>
+                </div>
+                <div className="two-column-fields">
+                  <label className="workflow-field"><span>Da página</span><input type="number" min={1} max={pageCount} value={pageStart} onChange={(e) => setPageStart(Math.max(1, Math.min(pageCount, Number(e.target.value) || 1)))} /></label>
+                  <label className="workflow-field"><span>Até</span><input type="number" min={1} max={pageCount} value={pageEnd} onChange={(e) => setPageEnd(Math.max(1, Math.min(pageCount, Number(e.target.value) || pageCount)))} /></label>
+                </div>
+                <div className="organizer-note"><SevenIcon name="pages" /><span>Esses rótulos alteram /PageLabels do PDF, não o conteúdo visual da página. Para número impresso, use “Número visual de página”.</span></div>
+                <button className="primary-button workflow-submit" onClick={applyPageLabels}><SevenIcon name="save" /> Aplicar rótulos</button>
+              </>
+            )}
           </>}
 
           {mode === "background" && <>
-            <label className="workflow-field"><span>Cor de fundo</span><input className="color-field" type="color" value={background} onChange={(e) => setBackground(e.target.value)} /></label>
-            <div className="two-column-fields"><label className="workflow-field"><span>Da página</span><input type="number" min={1} max={pageCount} value={pageStart} onChange={(e) => setPageStart(Number(e.target.value))} /></label><label className="workflow-field"><span>Até</span><input type="number" min={1} max={pageCount} value={pageEnd} onChange={(e) => setPageEnd(Number(e.target.value))} /></label></div>
+            {editingManagedId && <div className="managed-edit-banner"><SevenIcon name="edit" /><span>Editando fundo {editingManagedId.slice(0, 8)}…</span><button onClick={() => setEditingManagedId("")}>Criar novo</button></div>}
+            <div className="two-column-fields">
+              <label className="workflow-field"><span>Cor de fundo</span><input className="color-field" type="color" value={background} onChange={(e) => setBackground(e.target.value)} /></label>
+              <label className="workflow-field"><span>Opacidade</span><input type="number" min={0} max={1} step={0.05} value={backgroundOpacity} onChange={(e) => setBackgroundOpacity(Math.max(0, Math.min(1, Number(e.target.value))))} /></label>
+            </div>
+            <button className="secondary-light-button choose-wide" onClick={() => void chooseOverlayImage("background")}><SevenIcon name="open" /> {backgroundImagePath || "Adicionar imagem de fundo opcional"}</button>
+            {backgroundImagePath && (
+              <div className="three-column-fields">
+                <label className="workflow-field"><span>Imagem</span><select value={backgroundPosition} onChange={(e) => setBackgroundPosition(e.target.value as BackgroundOptions["position"])}><option value="center">Centralizar</option><option value="stretch">Esticar para página</option><option value="tile">Repetir / tile</option></select></label>
+                <label className="workflow-field"><span>Escala</span><input type="number" min={0.01} max={10} step={0.05} value={backgroundImageScale} onChange={(e) => setBackgroundImageScale(Math.max(0.01, Math.min(10, Number(e.target.value) || 1)))} /></label>
+                <button className="secondary-light-button" onClick={() => setBackgroundImagePath("")}>Remover imagem</button>
+              </div>
+            )}
+            <div className="two-column-fields"><label className="workflow-field"><span>Da página</span><input type="number" min={1} max={pageCount} value={pageStart} onChange={(e) => setPageStart(Math.max(1, Math.min(pageCount, Number(e.target.value) || 1)))} /></label><label className="workflow-field"><span>Até</span><input type="number" min={1} max={pageCount} value={pageEnd} onChange={(e) => setPageEnd(Math.max(1, Math.min(pageCount, Number(e.target.value) || pageCount)))} /></label></div>
+            <div className="managed-element-list">
+              {managedElements.filter((element) => element.kind === "background").map((element) => (
+                <article key={element.id}>
+                  <span><SevenIcon name="layers" /></span>
+                  <div><strong>Fundo Seven</strong><small>{element.pageIndices.length} página(s) · {element.id.slice(0, 12)}…</small></div>
+                  <button onClick={() => loadManagedElement(element)}>Editar</button>
+                  <button className="danger-quiet" onClick={() => onRemoveManagedElement(element.id)}>Remover</button>
+                </article>
+              ))}
+            </div>
           </>}
 
-          {!(mode === "image" && imageSection === "existing") && !(mode === "link" && linkSection !== "create") && (
-            <button className="primary-button workflow-submit" disabled={!canApply} onClick={apply}><SevenIcon name="edit" /> Aplicar à sessão</button>
-          )}
+          {!(mode === "image" && imageSection === "existing")
+            && !(mode === "link" && linkSection !== "create")
+            && !(mode === "overlay" && overlaySection !== "create")
+            && (
+              <button className="primary-button workflow-submit" disabled={!canApply} onClick={apply}>
+                <SevenIcon name="edit" /> {editingManagedId ? "Atualizar elemento" : "Aplicar à sessão"}
+              </button>
+            )}
         </div>
       </section>
     </div>

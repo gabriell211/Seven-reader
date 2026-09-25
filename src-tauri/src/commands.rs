@@ -638,6 +638,33 @@ pub fn session_create_form_field(
 }
 
 #[tauri::command]
+pub fn session_duplicate_form_field(
+    state: State<'_, AppState>,
+    document_id: String,
+    request: forms::DuplicateFieldRequest,
+) -> CommandResult<SessionFormFillResult> {
+    session::apply_revision(&state, &document_id, "duplicate-field", move |input, output| {
+        forms::duplicate_field(input, output, request)
+    })
+    .map(|(document, changed)| SessionFormFillResult { document, changed })
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_set_page_tab_order(
+    state: State<'_, AppState>,
+    document_id: String,
+    page_index: usize,
+    order: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "tab-order", move |input, output| {
+        forms::set_page_tab_order(input, output, page_index, &order)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn export_form_data(
     input: String,
     destination: String,

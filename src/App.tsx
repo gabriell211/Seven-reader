@@ -23,6 +23,7 @@ import { UnsavedChangesDialog } from "./components/UnsavedChangesDialog";
 import { ActionsDialog } from "./components/ActionsDialog";
 import { PrintProductionDialog } from "./components/PrintProductionDialog";
 import { CatalogDialog } from "./components/CatalogDialog";
+import { GuidedActionsDialog, type GuidedActionKind } from "./components/GuidedActionsDialog";
 import { applyAppearance, isTrustedPath, loadSettings, saveSettings, type SevenSettings } from "./lib/settings";
 import {
   buildCatalog,
@@ -104,6 +105,7 @@ import {
   startOcr,
   startOcrAdvanced,
   startOptimize,
+  startBatchOptimize,
 } from "./lib/native";
 import { canRunTool } from "./data/tools";
 import type {
@@ -228,6 +230,7 @@ export default function App() {
   const [recentTools, setRecentTools] = useState<ToolId[]>(loadRecentTools);
   const [notice, setNotice] = useState<string | null>(null);
   const [catalogOpen, setCatalogOpen] = useState(false);
+  const [guidedActionsOpen, setGuidedActionsOpen] = useState(false);
   const [catalogs, setCatalogs] = useState<CatalogSummary[]>([]);
   const [catalogHits, setCatalogHits] = useState<CatalogHit[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -1010,6 +1013,11 @@ export default function App() {
         return;
       }
 
+      if (tool === "automation") {
+        setGuidedActionsOpen(true);
+        return;
+      }
+
       if (tool === "catalog") {
         setCatalogHits([]);
         setCatalogOpen(true);
@@ -1518,6 +1526,31 @@ export default function App() {
     }
   };
 
+  const runGuidedAction = async (
+    kind: GuidedActionKind,
+    inputs: string[],
+    outputDirectory: string,
+  ) => {
+    try {
+      const started =
+        kind === "ocr"
+          ? await startBatchOcr(inputs, outputDirectory, {
+              language: settings.ocrLanguage,
+              deskew: true,
+              rotatePages: true,
+              outputType: settings.ocrOutputType,
+              mode: "skip",
+            })
+          : kind === "optimize"
+            ? await startBatchOptimize(inputs, outputDirectory, "ebook")
+            : await startBatchConvertToPdf(inputs, outputDirectory);
+      setGuidedActionsOpen(false);
+      setNotice(`Ação guiada iniciada · ${inputs.length} arquivo(s) · job ${started.jobId.slice(0, 8)}`);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
   const reloadCatalogs = async () => {
     try { setCatalogs(await listCatalogs()); } catch (error) { setNotice(errorMessage(error)); }
   };
@@ -1941,6 +1974,7 @@ export default function App() {
           onCancel={cancelClosePrompt}
         />
       )}
+      {guidedActionsOpen && <GuidedActionsDialog onClose={() => setGuidedActionsOpen(false)} onRun={(kind, inputs, outputDirectory) => void runGuidedAction(kind, inputs, outputDirectory)} />}
       {catalogOpen && <CatalogDialog catalogs={catalogs} hits={catalogHits} loading={catalogLoading} onClose={() => setCatalogOpen(false)} onReload={() => void reloadCatalogs()} onBuild={(name, inputs) => void runBuildCatalog(name, inputs)} onSearch={(id, query, matchCase) => void runCatalogSearch(id, query, matchCase)} onDelete={(id) => void runDeleteCatalog(id)} onOpenHit={(path, pageIndex) => { setCatalogOpen(false); void openPath(path, { page: pageIndex, zoom: settings.defaultZoom }); }} />}
       {settingsOpen && <SettingsDialog settings={settings} onClose={() => setSettingsOpen(false)} onChange={setSettings} />}
       {printProductionOpen && document && (

@@ -445,6 +445,15 @@ export async function sessionRemovePdfAttachment(
   });
 }
 
+export async function sessionUpdatePdfLayerProperties(
+  documentId: string,
+  update: LayerPropertiesUpdate,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_update_pdf_layer_properties", {
+    documentId, update,
+  });
+}
+
 export async function sessionSetPdfLayerVisibility(
   documentId: string,
   objectId: string,

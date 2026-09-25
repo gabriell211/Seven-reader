@@ -135,6 +135,7 @@ pub fn import_xfdf(input: &Path, output: &Path, xfdf: &Path) -> Result<ReviewTra
     }
 
     let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let mut imported = 0usize;
     for item in parsed {
         let Some(kind) = kind_from_tag(&item.tag) else { skipped += 1; continue };
         let Some(page_id) = document.get_pages().get(&((item.page + 1) as u32)).copied() else {
@@ -173,6 +174,7 @@ pub fn import_xfdf(input: &Path, output: &Path, xfdf: &Path) -> Result<ReviewTra
         if kind == "stamp" { dict.set("Name", "Approved"); }
         if kind == "freetext" { dict.set("DA", Object::string_literal("/Helv 10 Tf 0.2 0.2 0.2 rg")); }
         let id = document.add_object(dict);
+        imported += 1;
         let page = document.get_object_mut(page_id).map_err(|e| SevenError::Operation(e.to_string()))?
             .as_dict_mut().map_err(|e| SevenError::Operation(e.to_string()))?;
         match page.get_mut(b"Annots") {
@@ -182,9 +184,6 @@ pub fn import_xfdf(input: &Path, output: &Path, xfdf: &Path) -> Result<ReviewTra
         }
     }
 
-    let imported = document.objects.values().filter(|o| {
-        o.as_dict().ok().and_then(|d| d.get(b"Subtype").ok()).is_some()
-    }).count();
     let temp = output.with_extension("seven-review.tmp.pdf");
     document.compress();
     document.save(&temp).map_err(|error| SevenError::Io(error.to_string()))?;

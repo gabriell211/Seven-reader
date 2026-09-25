@@ -114,11 +114,21 @@ pub fn detect(state: &AppState) -> Capabilities {
 
     #[cfg(target_os = "linux")]
     let scanner = command_version(&["scanimage"], &["--version"]);
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "windows")]
+    let scanner = command_version(
+        &["powershell"],
+        &[
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "$ErrorActionPreference='Stop'; $null=New-Object -ComObject WIA.DeviceManager; Write-Output WIA",
+        ],
+    );
+    #[cfg(target_os = "macos")]
     let scanner = Capability {
         available: false,
         version: None,
-        detail: Some("Adapter WIA/TWAIN ainda não carregado".into()),
+        detail: Some("Adapter Image Capture ainda não integrado".into()),
     };
 
     #[cfg(target_os = "linux")]

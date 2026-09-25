@@ -1,6 +1,7 @@
 mod advanced;
 mod annotations;
 mod capabilities;
+mod catalog;
 mod commands;
 mod document_ops;
 mod editing;
@@ -37,6 +38,10 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_capabilities,
+            commands::build_catalog,
+            commands::list_catalogs,
+            commands::search_catalog,
+            commands::delete_catalog,
             commands::open_document,
             commands::restore_document_session,
             commands::close_document,

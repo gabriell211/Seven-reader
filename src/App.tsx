@@ -4,7 +4,7 @@ import { message, open, save } from "@tauri-apps/plugin-dialog";
 import { SplashScreen } from "./components/SplashScreen";
 import { Home } from "./components/Home";
 import { DocumentWorkspace } from "./components/DocumentWorkspace";
-import { PageOrganizerDialog, type PageOperation } from "./components/PageOrganizerDialog";
+import { PageOrganizerDialog, type PageOperationRequest } from "./components/PageOrganizerDialog";
 import { CreatePdfDialog, type BlankPageSize } from "./components/CreatePdfDialog";
 import { ConversionDialog } from "./components/ConversionDialog";
 import { SecurityDialog } from "./components/SecurityDialog";
@@ -68,6 +68,9 @@ import {
   startReorderPages,
   startRotatePages,
   startSplitPages,
+  startDeletePages,
+  startInsertPages,
+  startReplacePages,
   signDocument,
   validateSignatures,
   startOcr,
@@ -985,26 +988,28 @@ export default function App() {
     }
   };
 
-  const runPageOperation = async (
-    operation: PageOperation,
-    pageExpression: string,
-    angle: 90 | 180 | 270,
-    pagesPerFile: number,
-  ) => {
+  const runPageOperation = async (request: PageOperationRequest) => {
     const input = await pickInputPdf();
     if (!input) return;
 
     const suffix =
-      operation === "extract" ? "extraido"
-        : operation === "rotate" ? "girado"
-          : operation === "split" ? "dividido"
-            : "organizado";
+      request.operation === "extract" ? "extraido"
+        : request.operation === "rotate" ? "girado"
+          : request.operation === "split" ? "dividido"
+            : request.operation === "delete" ? "paginas-removidas"
+              : request.operation === "insert" ? "paginas-inseridas"
+                : request.operation === "replace" ? "paginas-substituidas"
+                  : "organizado";
+
     const output = await save({
       title:
-        operation === "extract" ? "Salvar páginas extraídas"
-          : operation === "rotate" ? "Salvar PDF girado"
-            : operation === "split" ? "Nome base dos PDFs divididos"
-              : "Salvar PDF reorganizado",
+        request.operation === "extract" ? "Salvar páginas extraídas"
+          : request.operation === "rotate" ? "Salvar PDF girado"
+            : request.operation === "split" ? "Nome base dos PDFs divididos"
+              : request.operation === "delete" ? "Salvar PDF sem as páginas selecionadas"
+                : request.operation === "insert" ? "Salvar PDF com páginas inseridas"
+                  : request.operation === "replace" ? "Salvar PDF com páginas substituídas"
+                    : "Salvar PDF reorganizado",
       defaultPath: `Seven-Reader-${suffix}.pdf`,
       filters: [{ name: "Documento PDF", extensions: ["pdf"] }],
     });
@@ -1012,13 +1017,33 @@ export default function App() {
 
     try {
       const started =
-        operation === "extract"
-          ? await startExtractPages(input, output, pageExpression)
-          : operation === "rotate"
-            ? await startRotatePages(input, output, pageExpression, angle)
-            : operation === "split"
-              ? await startSplitPages(input, output, pagesPerFile)
-              : await startReorderPages(input, output, pageExpression);
+        request.operation === "extract"
+          ? await startExtractPages(input, output, request.pageExpression)
+          : request.operation === "rotate"
+            ? await startRotatePages(input, output, request.pageExpression, request.angle)
+            : request.operation === "split"
+              ? await startSplitPages(input, output, request.pagesPerFile)
+              : request.operation === "delete"
+                ? await startDeletePages(input, output, request.pageExpression)
+                : request.operation === "insert"
+                  ? await startInsertPages(
+                      input,
+                      output,
+                      request.source ?? "",
+                      request.sourceRange ?? "1-z",
+                      request.insertAfter ?? 0,
+                    )
+                  : request.operation === "replace"
+                    ? await startReplacePages(
+                        input,
+                        output,
+                        request.source ?? "",
+                        request.targetStart ?? 1,
+                        request.sourceStart ?? 1,
+                        request.count ?? 1,
+                      )
+                    : await startReorderPages(input, output, request.pageExpression);
+
       setOrganizerOpen(false);
       setNotice(`Operação de páginas iniciada · job ${started.jobId.slice(0, 8)}`);
     } catch (error) {
@@ -1330,7 +1355,7 @@ export default function App() {
           fileName={document?.name ?? "Selecionar PDF"}
           pageCount={document?.pageCount}
           onClose={() => setOrganizerOpen(false)}
-          onRun={(operation, pageExpression, angle, pagesPerFile) => void runPageOperation(operation, pageExpression, angle, pagesPerFile)}
+          onRun={(request) => void runPageOperation(request)}
         />
       )}
       {activeJobs.length > 0 && (

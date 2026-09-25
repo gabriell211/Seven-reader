@@ -8,6 +8,7 @@ import type {
   LinkPlacement,
   LinkTargetKind,
   LinkUpdate,
+  NamedDestinationInfo,
   OverlayTextOptions,
   TextPlacement,
 } from "../types";
@@ -23,6 +24,7 @@ interface EditingDialogProps {
   imageObjectsLoading: boolean;
   links: LinkInfo[];
   linksLoading: boolean;
+  namedDestinations: NamedDestinationInfo[];
   onClose: () => void;
   onAddText: (placement: TextPlacement) => void;
   onReplaceText: (find: string, replacement: string, allPages: boolean) => void;
@@ -31,6 +33,9 @@ interface EditingDialogProps {
   onRemoveImage: (resourceName: string) => void;
   onAddImage: (placement: ImagePlacement) => void;
   onReloadLinks: () => void;
+  onReloadNamedDestinations: () => void;
+  onUpsertNamedDestination: (oldName: string | undefined, name: string, pageIndex: number) => void;
+  onRemoveNamedDestination: (name: string) => void;
   onUpdateLink: (update: LinkUpdate) => void;
   onRemoveLink: (pageIndex: number, objectId: string) => void;
   onAddLink: (link: LinkPlacement) => void;
@@ -45,6 +50,7 @@ export function EditingDialog({
   imageObjectsLoading,
   links,
   linksLoading,
+  namedDestinations,
   onClose,
   onAddText,
   onReplaceText,
@@ -53,6 +59,9 @@ export function EditingDialog({
   onRemoveImage,
   onAddImage,
   onReloadLinks,
+  onReloadNamedDestinations,
+  onUpsertNamedDestination,
+  onRemoveNamedDestination,
   onUpdateLink,
   onRemoveLink,
   onAddLink,
@@ -77,7 +86,7 @@ export function EditingDialog({
   const [lockAspect, setLockAspect] = useState(true);
   const [imageAspect, setImageAspect] = useState<number | null>(null);
   const [target, setTarget] = useState("");
-  const [linkSection, setLinkSection] = useState<"create" | "existing">("create");
+  const [linkSection, setLinkSection] = useState<"create" | "existing" | "destinations">("create");
   const [linkKind, setLinkKind] = useState<LinkTargetKind>("url");
   const [targetPage, setTargetPage] = useState(1);
   const [namedDestination, setNamedDestination] = useState("");
@@ -85,6 +94,9 @@ export function EditingDialog({
   const [linkBorderColor, setLinkBorderColor] = useState("#2458d6");
   const [editingLinkId, setEditingLinkId] = useState("");
   const [editingLinkPageIndex, setEditingLinkPageIndex] = useState(pageIndex);
+  const [destinationName, setDestinationName] = useState("");
+  const [destinationPage, setDestinationPage] = useState(pageIndex + 1);
+  const [editingDestinationOldName, setEditingDestinationOldName] = useState<string | undefined>(undefined);
   const [x, setX] = useState(48);
   const [y, setY] = useState(48);
   const [width, setWidth] = useState(180);
@@ -378,6 +390,7 @@ export function EditingDialog({
             <div className="workflow-tabs inline">
               <button className={linkSection === "create" ? "active" : ""} onClick={() => { setLinkSection("create"); setEditingLinkId(""); }}>Criar link</button>
               <button className={linkSection === "existing" ? "active" : ""} onClick={() => { setLinkSection("existing"); setEditingLinkId(""); onReloadLinks(); }}>Links existentes</button>
+              <button className={linkSection === "destinations" ? "active" : ""} onClick={() => { setLinkSection("destinations"); setEditingLinkId(""); onReloadNamedDestinations(); }}>Destinos</button>
             </div>
 
             {linkSection === "create" ? (
@@ -386,7 +399,7 @@ export function EditingDialog({
                 {linkKind === "page"
                   ? <label className="workflow-field"><span>Página de destino</span><input type="number" min={1} max={pageCount} value={targetPage} onChange={(e) => setTargetPage(Number(e.target.value))} /></label>
                   : linkKind === "named"
-                    ? <label className="workflow-field"><span>Nome do destino</span><input value={namedDestination} onChange={(e) => setNamedDestination(e.target.value)} /></label>
+                    ? <label className="workflow-field"><span>Destino nomeado</span><select value={namedDestination} onChange={(e) => setNamedDestination(e.target.value)}><option value="">Selecione…</option>{namedDestinations.map((destination)=><option key={destination.name} value={destination.name}>{destination.name}{destination.pageIndex!==undefined?` · pág. ${destination.pageIndex+1}`:""}</option>)}</select><small>Crie e gerencie destinos na aba “Destinos”.</small></label>
                     : <label className="workflow-field"><span>{linkKind === "file" ? "Arquivo/caminho" : "URL"}</span><input value={target} onChange={(e) => setTarget(e.target.value)} placeholder={linkKind === "url" ? "https://..." : "arquivo.pdf"} /></label>}
                 {linkKind === "file" && <div className="organizer-note organizer-note--warning"><SevenIcon name="lock"/><span>O link será gravado como /Launch para compatibilidade, mas o Seven Reader não executa Launch automaticamente.</span></div>}
                 {rectFields}
@@ -395,7 +408,7 @@ export function EditingDialog({
                   <label className="workflow-field"><span>Cor da borda</span><input type="color" value={linkBorderColor} onChange={(e)=>setLinkBorderColor(e.target.value)}/></label>
                 </div>
               </>
-            ) : (
+            ) : linkSection === "existing" ? (
               <>
                 {linksLoading && <div className="report-loading"><span className="loader-ring"/> Lendo links das páginas…</div>}
                 {!linksLoading && !editingLinkId && links.length === 0 && <div className="empty-panel">Nenhuma anotação Link encontrada.</div>}
@@ -417,7 +430,7 @@ export function EditingDialog({
                     {linkKind === "page"
                       ? <label className="workflow-field"><span>Página de destino</span><input type="number" min={1} max={pageCount} value={targetPage} onChange={(e) => setTargetPage(Number(e.target.value))} /></label>
                       : linkKind === "named"
-                        ? <label className="workflow-field"><span>Nome do destino</span><input value={namedDestination} onChange={(e) => setNamedDestination(e.target.value)} /></label>
+                        ? <label className="workflow-field"><span>Destino nomeado</span><select value={namedDestination} onChange={(e) => setNamedDestination(e.target.value)}><option value="">Selecione…</option>{namedDestinations.map((destination)=><option key={destination.name} value={destination.name}>{destination.name}{destination.pageIndex!==undefined?` · pág. ${destination.pageIndex+1}`:""}</option>)}</select></label>
                         : <label className="workflow-field"><span>{linkKind === "file" ? "Arquivo/caminho" : "URL"}</span><input value={target} onChange={(e) => setTarget(e.target.value)} placeholder={linkKind === "url" ? "https://..." : "arquivo.pdf"} /></label>}
                     {rectFields}
                     <div className="two-column-fields">
@@ -430,6 +443,31 @@ export function EditingDialog({
                     </div>
                   </>
                 )}
+              </>
+            ) : (
+              <>
+                <div className="two-column-fields">
+                  <label className="workflow-field"><span>Nome do destino</span><input value={destinationName} onChange={(e)=>setDestinationName(e.target.value)} placeholder="ex.: introducao"/></label>
+                  <label className="workflow-field"><span>Página</span><input type="number" min={1} max={pageCount} value={destinationPage} onChange={(e)=>setDestinationPage(Math.max(1,Math.min(pageCount,Number(e.target.value)||1)))}/></label>
+                </div>
+                <div className="form-edit-actions">
+                  {editingDestinationOldName && <button className="secondary-light-button" onClick={()=>{setEditingDestinationOldName(undefined);setDestinationName("");setDestinationPage(pageIndex+1);}}>Cancelar edição</button>}
+                  <button className="primary-button" disabled={!destinationName.trim()} onClick={()=>{onUpsertNamedDestination(editingDestinationOldName,destinationName,Math.max(0,destinationPage-1));setEditingDestinationOldName(undefined);}}><SevenIcon name="save"/>{editingDestinationOldName?" Atualizar destino":" Criar destino"}</button>
+                </div>
+                <div className="named-destination-list">
+                  {namedDestinations.map((destination)=>(
+                    <article key={destination.name}>
+                      <span><SevenIcon name="bookmark"/></span>
+                      <div><strong>{destination.name}</strong><small>{destination.pageIndex!==undefined?`Página ${destination.pageIndex+1}`:"Destino não resolvido"} · {destination.editable?"Editável":"Name Tree externa"}</small></div>
+                      {destination.editable && <>
+                        <button onClick={()=>{setEditingDestinationOldName(destination.name);setDestinationName(destination.name);setDestinationPage((destination.pageIndex??pageIndex)+1);}}>Editar</button>
+                        <button className="danger-quiet" onClick={()=>onRemoveNamedDestination(destination.name)}>Remover</button>
+                      </>}
+                    </article>
+                  ))}
+                  {namedDestinations.length===0&&<div className="empty-panel">Nenhum destino nomeado encontrado.</div>}
+                </div>
+                <div className="organizer-note"><SevenIcon name="shield"/><span>Destinos encontrados em Name Trees externas são listados e podem ser usados por links, mas só destinos gerenciados no dicionário /Dests são alterados por este editor.</span></div>
               </>
             )}
           </>}
@@ -446,7 +484,7 @@ export function EditingDialog({
             <div className="two-column-fields"><label className="workflow-field"><span>Da página</span><input type="number" min={1} max={pageCount} value={pageStart} onChange={(e) => setPageStart(Number(e.target.value))} /></label><label className="workflow-field"><span>Até</span><input type="number" min={1} max={pageCount} value={pageEnd} onChange={(e) => setPageEnd(Number(e.target.value))} /></label></div>
           </>}
 
-          {!(mode === "image" && imageSection === "existing") && !(mode === "link" && linkSection === "existing") && (
+          {!(mode === "image" && imageSection === "existing") && !(mode === "link" && linkSection !== "create") && (
             <button className="primary-button workflow-submit" disabled={!canApply} onClick={apply}><SevenIcon name="edit" /> Aplicar à sessão</button>
           )}
         </div>

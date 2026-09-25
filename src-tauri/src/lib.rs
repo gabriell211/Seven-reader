@@ -14,6 +14,7 @@ mod print_production;
 mod redaction;
 mod search;
 mod session;
+mod shared_review;
 mod signatures;
 mod state;
 
@@ -38,6 +39,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_capabilities,
+            commands::export_review_xfdf,
+            commands::session_import_review_xfdf,
             commands::build_catalog,
             commands::list_catalogs,
             commands::search_catalog,

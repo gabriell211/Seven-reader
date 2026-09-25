@@ -3,7 +3,6 @@ import type { AnnotationInfo, AnnotationInput, AnnotationKind } from "../types";
 import { SevenIcon } from "./SevenIcon";
 
 interface CommentsDialogProps {
-  documentPath: string;
   pageIndex: number;
   annotations: AnnotationInfo[];
   loading: boolean;
@@ -23,7 +22,6 @@ const kinds: Array<{ id: AnnotationKind; label: string }> = [
 ];
 
 export function CommentsDialog({
-  documentPath,
   pageIndex,
   annotations,
   loading,

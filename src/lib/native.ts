@@ -445,6 +445,21 @@ export async function sessionRemovePdfAttachment(
   });
 }
 
+export async function sessionApplyPdfLayerOverrides(
+  documentId: string,
+  context: "view" | "print" | "export",
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_apply_pdf_layer_overrides", {
+    documentId, context,
+  });
+}
+
+export async function sessionResetPdfLayerVisibility(
+  documentId: string,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_reset_pdf_layer_visibility", { documentId });
+}
+
 export async function sessionUpdatePdfLayerProperties(
   documentId: string,
   update: LayerPropertiesUpdate,

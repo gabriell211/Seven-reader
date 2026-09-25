@@ -339,6 +339,22 @@ export interface ImagePlacement {
   y: number;
   width: number;
   height: number;
+  rotation: number;
+  opacity: number;
+  mirrorX: boolean;
+  mirrorY: boolean;
+  cropLeft: number;
+  cropTop: number;
+  cropRight: number;
+  cropBottom: number;
+}
+
+export interface ImageObjectInfo {
+  pageIndex: number;
+  resourceName: string;
+  objectId: string;
+  pixelWidth?: number;
+  pixelHeight?: number;
 }
 
 export interface LinkPlacement {

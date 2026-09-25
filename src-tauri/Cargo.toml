@@ -31,6 +31,7 @@ lopdf = { version = "0.38", features = ["embed_image"] }
 sha2 = "0.10"
 hex = "0.4"
 image = "0.25"
+underskrift = "0.1.4"
 
 [profile.release]
 codegen-units = 1

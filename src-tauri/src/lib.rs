@@ -7,6 +7,7 @@ mod forms;
 mod jobs;
 mod ocr;
 mod pdf;
+mod signatures;
 mod state;
 
 use std::fs;
@@ -61,6 +62,8 @@ pub fn run() {
             commands::start_decrypt_pdf,
             commands::start_convert_to_pdf,
             commands::start_export_pdf,
+            commands::sign_document,
+            commands::validate_signatures,
             commands::get_job_status,
             commands::cancel_job,
         ])

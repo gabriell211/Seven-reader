@@ -7,6 +7,7 @@ use crate::{
     ocr,
     document_ops,
     pdf,
+    signatures,
     state::{AppState, JobStatus},
 };
 use std::{fs, sync::atomic::Ordering};
@@ -689,6 +690,41 @@ pub fn start_export_pdf(
         input.to_string_lossy().into_owned(),
     ];
     Ok(jobs::start_process_job(app, &state, "export-images", executable, args, Some(output_directory)))
+}
+
+#[tauri::command]
+pub async fn sign_document(
+    input: String,
+    output: String,
+    request: signatures::SignRequest,
+) -> CommandResult<()> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    signatures::sign_pdf(&input, &output, request)
+        .await
+        .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub async fn validate_signatures(
+    input: String,
+    trust_directory: Option<String>,
+    allow_online: bool,
+) -> CommandResult<signatures::SignatureValidationReport> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let trust = match trust_directory {
+        Some(path) if !path.trim().is_empty() => Some(
+            fs::canonicalize(path)
+                .map_err(|error| ErrorPayload::from(SevenError::InvalidPath(error.to_string())))?,
+        ),
+        _ => None,
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        signatures::verify_pdf(&input, trust.as_deref(), allow_online)
+    })
+    .await
+    .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
+    .map_err(ErrorPayload::from)
 }
 
 #[tauri::command]

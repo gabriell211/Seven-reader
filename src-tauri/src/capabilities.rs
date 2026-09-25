@@ -93,9 +93,9 @@ pub fn detect(state: &AppState) -> Capabilities {
     let tesseract = command_version(&["tesseract"], &["--version"]);
 
     let certificates = Capability {
-        available: false,
-        version: None,
-        detail: Some("Store de certificados detectado somente quando o módulo de assinatura estiver carregado".into()),
+        available: true,
+        version: Some("underskrift 0.1.4".into()),
+        detail: Some("PKCS#12 + PAdES B-B/B-T/B-LT/B-LTA integrados".into()),
     };
 
     Capabilities {

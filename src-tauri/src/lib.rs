@@ -9,6 +9,7 @@ mod forms;
 mod jobs;
 mod ocr;
 mod pdf;
+mod print_production;
 mod redaction;
 mod search;
 mod session;
@@ -105,6 +106,8 @@ pub fn run() {
             commands::list_form_fields,
             commands::fill_form_fields,
             commands::create_form_field,
+            commands::get_print_preflight,
+            commands::session_set_page_boxes,
             commands::list_pdf_actions,
             commands::get_document_metadata,
             commands::update_document_metadata,

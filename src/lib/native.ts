@@ -16,6 +16,7 @@ import type {
   FormFieldInfo,
   FormValue,
   ImagePlacement,
+  InkAnnotationInput,
   LinkPlacement,
   MetadataUpdate,
   NewFormField,
@@ -367,6 +368,14 @@ export async function addAnnotation(
   annotation: AnnotationInput,
 ): Promise<void> {
   await invoke("add_annotation", { input, output, annotation });
+}
+
+export async function addInkAnnotation(
+  input: string,
+  output: string,
+  ink: InkAnnotationInput,
+): Promise<void> {
+  await invoke("add_ink_annotation", { input, output, ink });
 }
 
 export async function deleteAnnotation(

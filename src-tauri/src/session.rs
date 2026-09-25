@@ -80,6 +80,26 @@ pub fn commit_revision(
     Ok(pdf::summary(document))
 }
 
+pub fn apply_revision<T, F>(
+    state: &AppState,
+    document_id: &str,
+    label: &str,
+    operation: F,
+) -> Result<(pdf::DocumentSummary, T), SevenError>
+where
+    F: FnOnce(&Path, &Path) -> Result<T, SevenError>,
+{
+    let prepared = prepare_revision(state, document_id, label)?;
+    let result = operation(prepared.document.active_path(), &prepared.output)?;
+    let summary = commit_revision(
+        state,
+        document_id,
+        prepared.expected_revision,
+        prepared.output,
+    )?;
+    Ok((summary, result))
+}
+
 pub fn undo(state: &AppState, document_id: &str) -> Result<pdf::DocumentSummary, SevenError> {
     let mut documents = state.documents.lock();
     let document = documents

@@ -53,6 +53,14 @@ pub struct NewFormField {
     pub tooltip: String,
     pub default_value: String,
     pub options: Vec<String>,
+    pub border_color: Option<[f64; 3]>,
+    pub fill_color: Option<[f64; 3]>,
+    pub border_width: f64,
+    pub border_style: String,
+    pub font_size: f64,
+    pub text_color: [f64; 3],
+    pub rotation: i32,
+    pub visibility: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -506,6 +514,57 @@ pub fn create_field(input: &Path, output: &Path, field: NewFormField) -> Result<
                 .collect::<Vec<_>>(),
         );
     }
+    for component in field.text_color
+        .iter()
+        .chain(field.border_color.iter().flatten())
+        .chain(field.fill_color.iter().flatten())
+    {
+        if !(0.0..=1.0).contains(component) {
+            return Err(SevenError::OperationRejected("Componentes de cor devem ficar entre 0 e 1".into()));
+        }
+    }
+    if !(0.0..=20.0).contains(&field.border_width)
+        || !(1.0..=200.0).contains(&field.font_size)
+        || !matches!(field.rotation, 0 | 90 | 180 | 270)
+        || !matches!(field.border_style.as_str(), "S" | "D" | "B" | "I" | "U")
+    {
+        return Err(SevenError::OperationRejected("Aparência do campo inválida".into()));
+    }
+
+    let mut mk = Dictionary::new();
+    if let Some(color) = field.border_color {
+        mk.set("BC", vec![color[0].into(), color[1].into(), color[2].into()]);
+    }
+    if let Some(color) = field.fill_color {
+        mk.set("BG", vec![color[0].into(), color[1].into(), color[2].into()]);
+    }
+    mk.set("R", i64::from(field.rotation));
+    dictionary.set("MK", mk);
+    dictionary.set("BS", dictionary! {
+        "Type" => "Border",
+        "W" => field.border_width,
+        "S" => Object::Name(field.border_style.as_bytes().to_vec()),
+    });
+    if ft == "Tx" || ft == "Ch" {
+        dictionary.set(
+            "DA",
+            Object::string_literal(format!(
+                "/Helv {:.2} Tf {:.4} {:.4} {:.4} rg",
+                field.font_size,
+                field.text_color[0],
+                field.text_color[1],
+                field.text_color[2],
+            )),
+        );
+    }
+    let annotation_flags = match field.visibility.as_str() {
+        "visible" => 4i64,
+        "visible-no-print" => 0i64,
+        "hidden" => 2i64,
+        "hidden-printable" => 2i64 | 4i64,
+        _ => return Err(SevenError::OperationRejected("Visibilidade inválida".into())),
+    };
+    dictionary.set("F", annotation_flags);
     if field.field_type == "checkbox" || field.field_type == "radio" {
         dictionary.set("V", Object::Name(b"Off".to_vec()));
         dictionary.set("AS", Object::Name(b"Off".to_vec()));

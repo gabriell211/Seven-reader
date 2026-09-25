@@ -362,25 +362,33 @@ export function EditingDialog({
       return;
     }
     if (mode === "overlay") {
-      onOverlay({
-        kind: overlayKind,
-        text,
-        prefix,
-        startNumber,
-        digits,
-        fontSize,
-        pageStart: Math.max(0, pageStart - 1),
-        pageEnd: Math.max(0, pageEnd - 1),
-      });
+      const options = currentOverlayOptions();
+      if (editingManagedId) {
+        onUpdateManagedOverlay(editingManagedId, options);
+      } else {
+        onOverlay(options);
+      }
+      setEditingManagedId("");
       return;
     }
-    const value = background.replace("#", "");
-    onBackground({
+
+    const options = currentBackgroundOptions();
+    if (editingManagedId) {
+      onUpdateManagedBackground(editingManagedId, options);
+    } else {
+      onBackground(options);
+    }
+    setEditingManagedId("");
+  };
+
+  const applyPageLabels = () => {
+    onSetPageLabels({
       pageStart: Math.max(0, pageStart - 1),
       pageEnd: Math.max(0, pageEnd - 1),
-      red: parseInt(value.slice(0, 2), 16) / 255,
-      green: parseInt(value.slice(2, 4), 16) / 255,
-      blue: parseInt(value.slice(4, 6), 16) / 255,
+      style: pageLabelStyle,
+      prefix: pageLabelPrefix,
+      suffix: pageLabelSuffix,
+      startNumber: Math.max(1, pageLabelStartNumber),
     });
   };
 
@@ -415,7 +423,12 @@ export function EditingDialog({
             ["overlay", "Cabeçalho / Bates", "pages"],
             ["background", "Fundo", "layers"],
           ] as const).map(([id, label, icon]) => (
-            <button key={id} className={mode === id ? "edit-mode active" : "edit-mode"} onClick={() => { setMode(id); if (id === "link") onReloadNamedDestinations(); }}>
+            <button key={id} className={mode === id ? "edit-mode active" : "edit-mode"} onClick={() => {
+              setMode(id);
+              setEditingManagedId("");
+              if (id === "link") onReloadNamedDestinations();
+              if (id === "overlay" || id === "background") onReloadManagedElements();
+            }}>
               <SevenIcon name={icon} /><span>{label}</span>
             </button>
           ))}

@@ -598,3 +598,26 @@ svg { width: 20px; height: 20px; }
 .ink-width-control { width: 104px; padding: 0 6px; display: grid; grid-template-columns: 1fr 34px; gap: 4px; align-items: center; }
 .ink-width-control input { min-width: 0; accent-color: var(--violet); }
 .ink-width-control small { color: #777984; font-size: 8px; text-align: right; white-space: nowrap; }
+
+.settings-help { margin: -4px 0 10px; color: #858790; font-size: 9.5px; line-height: 1.5; }
+.settings-order-list { display: grid; gap: 5px; }
+.settings-order-row { min-height: 38px; padding: 4px 6px 4px 10px; border: 1px solid #e5e4e9; border-radius: 9px; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; align-items: center; background: #fafafd; opacity: .65; }
+.settings-order-row.active { background: white; opacity: 1; }
+.settings-order-row > label { display: flex; gap: 8px; align-items: center; font-size: 10px; cursor: pointer; }
+.settings-order-row > label input { accent-color: var(--violet); }
+.settings-order-row > div { display: flex; gap: 2px; }
+.settings-order-row > div button { width: 27px; height: 27px; border: 0; border-radius: 7px; color: #696b74; background: #f0eff3; cursor: pointer; }
+.settings-order-row > div button:hover:not(:disabled) { color: #5633bd; background: #ebe5ff; }
+.settings-order-row > div button:disabled { opacity: .3; cursor: default; }
+.settings-inline-actions { display: flex; gap: 7px; flex-wrap: wrap; }
+.settings-inline-actions button { min-height: 32px; padding: 0 10px; border: 1px solid #dddce3; border-radius: 8px; color: #5f616a; background: white; cursor: pointer; font-size: 9px; font-weight: 700; }
+.quick-tools.quick-tools--free { position: absolute; }
+.quick-tools-drag { cursor: grab !important; touch-action: none; }
+.quick-tools-drag:active { cursor: grabbing !important; }
+.panel-task-list { height: calc(100% - 42px); overflow: auto; padding: 7px; display: grid; align-content: start; gap: 5px; }
+.panel-task-row { min-height: 52px; padding: 8px; border: 1px solid #e6e5ea; border-radius: 9px; display: grid; grid-template-columns: 9px minmax(0,1fr) auto; gap: 8px; align-items: center; background: white; }
+.panel-task-row > div { min-width: 0; display: grid; gap: 2px; }
+.panel-task-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: capitalize; font-size: 9.5px; }
+.panel-task-row small, .panel-task-row em { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #898b94; font-size: 8px; font-style: normal; }
+.panel-task-row em { color: #a44b58; }
+.panel-task-row b { color: #777984; font-size: 8px; }

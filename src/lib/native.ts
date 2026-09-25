@@ -219,6 +219,49 @@ export async function sessionCreateFormField(
   return invoke<DocumentSummary>("session_create_form_field", { documentId, field });
 }
 
+export async function sessionAddPdfBookmark(
+  documentId: string,
+  bookmark: BookmarkInput,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_add_pdf_bookmark", { documentId, bookmark });
+}
+
+export async function sessionRenamePdfBookmark(
+  documentId: string,
+  objectId: string,
+  title: string,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_rename_pdf_bookmark", { documentId, objectId, title });
+}
+
+export async function sessionAddPdfAttachment(
+  documentId: string,
+  filePath: string,
+  displayName: string,
+  description: string,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_add_pdf_attachment", {
+    documentId, filePath, displayName, description,
+  });
+}
+
+export async function sessionSetPdfLayerVisibility(
+  documentId: string,
+  objectId: string,
+  visible: boolean,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_set_pdf_layer_visibility", {
+    documentId, objectId, visible,
+  });
+}
+
+export async function sessionUpdateDocumentMetadata(
+  documentId: string,
+  update: MetadataUpdate,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_update_document_metadata", { documentId, update });
+}
+
 export async function printDocument(input: string): Promise<JobStart> {
   return invoke<JobStart>("start_print_document", { input });
 }

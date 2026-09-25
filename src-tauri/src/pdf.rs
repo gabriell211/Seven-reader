@@ -166,7 +166,9 @@ pub fn render_page(
         )
         .map_err(|error| SevenError::Render(error.to_string()))?;
 
-    let image = bitmap.as_image();
+    let image = bitmap
+        .as_image()
+        .map_err(|error| SevenError::Render(error.to_string()))?;
     let width = image.width();
     let height = image.height();
     image.save(&cache_path).map_err(|error| SevenError::Render(error.to_string()))?;

@@ -74,6 +74,7 @@ pub fn run() {
             commands::set_pdf_layer_visibility,
             commands::list_annotations,
             commands::add_annotation,
+            commands::add_ink_annotation,
             commands::delete_annotation,
             commands::list_form_fields,
             commands::fill_form_fields,

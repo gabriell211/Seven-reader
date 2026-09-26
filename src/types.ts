@@ -264,6 +264,18 @@ export interface SanitizeReport {
   output: string;
 }
 
+export interface SanitizeAnalysis {
+  metadataEntries: number;
+  annotationCount: number;
+  attachmentEntries: number;
+  javascriptEntries: number;
+  actionEntries: number;
+  xfaEntries: number;
+  formFieldCount: number;
+  multimediaEntries: number;
+  invalidStructureEntries: number;
+}
+
 export interface AccessibilityCheck {
   id: string;
   label: string;

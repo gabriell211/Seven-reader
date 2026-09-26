@@ -10,12 +10,14 @@ use crate::{
     error::{CommandResult, ErrorPayload, SevenError},
     jobs::{self, JobStart},
     forms,
+    iso_validation,
     ocr,
     optimizer,
     document_ops,
     editing,
     pdf,
     print_production,
+    printing,
     redaction,
     search,
     session,
@@ -3936,6 +3938,249 @@ pub fn start_batch_redact_by_search(
                 return Ok(());
             }
             redaction::apply_redactions(&state_snapshot, input, output, &areas).map(|_| ())
+        },
+    ))
+}
+
+fn validate_batch_rename_fragment(value: &str, label: &str) -> Result<String, SevenError> {
+    let value = value.trim();
+    if value.chars().count() > 80 {
+        return Err(SevenError::OperationRejected(format!("{label} excede 80 caracteres")));
+    }
+    if value.chars().any(|ch| matches!(ch, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' | '\0' | '\r' | '\n')) {
+        return Err(SevenError::OperationRejected(format!("{label} contém caracteres inválidos para nome de arquivo")));
+    }
+    Ok(value.to_owned())
+}
+
+#[tauri::command]
+pub fn start_batch_split_pdf(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    inputs: Vec<String>,
+    output_directory: String,
+    pages_per_file: u16,
+) -> CommandResult<JobStart> {
+    if !(1..=500).contains(&pages_per_file) {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "Páginas por arquivo deve ficar entre 1 e 500".into(),
+        )));
+    }
+    let executable = jobs::require_executable(&["qpdf"], "qpdf").map_err(ErrorPayload::from)?;
+    let (output_directory, items) =
+        prepare_batch_pdf_outputs(inputs, output_directory, "dividido")?;
+    let total = items.len();
+    let mut steps = Vec::with_capacity(total);
+
+    for (index, (input, output, name)) in items.into_iter().enumerate() {
+        steps.push(jobs::ProcessStep {
+            program: executable.clone(),
+            args: vec![
+                format!("--split-pages={pages_per_file}"),
+                input.to_string_lossy().into_owned(),
+                output.to_string_lossy().into_owned(),
+            ],
+            label: format!("Dividindo {} de {} · {name}", index + 1, total),
+        });
+    }
+
+    Ok(jobs::start_process_sequence_job(
+        app,
+        &state,
+        "batch-split",
+        steps,
+        Some(output_directory),
+    ))
+}
+
+#[tauri::command]
+pub fn start_batch_extract_pdf(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    inputs: Vec<String>,
+    output_directory: String,
+    page_range: String,
+) -> CommandResult<JobStart> {
+    let executable = jobs::require_executable(&["qpdf"], "qpdf").map_err(ErrorPayload::from)?;
+    let page_range = jobs::validated_page_range(&page_range).map_err(ErrorPayload::from)?;
+    let (output_directory, items) =
+        prepare_batch_pdf_outputs(inputs, output_directory, "extraido")?;
+    let total = items.len();
+    let mut steps = Vec::with_capacity(total);
+
+    for (index, (input, output, name)) in items.into_iter().enumerate() {
+        steps.push(jobs::ProcessStep {
+            program: executable.clone(),
+            args: vec![
+                input.to_string_lossy().into_owned(),
+                "--pages".into(),
+                ".".into(),
+                page_range.clone(),
+                "--".into(),
+                output.to_string_lossy().into_owned(),
+            ],
+            label: format!("Extraindo {} de {} · {name}", index + 1, total),
+        });
+    }
+
+    Ok(jobs::start_process_sequence_job(
+        app,
+        &state,
+        "batch-extract",
+        steps,
+        Some(output_directory),
+    ))
+}
+
+#[tauri::command]
+pub fn start_batch_rename_pdf(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    inputs: Vec<String>,
+    output_directory: String,
+    prefix: String,
+    suffix: String,
+) -> CommandResult<JobStart> {
+    if inputs.is_empty() || inputs.len() > 500 {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "Selecione entre 1 e 500 PDFs para renomear".into(),
+        )));
+    }
+    let output_directory = jobs::validated_directory(&output_directory).map_err(ErrorPayload::from)?;
+    let prefix = validate_batch_rename_fragment(&prefix, "Prefixo").map_err(ErrorPayload::from)?;
+    let suffix = validate_batch_rename_fragment(&suffix, "Sufixo").map_err(ErrorPayload::from)?;
+    if prefix.is_empty() && suffix.is_empty() {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "Informe um prefixo ou sufixo para o renomeio".into(),
+        )));
+    }
+
+    let mut items = Vec::with_capacity(inputs.len());
+    let mut reserved = std::collections::HashSet::new();
+    for input in inputs {
+        let canonical = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+        let stem = canonical.file_stem().and_then(|value| value.to_str()).unwrap_or("documento");
+        let base = format!("{prefix}{stem}{suffix}");
+        let mut output = output_directory.join(format!("{base}.pdf"));
+        let mut index = 2usize;
+        while output.exists() || !reserved.insert(output.to_string_lossy().to_ascii_lowercase()) {
+            output = output_directory.join(format!("{base}-{index}.pdf"));
+            index += 1;
+        }
+        let name = canonical.file_name().and_then(|value| value.to_str()).unwrap_or("documento.pdf").to_owned();
+        items.push((canonical, output, name));
+    }
+
+    let labels = items.iter().enumerate()
+        .map(|(index, (_, _, name))| format!("Renomeando {} de {} · {name}", index + 1, items.len()))
+        .collect::<Vec<_>>();
+    let batch_items = items.clone();
+
+    Ok(jobs::start_rust_batch_job(
+        app,
+        &state,
+        "batch-rename",
+        labels,
+        Some(output_directory),
+        move |index| {
+            let (input, output, _) = &batch_items[index];
+            fs::copy(input, output).map_err(|error| SevenError::Io(error.to_string()))?;
+            pdf::validate_pdf_path(output.to_string_lossy().as_ref())?;
+            Ok(())
+        },
+    ))
+}
+
+#[tauri::command]
+pub fn start_batch_validate_pdfa(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    inputs: Vec<String>,
+    output_directory: String,
+    flavour: String,
+) -> CommandResult<JobStart> {
+    if inputs.is_empty() || inputs.len() > 200 {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "Selecione entre 1 e 200 PDFs para validar".into(),
+        )));
+    }
+    let executable = jobs::require_executable(&["verapdf", "verapdf.bat"], "veraPDF")
+        .map_err(ErrorPayload::from)?;
+    let output_directory = jobs::validated_directory(&output_directory).map_err(ErrorPayload::from)?;
+    let mut items = Vec::with_capacity(inputs.len());
+    for input in inputs {
+        let canonical = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+        let stem = canonical.file_stem().and_then(|value| value.to_str()).unwrap_or("documento").to_owned();
+        let name = canonical.file_name().and_then(|value| value.to_str()).unwrap_or("documento.pdf").to_owned();
+        let report = output_directory.join(format!("{stem}-pdfa-relatorio.json"));
+        items.push((canonical, report, name));
+    }
+    let labels = items.iter().enumerate()
+        .map(|(index, (_, _, name))| format!("Validando PDF/A {} de {} · {name}", index + 1, items.len()))
+        .collect::<Vec<_>>();
+    let batch_items = items.clone();
+    let batch_executable = executable.clone();
+    let batch_flavour = flavour.clone();
+
+    Ok(jobs::start_rust_batch_job(
+        app,
+        &state,
+        "batch-validate-pdfa",
+        labels,
+        Some(output_directory),
+        move |index| {
+            let (input, report_path, _) = &batch_items[index];
+            let report = iso_validation::validate(
+                &batch_executable,
+                input,
+                &batch_flavour,
+                None,
+            )?;
+            let bytes = serde_json::to_vec_pretty(&report)
+                .map_err(|error| SevenError::Operation(error.to_string()))?;
+            fs::write(report_path, bytes).map_err(|error| SevenError::Io(error.to_string()))
+        },
+    ))
+}
+
+#[tauri::command]
+pub fn start_batch_preflight_pdf(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    inputs: Vec<String>,
+    output_directory: String,
+) -> CommandResult<JobStart> {
+    if inputs.is_empty() || inputs.len() > 500 {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "Selecione entre 1 e 500 PDFs para Preflight".into(),
+        )));
+    }
+    let output_directory = jobs::validated_directory(&output_directory).map_err(ErrorPayload::from)?;
+    let mut items = Vec::with_capacity(inputs.len());
+    for input in inputs {
+        let canonical = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+        let stem = canonical.file_stem().and_then(|value| value.to_str()).unwrap_or("documento").to_owned();
+        let name = canonical.file_name().and_then(|value| value.to_str()).unwrap_or("documento.pdf").to_owned();
+        let report = output_directory.join(format!("{stem}-preflight.json"));
+        items.push((canonical, report, name));
+    }
+    let labels = items.iter().enumerate()
+        .map(|(index, (_, _, name))| format!("Preflight {} de {} · {name}", index + 1, items.len()))
+        .collect::<Vec<_>>();
+    let batch_items = items.clone();
+
+    Ok(jobs::start_rust_batch_job(
+        app,
+        &state,
+        "batch-preflight",
+        labels,
+        Some(output_directory),
+        move |index| {
+            let (input, report_path, _) = &batch_items[index];
+            let report = print_production::preflight(input)?;
+            let bytes = serde_json::to_vec_pretty(&report)
+                .map_err(|error| SevenError::Operation(error.to_string()))?;
+            fs::write(report_path, bytes).map_err(|error| SevenError::Io(error.to_string()))
         },
     ))
 }

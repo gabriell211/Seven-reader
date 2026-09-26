@@ -84,7 +84,8 @@ interface WorkspaceProps {
   onSaveAs: () => void;
   onUndo: () => void;
   onRedo: () => void;
-  onPrint: () => void;
+  onPrint: (selection?: NormalizedRect) => void;
+  onSelectionChange: (selection: NormalizedRect | null) => void;
   onRender: (page: number, zoom: number) => void;
   onVisiblePage: (page: number) => void;
   onViewModeChange: (mode: ViewMode) => void;
@@ -168,6 +169,7 @@ export function DocumentWorkspace({
   onUndo,
   onRedo,
   onPrint,
+  onSelectionChange,
   onRender,
   onVisiblePage,
   onViewModeChange,
@@ -341,6 +343,10 @@ export function DocumentWorkspace({
   }, [immersiveMode]);
 
   useEffect(() => {
+    onSelectionChange(selectionRect);
+  }, [selectionRect]);
+
+  useEffect(() => {
     if (!tabMenu) return;
     const close = () => setTabMenu(null);
     window.addEventListener("click", close);
@@ -415,7 +421,7 @@ export function DocumentWorkspace({
   const runGlobalCommand = (command: "save" | "print" | "settings" | "properties") => {
     setSearchFocused(false);
     if (command === "save") onSave();
-    else if (command === "print") onPrint();
+    else if (command === "print") onPrint(selectionRect ?? undefined);
     else if (command === "settings") onSettings();
     else onTool("properties");
   };
@@ -1143,7 +1149,7 @@ export function DocumentWorkspace({
               <button disabled={!document.dirty} onClick={() => { setMainMenu(null); onSave(); }}><span>Salvar</span><kbd>Ctrl+S</kbd></button>
               <button onClick={() => { setMainMenu(null); onSaveAs(); }}><span>Salvar como…</span><kbd>Ctrl+Shift+S</kbd></button>
               <i />
-              <button disabled={!capabilities?.printing?.available} onClick={() => { setMainMenu(null); onPrint(); }}><span>Imprimir…</span><kbd>Ctrl+P</kbd></button>
+              <button disabled={!capabilities?.printing?.available} onClick={() => { setMainMenu(null); onPrint(selectionRect ?? undefined); }}><span>Imprimir…</span><kbd>Ctrl+P</kbd></button>
               <button disabled={!canCreateWindow} onClick={() => { setMainMenu(null); onOpenInNewWindow(document.id); }}><span>Abrir em nova janela</span></button>
               <i />
               <button onClick={() => { setMainMenu(null); onCloseTab(document.id); }}><span>Fechar documento</span><kbd>Ctrl+W</kbd></button>
@@ -1222,7 +1228,7 @@ export function DocumentWorkspace({
           className="global-action compact"
           disabled={!capabilities?.printing?.available}
           title={capabilities?.printing?.available ? "Imprimir com o sistema operacional" : "Serviço de impressão não disponível"}
-          onClick={onPrint}
+          onClick={() => onPrint(selectionRect ?? undefined)}
         ><SevenIcon name="print" /><span>Imprimir</span></button>
       </nav>
 

@@ -58,6 +58,7 @@ import {
   openDocument,
   printDocument,
   renderPage,
+  renderPages,
   restoreDocumentSession,
   revealInFileManager,
   deleteAnnotation,
@@ -205,6 +206,7 @@ import type {
   SignatureValidationReport,
   TextPlacement,
   ToolId,
+  ViewMode,
 } from "./types";
 
 const RECENTS_KEY = "seven-reader:recents:v1";
@@ -281,6 +283,8 @@ export default function App() {
   const [closedTabs, setClosedTabs] = useState<Array<{ path: string; page: number; zoom: number }>>([]);
   const [navHistories, setNavHistories] = useState<Record<string, { entries: number[]; index: number }>>({});
   const [rendered, setRendered] = useState<RenderResult | null>(null);
+  const [renderedPages, setRenderedPages] = useState<RenderResult[]>([]);
+  const [viewMode, setViewMode] = useState<ViewMode>("single");
   const [page, setPage] = useState(0);
   const [zoom, setZoom] = useState(100);
   const [recents, setRecents] = useState<RecentDocument[]>(loadRecents);
@@ -532,6 +536,7 @@ export default function App() {
     setSearchHits([]);
     setAdvancedSearchHits([]);
     setRendered(null);
+    setRenderedPages([]);
 
     try {
       const security = await inspectAdvancedPdf(summary.activePath);
@@ -553,6 +558,7 @@ export default function App() {
     const targetWidth = Math.max(900, Math.min(6000, Math.round(1400 * (nextZoom / 100))));
     const first = await renderPage(summary.id, nextPage, targetWidth);
     setRendered(first);
+    setRenderedPages([first]);
   };
 
   const openPath = async (path: string, preferredView?: { page: number; zoom: number }) => {
@@ -777,6 +783,7 @@ export default function App() {
     } else {
       setDocument(null);
       setRendered(null);
+      setRenderedPages([]);
       setSearchHits([]);
       setAdvancedSearchHits([]);
       setProtectedView(false);

@@ -11,6 +11,7 @@ mod editing;
 mod error;
 mod forms;
 mod jobs;
+mod iso_validation;
 mod interactive;
 mod measurement;
 mod ocr;
@@ -214,6 +215,7 @@ pub fn run() {
             commands::fill_form_fields,
             commands::create_form_field,
             commands::get_page_preflight,
+            commands::validate_pdf_iso,
             commands::get_print_preflight,
             commands::session_set_page_geometry,
             commands::session_set_page_boxes,

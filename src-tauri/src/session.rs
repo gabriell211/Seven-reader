@@ -77,6 +77,8 @@ pub fn commit_revision(
     document.working_path = Some(output);
     document.file_size = metadata.len();
     document.revision = document.revision.saturating_add(1);
+    let active = document.active_path().to_path_buf();
+    pdf::refresh_document_facts(document, &active)?;
     Ok(pdf::summary(document))
 }
 
@@ -130,6 +132,8 @@ pub fn commit_revision_pair(
         first.working_path = Some(first_output);
         first.file_size = first_metadata.len();
         first.revision = first.revision.saturating_add(1);
+        let active = first.active_path().to_path_buf();
+        pdf::refresh_document_facts(first, &active)?;
     }
 
     {
@@ -144,6 +148,8 @@ pub fn commit_revision_pair(
         second.working_path = Some(second_output);
         second.file_size = second_metadata.len();
         second.revision = second.revision.saturating_add(1);
+        let active = second.active_path().to_path_buf();
+        pdf::refresh_document_facts(second, &active)?;
     }
 
     let first_summary = pdf::summary(

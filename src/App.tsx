@@ -870,6 +870,11 @@ export default function App() {
     });
   };
 
+  const closeOpenDocumentFromHome = async (documentId: string) => {
+    await closeTab(documentId);
+    setHomeVisible(true);
+  };
+
   const resumeOpenDocument = async (documentId: string) => {
     const tab = openTabs.find((item) => item.id === documentId);
     if (!tab) return;
@@ -3749,7 +3754,7 @@ export default function App() {
         openDocuments={openTabs}
         activeDocumentId={document?.id ?? null}
         onResumeDocument={(documentId) => void resumeOpenDocument(documentId)}
-        onCloseOpenDocument={(documentId) => void closeTab(documentId)}
+        onCloseOpenDocument={(documentId) => void closeOpenDocumentFromHome(documentId)}
         onOpen={() => void choosePdf()}
         onOpenFolder={() => void chooseFolder()}
         lastSessionPath={localStorage.getItem("seven-reader:last-document")}

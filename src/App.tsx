@@ -28,6 +28,7 @@ import { GuidedActionsDialog, type GuidedActionKind } from "./components/GuidedA
 import { SharedReviewDialog } from "./components/SharedReviewDialog";
 import { OptimizeDialog } from "./components/OptimizeDialog";
 import { InteractiveContentDialog, type InteractiveMode } from "./components/InteractiveContentDialog";
+import { PrintDialog } from "./components/PrintDialog";
 import { applyAccessibilityPreferences, applyAppearance, isTrustedPath, loadSettings, saveSettings, type SevenSettings } from "./lib/settings";
 import {
   buildCatalog,
@@ -61,6 +62,8 @@ import {
   reloadDocumentFromSource,
   getOptimizationAudit,
   listInteractiveAssets,
+  listPrinters,
+  printDocumentAdvanced,
   extractInteractiveAsset,
   listGeospatialViewports,
   resolveGeospatialCoordinate,
@@ -257,6 +260,8 @@ import type {
   PageActionInfo,
   PageActionInput,
   PrintPreflightReport,
+  PrinterInfo,
+  PrintOptions,
   PortfolioPreview,
   PortfolioSearchHit,
   PageBoxUpdate,
@@ -439,6 +444,10 @@ export default function App() {
   const [pdfActions, setPdfActions] = useState<PdfActionInfo[]>([]);
   const [pageActions, setPageActions] = useState<PageActionInfo[]>([]);
   const [actionsLoading, setActionsLoading] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
+  const [printers, setPrinters] = useState<PrinterInfo[]>([]);
+  const [printersLoading, setPrintersLoading] = useState(false);
+  const [printSelection, setPrintSelection] = useState<import("./types").NormalizedRect | null>(null);
   const [printProductionOpen, setPrintProductionOpen] = useState(false);
   const [printPreflight, setPrintPreflight] = useState<PrintPreflightReport | null>(null);
   const [printPreflightLoading, setPrintPreflightLoading] = useState(false);
@@ -569,7 +578,7 @@ export default function App() {
       }
       if (modifier && event.key.toLowerCase() === "p" && document) {
         event.preventDefault();
-        void runPrint();
+        openPrintDialog();
       }
       if (modifier && event.key === "0" && document) {
         event.preventDefault();
@@ -3561,11 +3570,41 @@ export default function App() {
     }
   };
 
-  const runPrint = async () => {
+  const openPrintDialog = (selection?: import("./types").NormalizedRect) => {
+    if (!document) return;
+    setPrintSelection(selection ?? printSelection ?? null);
+    setPrintOpen(true);
+  };
+
+  const reloadPrinters = async () => {
+    try {
+      setPrintersLoading(true);
+      setPrinters(await listPrinters());
+    } catch (error) {
+      setPrinters([]);
+      setNotice(errorMessage(error));
+    } finally {
+      setPrintersLoading(false);
+    }
+  };
+
+  const runPrintAdvanced = async (options: PrintOptions) => {
+    if (!document) return;
+    try {
+      const started = await printDocumentAdvanced(document.activePath, options);
+      setPrintOpen(false);
+      setNotice(`Impressão configurada iniciada · job ${started.jobId.slice(0, 8)}`);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runSystemPrint = async () => {
     if (!document) return;
     try {
       const started = await printDocument(document.activePath);
-      setNotice(`Impressão enviada ao sistema · job ${started.jobId.slice(0, 8)}`);
+      setPrintOpen(false);
+      setNotice(`Impressão básica enviada ao sistema · job ${started.jobId.slice(0, 8)}`);
     } catch (error) {
       setNotice(errorMessage(error));
     }
@@ -3593,6 +3632,7 @@ export default function App() {
           onCancel={cancelClosePrompt}
         />
       )}
+      {printOpen && document && <PrintDialog fileName={document.name} currentPage={page} pageCount={document.pageCount} selection={printSelection ?? undefined} printers={printers} loading={printersLoading} advancedAvailable={Boolean(capabilities?.ghostscript?.available)} qpdfAvailable={Boolean(capabilities?.qpdf?.available)} onClose={() => setPrintOpen(false)} onReload={() => void reloadPrinters()} onPrint={(options) => void runPrintAdvanced(options)} onSystemPrint={() => void runSystemPrint()} />}
       {interactiveMode && document && <InteractiveContentDialog mode={interactiveMode} pageIndex={page} assets={interactiveAssets} viewports={geospatialViewports} coordinate={geospatialCoordinate} loading={interactiveLoading} onClose={() => setInteractiveMode(null)} onReload={() => void reloadInteractiveContent()} onExtract={(objectId, destination) => void runExtractInteractiveAsset(objectId, destination)} onResolve={(pageIndex, normalizedX, normalizedY) => void runResolveGeospatial(pageIndex, normalizedX, normalizedY)} />}
       {optimizeOpen && document && <OptimizeDialog documentPath={document.activePath} audit={optimizationAudit} loading={optimizationAuditLoading} onClose={() => setOptimizeOpen(false)} onAudit={() => void reloadOptimizationAudit()} onRun={(output, options) => void runOptimizeAdvanced(output, options)} />}
       {sharedReviewOpen && document && <SharedReviewDialog documentPath={document.activePath} lastReport={reviewTransferReport} onClose={() => setSharedReviewOpen(false)} onExport={(destination) => void runExportReview(destination)} onImport={(xfdf) => void runImportReview(xfdf)} />}
@@ -3912,7 +3952,8 @@ export default function App() {
           onSaveAs={() => void saveAs()}
           onUndo={() => void undoCurrent()}
           onRedo={() => void redoCurrent()}
-          onPrint={() => void runPrint()}
+          onPrint={(selection) => openPrintDialog(selection)}
+          onSelectionChange={setPrintSelection}
           onRender={(nextPage, nextZoom) => void render(nextPage, nextZoom)}
           onVisiblePage={(nextPage) => void updateVisiblePage(nextPage)}
           onViewModeChange={(mode) => void changeViewMode(mode)}

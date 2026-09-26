@@ -1208,6 +1208,38 @@ export async function startBatchOcr(
   return invoke<JobStart>("start_batch_ocr", { inputs, outputDirectory, options });
 }
 
+export async function startBatchSanitize(
+  inputs: string[],
+  outputDirectory: string,
+  options: SanitizeOptions,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_batch_sanitize_pdf", { inputs, outputDirectory, options });
+}
+
+export async function startBatchOverlay(
+  inputs: string[],
+  outputDirectory: string,
+  options: OverlayTextOptions,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_batch_overlay_pdf", { inputs, outputDirectory, options });
+}
+
+export async function startBatchRedactBySearch(
+  inputs: string[],
+  outputDirectory: string,
+  query: string,
+  matchCase = false,
+  wholeWord = false,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_batch_redact_by_search", {
+    inputs,
+    outputDirectory,
+    query,
+    matchCase,
+    wholeWord,
+  });
+}
+
 export async function detectOcrLanguage(
   documentId: string,
   pageIndex: number,

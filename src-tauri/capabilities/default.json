@@ -19,6 +19,7 @@
     "clipboard-manager:allow-read-image",
     "clipboard-manager:allow-write-image",
     "clipboard-manager:allow-clear",
-    "core:window:allow-destroy"
+    "core:window:allow-destroy",
+    "core:webview:allow-create-webview-window"
   ]
 }

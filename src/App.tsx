@@ -39,7 +39,6 @@ import {
   addInkAnnotation,
   cancelJob,
   closeDocument,
-  compareDocuments,
   compareDocumentsAdvanced,
   exportCompareReportPdf,
   createPdfFromImages,

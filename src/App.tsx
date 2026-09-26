@@ -45,6 +45,8 @@ import {
   createBlankDocument,
   getAccessibilityReport,
   getCapabilities,
+  getExternalFileStatus,
+  reloadDocumentFromSource,
   getOptimizationAudit,
   getDocumentMetadata,
   getPrintPreflight,
@@ -171,6 +173,7 @@ import type {
   DocumentMetadata,
   DuplicateFieldRequest,
   DocumentSummary,
+  ExternalFileStatus,
   FormFieldInfo,
   FieldActionInfo,
   FieldActionInput,
@@ -297,6 +300,7 @@ export default function App() {
   const [taskHistory, setTaskHistory] = useState<JobStatus[]>(loadTaskHistory);
   const [recentTools, setRecentTools] = useState<ToolId[]>(loadRecentTools);
   const [notice, setNotice] = useState<string | null>(null);
+  const [externalFileStatus, setExternalFileStatus] = useState<ExternalFileStatus | null>(null);
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [guidedActionsOpen, setGuidedActionsOpen] = useState(false);
   const [sharedReviewOpen, setSharedReviewOpen] = useState(false);
@@ -407,6 +411,42 @@ export default function App() {
     return () => dispose?.();
   }, [native]);
 
+
+  useEffect(() => {
+    if (!native || !document) {
+      setExternalFileStatus(null);
+      return;
+    }
+    let cancelled = false;
+    let running = false;
+
+    const check = async () => {
+      if (running) return;
+      running = true;
+      try {
+        const status = await getExternalFileStatus(document.id);
+        if (!cancelled) {
+          setExternalFileStatus(status);
+          if (status.changed) {
+            setNotice(status.exists
+              ? "O arquivo foi alterado fora do Seven Reader."
+              : "O arquivo original foi removido ou movido no disco.");
+          }
+        }
+      } catch {
+        // Document may be closing between timer ticks.
+      } finally {
+        running = false;
+      }
+    };
+
+    void check();
+    const timer = window.setInterval(() => void check(), 4000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [native, document?.id, document?.revision]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -565,6 +605,7 @@ export default function App() {
     const nextPage = Math.max(0, Math.min(summary.pageCount - 1, saved.page));
     const nextZoom = Math.max(25, Math.min(400, saved.zoom));
     setDocument(summary);
+    setExternalFileStatus(null);
     setPage(nextPage);
     setZoom(nextZoom);
     setTabViews((current) => ({ ...current, [summary.id]: { page: nextPage, zoom: nextZoom } }));
@@ -1103,6 +1144,24 @@ export default function App() {
     setOpenTabs((current) => current.map((tab) => tab.id === summary.id ? summary : tab));
     await renderDocumentWindow(summary, page, zoom);
     setNotice(successMessage);
+  };
+
+  const reloadExternalDocument = async () => {
+    if (!document) return;
+    if (document.dirty) {
+      setNotice("Há alterações locais não salvas. Use Salvar como antes de recarregar o arquivo externo.");
+      return;
+    }
+    try {
+      const summary = await reloadDocumentFromSource(document.id);
+      setDocument(summary);
+      setOpenTabs((current) => current.map((tab) => tab.id === summary.id ? summary : tab));
+      setExternalFileStatus(null);
+      await renderDocumentWindow(summary, page, zoom);
+      setNotice("Arquivo recarregado do disco.");
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
   };
 
   const saveCurrent = async () => {
@@ -2951,6 +3010,8 @@ export default function App() {
           onAdvancedSearch={(options) => void runAdvancedSearch(options)}
           onTool={(tool) => void selectTool(tool)}
           onSettings={() => setSettingsOpen(true)}
+          externalFileStatus={externalFileStatus}
+          onReloadExternal={() => void reloadExternalDocument()}
           protectedView={protectedView}
           protectedReasons={protectedReasons}
           onTrustOnce={trustCurrentOnce}

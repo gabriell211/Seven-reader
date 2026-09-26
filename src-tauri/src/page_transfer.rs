@@ -117,6 +117,11 @@ pub fn transfer_pages(
         .cloned()
         .ok_or(SevenError::DocumentNotOpen)?;
 
+    if source.encrypted || target.encrypted {
+        return Err(SevenError::OperationRejected(
+            "Descriptografe os dois PDFs antes de transferir páginas entre documentos".into(),
+        ));
+    }
     if source.has_signatures || target.has_signatures {
         return Err(SevenError::OperationRejected(
             "A transferência entre documentos assinados foi bloqueada para não invalidar assinaturas digitais.".into(),

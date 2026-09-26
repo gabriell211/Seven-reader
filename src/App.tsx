@@ -504,6 +504,7 @@ export default function App() {
   } | null>(null);
   const [closeBusy, setCloseBusy] = useState(false);
   const sessionRestoredRef = useRef(false);
+  const watchFoldersRestoredRef = useRef(false);
 
   useEffect(() => {
     applyAppearance(settings.appearance);
@@ -549,6 +550,45 @@ export default function App() {
     }).then((unlisten) => { dispose = unlisten; });
     return () => dispose?.();
   }, [native]);
+
+  useEffect(() => {
+    if (!native) return;
+    let dispose: (() => void) | undefined;
+    void listen<WatchFolderEvent>("seven://watch-folder", ({ payload }) => {
+      setWatchFolderEvents((current) => [payload, ...current].slice(0, 40));
+      if (payload.state === "error") setNotice(`Watch Folder: ${payload.detail}`);
+    }).then((unlisten) => { dispose = unlisten; });
+    return () => dispose?.();
+  }, [native]);
+
+  useEffect(() => {
+    if (!native || watchFoldersRestoredRef.current || !capabilities.office.available) return;
+    watchFoldersRestoredRef.current = true;
+    void (async () => {
+      try {
+        const raw = localStorage.getItem(WATCH_FOLDERS_KEY);
+        const stored = raw ? JSON.parse(raw) : [];
+        const configs = Array.isArray(stored) ? stored as WatchFolderConfig[] : [];
+        const restored: WatchFolderConfig[] = [];
+        for (const config of configs) {
+          try {
+            restored.push(await startWatchFolder(config));
+          } catch (error) {
+            restored.push({ ...config, enabled: false });
+            setWatchFolderEvents((current) => [{
+              watcherId: config.id,
+              state: "error",
+              detail: errorMessage(error),
+            }, ...current].slice(0, 40));
+          }
+        }
+        setWatchFolders(restored);
+        localStorage.setItem(WATCH_FOLDERS_KEY, JSON.stringify(restored));
+      } catch (error) {
+        setNotice(`Falha ao restaurar Watch Folders: ${errorMessage(error)}`);
+      }
+    })();
+  }, [native, capabilities.office.available]);
 
 
   useEffect(() => {

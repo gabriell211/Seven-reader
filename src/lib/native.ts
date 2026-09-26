@@ -612,6 +612,69 @@ export async function listPdfFilesInFolder(
   return invoke<string[]>("list_pdf_files_in_folder", { path, recursive, limit });
 }
 
+export async function startInsertBlankPages(
+  input: string,
+  output: string,
+  insertAfter: number,
+  pageSize: "a4" | "letter" | "legal",
+  pageCount: number,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_insert_blank_pages", { input, output, insertAfter, pageSize, pageCount });
+}
+
+export async function startInsertImagePages(
+  input: string,
+  output: string,
+  insertAfter: number,
+  images: string[],
+  dpi: number,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_insert_image_pages", { input, output, insertAfter, images, dpi });
+}
+
+export async function startInsertTextPages(
+  input: string,
+  output: string,
+  insertAfter: number,
+  text: string,
+  pageSize: "a4" | "letter" | "legal",
+  fontSize: number,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_insert_text_pages", { input, output, insertAfter, text, pageSize, fontSize });
+}
+
+export async function startInsertClipboardImagePages(
+  input: string,
+  output: string,
+  insertAfter: number,
+  rgba: number[],
+  width: number,
+  height: number,
+  dpi: number,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_insert_clipboard_image_pages", {
+    input, output, insertAfter, rgba, width, height, dpi,
+  });
+}
+
+export async function startInsertWebPages(
+  input: string,
+  output: string,
+  insertAfter: number,
+  url: string,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_insert_web_pages", { input, output, insertAfter, url });
+}
+
+export async function startInsertScannedPage(
+  input: string,
+  output: string,
+  insertAfter: number,
+  dpi: number,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_insert_scanned_page", { input, output, insertAfter, dpi });
+}
+
 export async function createBlankDocument(
   destination: string,
   pageSize: "a4" | "letter" | "legal",

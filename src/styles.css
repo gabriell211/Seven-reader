@@ -1044,3 +1044,13 @@ svg { width: 20px; height: 20px; }
 .immersive-presentation .reflow-view { width:min(900px,calc(100vw - 48px)); min-height:calc(100vh - 36px); }
 
 .tab-context-divider { height:1px; margin:4px 5px; background:#ecebf0; }
+
+.external-change-banner { position:absolute; z-index:34; left:48px; right:0; top:0; min-height:48px; padding:8px 12px; border-bottom:1px solid #e7c773; display:grid; grid-template-columns:24px minmax(0,1fr) auto; gap:9px; align-items:center; color:#6f571b; background:rgba(255,248,222,.98); box-shadow:0 5px 18px rgba(43,35,12,.08); }
+.external-change-banner.danger { color:#8a3946; border-bottom-color:#e6b8c0; background:rgba(255,240,243,.98); }
+.external-change-banner > svg { width:18px; }
+.external-change-banner > div { min-width:0; display:grid; gap:2px; }
+.external-change-banner strong { font-size:10px; }
+.external-change-banner span { color:#82744e; font-size:8.5px; }
+.external-change-banner.danger span { color:#98606a; }
+.external-change-banner button { min-height:30px; padding:0 10px; border:1px solid rgba(114,84,16,.2); border-radius:7px; color:inherit; background:white; cursor:pointer; font-size:8.5px; font-weight:750; }
+.external-change-banner button:disabled { opacity:.45; cursor:default; }

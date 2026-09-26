@@ -4179,6 +4179,36 @@ pub fn get_job_status(state: State<'_, AppState>, job_id: String) -> CommandResu
 }
 
 #[tauri::command]
+pub fn pause_job(state: State<'_, AppState>, job_id: String) -> CommandResult<()> {
+    let jobs = state.jobs.lock();
+    let runtime = jobs
+        .get(&job_id)
+        .ok_or_else(|| ErrorPayload::from(SevenError::NotFound(job_id.clone())))?;
+    if !matches!(runtime.status.state.as_str(), "queued" | "running") {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "Somente tarefas na fila ou em execução podem ser pausadas".into(),
+        )));
+    }
+    runtime.paused.store(true, Ordering::Relaxed);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn resume_job(state: State<'_, AppState>, job_id: String) -> CommandResult<()> {
+    let jobs = state.jobs.lock();
+    let runtime = jobs
+        .get(&job_id)
+        .ok_or_else(|| ErrorPayload::from(SevenError::NotFound(job_id.clone())))?;
+    if runtime.status.state != "paused" && !runtime.paused.load(Ordering::Relaxed) {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "A tarefa não está pausada".into(),
+        )));
+    }
+    runtime.paused.store(false, Ordering::Relaxed);
+    Ok(())
+}
+
+#[tauri::command]
 pub fn cancel_job(state: State<'_, AppState>, job_id: String) -> CommandResult<()> {
     let jobs = state.jobs.lock();
     let runtime = jobs.get(&job_id).ok_or_else(|| ErrorPayload::from(SevenError::NotFound(job_id)))?;

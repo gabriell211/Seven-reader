@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import type { DocumentSummary } from "../types";
+import type { CombinePdfPreview, DocumentSummary } from "../types";
+import { nativeAssetUrl, previewCombinePdf } from "../lib/native";
 import { SevenIcon } from "./SevenIcon";
 
 interface CombineDialogProps {
@@ -49,6 +50,9 @@ export function CombineDialog({
   const [webUrl, setWebUrl] = useState("");
   const [folderLoading, setFolderLoading] = useState(false);
   const [pageRanges, setPageRanges] = useState<Record<string, string>>({});
+  const [previews, setPreviews] = useState<Record<string, CombinePdfPreview>>({});
+  const [expandedPath, setExpandedPath] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState<string | null>(null);
 
   const acceptedExtensions = useMemo(() => [
     "pdf",
@@ -129,6 +133,24 @@ export function CombineDialog({
     });
     setPageRanges((current) => ({ ...current, [value]: current[value] ?? "1-z" }));
     setWebUrl("");
+  };
+
+  const togglePreview = async (path: string) => {
+    if (sourceKind(path) !== "pdf") return;
+    if (expandedPath === path) {
+      setExpandedPath(null);
+      return;
+    }
+    if (!previews[path]) {
+      try {
+        setPreviewLoading(path);
+        const preview = await previewCombinePdf(path, 12);
+        setPreviews((current) => ({ ...current, [path]: preview }));
+      } finally {
+        setPreviewLoading(null);
+      }
+    }
+    setExpandedPath(path);
   };
 
   const move = (index: number, direction: -1 | 1) => {
@@ -245,6 +267,7 @@ export function CombineDialog({
                     </label>
                   </div>
                   <div className="combine-row-actions">
+                    <button disabled={kind !== "pdf"} title={kind === "pdf" ? "Expandir páginas" : "Preview disponível após conversão"} onClick={() => void togglePreview(path)}><SevenIcon name="pages" /></button>
                     <button disabled={index === 0} title="Primeiro" onClick={() => moveEdge(index, "first")}>⇤</button>
                     <button disabled={index === 0} title="Subir" onClick={() => move(index, -1)}>↑</button>
                     <button disabled={index === inputs.length - 1} title="Descer" onClick={() => move(index, 1)}>↓</button>
@@ -259,6 +282,30 @@ export function CombineDialog({
                       });
                     }}><SevenIcon name="close" /></button>
                   </div>
+                  {expandedPath === path && kind === "pdf" && (
+                    <section className="combine-page-preview">
+                      {previewLoading === path && <div className="report-loading"><span className="loader-ring" /> Renderizando miniaturas…</div>}
+                      {previews[path] && (
+                        <>
+                          <div className="combine-preview-head">
+                            <strong>{previews[path].pageCount} página(s)</strong>
+                            <small>Preview das primeiras {previews[path].pages.length} página(s)</small>
+                          </div>
+                          <div className="combine-preview-grid">
+                            {previews[path].pages.map((page) => (
+                              <figure key={page.pageIndex}>
+                                <img src={nativeAssetUrl(page.cachePath)} alt={`Página ${page.pageIndex + 1} de ${fileName(path)}`} />
+                                <figcaption>Página {page.pageIndex + 1}</figcaption>
+                              </figure>
+                            ))}
+                          </div>
+                          {previews[path].pageCount > previews[path].pages.length && (
+                            <small className="combine-preview-more">+ {previews[path].pageCount - previews[path].pages.length} página(s) não exibida(s) para manter o preview leve.</small>
+                          )}
+                        </>
+                      )}
+                    </section>
+                  )}
                 </article>
               );
             })}

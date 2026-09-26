@@ -1,6 +1,6 @@
 use crate::{error::SevenError, jobs, pdf::NormalizedRect, state::AppState};
 use serde::{Deserialize, Serialize};
-use lopdf::Object;
+use lopdf::{dictionary, Document, Object, Stream};
 use std::{collections::HashSet, fs, path::{Path, PathBuf}, process::Command};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -354,9 +354,9 @@ fn nup_shape(n_up: u8) -> &'static str {
 }
 
 #[cfg(target_os = "windows")]
-fn reorder_for_nup(mut pages: Vec<usize>, n_up: u8, layout: &str) -> Vec<usize> {
+fn nup_slots(pages: &[usize], n_up: u8, layout: &str) -> Vec<Option<usize>> {
     if n_up == 1 || layout == "lrtb" {
-        return pages;
+        return pages.iter().copied().map(Some).collect();
     }
     let (columns, rows) = match n_up {
         2 => (2usize, 1usize),
@@ -364,33 +364,95 @@ fn reorder_for_nup(mut pages: Vec<usize>, n_up: u8, layout: &str) -> Vec<usize> 
         6 => (3, 2),
         9 => (3, 3),
         16 => (4, 4),
-        _ => return pages,
+        _ => return pages.iter().copied().map(Some).collect(),
     };
     let positions = match layout {
         "lrtb" => (0..n_up as usize).collect::<Vec<_>>(),
-        "lrbt" => (0..columns).flat_map(|x| (0..rows).rev().map(move |y| y * columns + x)).collect(),
+        "lrbt" => (0..rows).rev().flat_map(|y| (0..columns).map(move |x| y * columns + x)).collect(),
         "rltb" => (0..rows).flat_map(|y| (0..columns).rev().map(move |x| y * columns + x)).collect(),
-        "rlbt" => (0..columns).rev().flat_map(|x| (0..rows).rev().map(move |y| y * columns + x)).collect(),
+        "rlbt" => (0..rows).rev().flat_map(|y| (0..columns).rev().map(move |x| y * columns + x)).collect(),
         "tblr" => (0..columns).flat_map(|x| (0..rows).map(move |y| y * columns + x)).collect(),
         "tbrl" => (0..columns).rev().flat_map(|x| (0..rows).map(move |y| y * columns + x)).collect(),
         "btlr" => (0..columns).flat_map(|x| (0..rows).rev().map(move |y| y * columns + x)).collect(),
         "btrl" => (0..columns).rev().flat_map(|x| (0..rows).rev().map(move |y| y * columns + x)).collect(),
-        _ => return pages,
+        _ => return pages.iter().copied().map(Some).collect(),
     };
 
-    let original = pages.clone();
-    pages.clear();
-    for chunk in original.chunks(n_up as usize) {
+    let mut output = Vec::new();
+    for chunk in pages.chunks(n_up as usize) {
         let mut row_major = vec![None; n_up as usize];
         for (source_index, page) in chunk.iter().copied().enumerate() {
             if let Some(&position) = positions.get(source_index) {
                 row_major[position] = Some(page);
             }
         }
-        pages.extend(row_major.into_iter().flatten());
+        output.extend(row_major);
     }
-    pages
+    output
 }
+
+fn create_blank_page_pdf(
+    destination: &Path,
+    width: f64,
+    height: f64,
+) -> Result<(), SevenError> {
+    let mut document = Document::with_version("1.7");
+    let pages_id = document.new_object_id();
+    let content_id = document.add_object(Stream::new(lopdf::Dictionary::new(), Vec::new()));
+    let page_id = document.add_object(dictionary! {
+        "Type" => "Page",
+        "Parent" => pages_id,
+        "MediaBox" => vec![0.into(), 0.into(), width.into(), height.into()],
+        "Resources" => dictionary! {},
+        "Contents" => content_id,
+    });
+    document.objects.insert(
+        pages_id,
+        Object::Dictionary(dictionary! {
+            "Type" => "Pages",
+            "Kids" => vec![Object::Reference(page_id)],
+            "Count" => 1,
+        }),
+    );
+    let catalog_id = document.add_object(dictionary! {
+        "Type" => "Catalog",
+        "Pages" => pages_id,
+    });
+    document.trailer.set("Root", catalog_id);
+    document.save(destination).map_err(|error| SevenError::Io(error.to_string()))?;
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn page_subset_step_with_slots(
+    input: &Path,
+    slots: &[Option<usize>],
+    blank: &Path,
+    output: &Path,
+) -> Result<jobs::ProcessStep, SevenError> {
+    let qpdf = jobs::require_executable(&["qpdf"], "qpdf")?;
+    let mut args = vec!["--empty".into(), "--pages".into()];
+    for slot in slots {
+        match slot {
+            Some(page) => {
+                args.push(input.to_string_lossy().into_owned());
+                args.push(page.to_string());
+            }
+            None => {
+                args.push(blank.to_string_lossy().into_owned());
+                args.push("1".into());
+            }
+        }
+    }
+    args.push("--".into());
+    args.push(output.to_string_lossy().into_owned());
+    Ok(jobs::ProcessStep {
+        program: qpdf,
+        args,
+        label: "Preparando ordem N-up e espaços vazios".into(),
+    })
+}
+
 
 fn rendered_print_pdf_step(
     input: &Path,
@@ -588,11 +650,9 @@ pub fn start_print_job(
 ) -> Result<jobs::JobStart, SevenError> {
     options.validate()?;
     validate_printer(&options)?;
-    let mut pages = selected_pages(&input, &options)?;
+    let pages = selected_pages(&input, &options)?;
     #[cfg(target_os = "windows")]
-    {
-        pages = reorder_for_nup(pages, options.n_up, &options.n_up_layout);
-    }
+    let nup_slots = nup_slots(&pages, options.n_up, &options.n_up_layout);
     let page_count = lopdf::Document::load(&input)
         .map_err(|error| SevenError::PdfOpen(error.to_string()))?
         .get_pages()
@@ -604,7 +664,7 @@ pub fn start_print_job(
         && !options.reverse
         && {
             #[cfg(target_os = "windows")]
-            { options.n_up_layout == "lrtb" }
+            { options.n_up == 1 || options.n_up_layout == "lrtb" }
             #[cfg(not(target_os = "windows"))]
             { true }
         };
@@ -627,7 +687,35 @@ pub fn start_print_job(
         let directory = state.cache_dir.join("jobs");
         fs::create_dir_all(&directory).map_err(|error| SevenError::Io(error.to_string()))?;
         let subset = directory.join(format!("print-{}.pdf", uuid::Uuid::new_v4()));
+
+        #[cfg(target_os = "windows")]
+        if options.n_up > 1 && options.n_up_layout != "lrtb" {
+            let page_id = lopdf::Document::load(&input)
+                .map_err(|error| SevenError::PdfOpen(error.to_string()))?
+                .get_pages()
+                .get(&(pages[0] as u32))
+                .copied()
+                .ok_or_else(|| SevenError::OperationRejected("Página N-up não encontrada".into()))?;
+            let document = lopdf::Document::load(&input)
+                .map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+            let page_box = inherited_box(&document, page_id, b"CropBox")
+                .or_else(|| inherited_box(&document, page_id, b"MediaBox"))
+                .unwrap_or([0.0, 0.0, 612.0, 792.0]);
+            let blank = directory.join(format!("print-blank-{}.pdf", uuid::Uuid::new_v4()));
+            create_blank_page_pdf(
+                &blank,
+                (page_box[2] - page_box[0]).abs().max(1.0),
+                (page_box[3] - page_box[1]).abs().max(1.0),
+            )?;
+            steps.push(page_subset_step_with_slots(&input, &nup_slots, &blank, &subset)?);
+            cleanup.push(blank);
+        } else {
+            steps.push(page_subset_step(&input, &pages, &subset)?);
+        }
+
+        #[cfg(not(target_os = "windows"))]
         steps.push(page_subset_step(&input, &pages, &subset)?);
+
         cleanup.push(subset.clone());
         subset
     };

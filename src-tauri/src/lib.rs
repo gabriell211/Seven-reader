@@ -8,6 +8,7 @@ mod editing;
 mod error;
 mod forms;
 mod jobs;
+mod measurement;
 mod ocr;
 mod optimizer;
 mod page_transfer;
@@ -64,6 +65,9 @@ pub fn run() {
             commands::redo_document,
             commands::session_add_annotation,
             commands::session_delete_annotation,
+            commands::session_add_measurement,
+            commands::list_measurements,
+            commands::export_measurements,
             commands::session_add_stamp,
             commands::session_add_ink,
             commands::session_add_markup,

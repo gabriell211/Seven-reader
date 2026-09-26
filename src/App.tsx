@@ -1506,7 +1506,7 @@ export default function App() {
       return;
     }
     if (protectedView) {
-      const readOnlyTools: ToolId[] = ["properties","compare","accessibility","bookmarks","attachments","layers","portfolio","articles","rich-media","three-d","geospatial","certificates"];
+      const readOnlyTools: ToolId[] = ["compare","rich-media","three-d","geospatial"];
       if (!readOnlyTools.includes(tool)) {
         setNotice("Visualização protegida: confie no arquivo antes de executar operações de escrita.");
         return;

@@ -27,6 +27,7 @@ import { CatalogDialog } from "./components/CatalogDialog";
 import { GuidedActionsDialog, type GuidedActionKind } from "./components/GuidedActionsDialog";
 import { SharedReviewDialog } from "./components/SharedReviewDialog";
 import { OptimizeDialog } from "./components/OptimizeDialog";
+import { InteractiveContentDialog, type InteractiveMode } from "./components/InteractiveContentDialog";
 import { applyAccessibilityPreferences, applyAppearance, isTrustedPath, loadSettings, saveSettings, type SevenSettings } from "./lib/settings";
 import {
   buildCatalog,
@@ -59,6 +60,10 @@ import {
   getExternalFileStatus,
   reloadDocumentFromSource,
   getOptimizationAudit,
+  listInteractiveAssets,
+  extractInteractiveAsset,
+  listGeospatialViewports,
+  resolveGeospatialCoordinate,
   getDocumentMetadata,
   getPrintPreflight,
   inspectAdvancedPdf,
@@ -208,6 +213,9 @@ import type {
   StructureTagInfo,
   StructureTagUpdate,
   AdvancedPdfReport,
+  InteractiveAssetInfo,
+  GeospatialViewportInfo,
+  GeospatialCoordinate,
   AdvancedSearchHit,
   AdvancedSearchOptions,
   AnnotationInfo,
@@ -417,6 +425,11 @@ export default function App() {
   const [redactionMatches, setRedactionMatches] = useState<RedactionArea[]>([]);
   const [redactionLoading, setRedactionLoading] = useState(false);
   const [advancedTab, setAdvancedTab] = useState<"overview"|"bookmarks"|"attachments"|"layers"|"portfolio"|null>(null);
+  const [interactiveMode, setInteractiveMode] = useState<InteractiveMode | null>(null);
+  const [interactiveAssets, setInteractiveAssets] = useState<InteractiveAssetInfo[]>([]);
+  const [geospatialViewports, setGeospatialViewports] = useState<GeospatialViewportInfo[]>([]);
+  const [geospatialCoordinate, setGeospatialCoordinate] = useState<GeospatialCoordinate | null>(null);
+  const [interactiveLoading, setInteractiveLoading] = useState(false);
   const [advancedReport, setAdvancedReport] = useState<AdvancedPdfReport|null>(null);
   const [advancedLoading, setAdvancedLoading] = useState(false);
   const [portfolioPreview, setPortfolioPreview] = useState<PortfolioPreview | null>(null);
@@ -1483,21 +1496,37 @@ export default function App() {
     });
 
     try {
-      if (["bookmarks","attachments","layers","portfolio","articles","rich-media","three-d","geospatial"].includes(tool)) {
+      if (["rich-media","three-d","geospatial"].includes(tool)) {
+        if (!document) {
+          setNotice("Abra um PDF para inspecionar conteúdo interativo.");
+          return;
+        }
+        setInteractiveAssets([]);
+        setGeospatialViewports([]);
+        setGeospatialCoordinate(null);
+        setInteractiveMode(
+          tool === "three-d" ? "3d" :
+            tool === "geospatial" ? "geospatial" :
+              "rich-media",
+        );
+        return;
+      }
+
+      if (["bookmarks","attachments","layers","portfolio","articles"].includes(tool)) {
         if (!document) {
           setNotice("Abra um PDF para inspecionar sua estrutura.");
           return;
         }
         setAdvancedReport(null);
         setPortfolioPreview(null);
-      setPortfolioSearchHits([]);
-      setAdvancedTab(
-        tool === "bookmarks" ? "bookmarks"
-          : tool === "attachments" ? "attachments"
-            : tool === "layers" ? "layers"
-              : tool === "portfolio" ? "portfolio"
-                : "overview",
-      );
+        setPortfolioSearchHits([]);
+        setAdvancedTab(
+          tool === "bookmarks" ? "bookmarks"
+            : tool === "attachments" ? "attachments"
+              : tool === "layers" ? "layers"
+                : tool === "portfolio" ? "portfolio"
+                  : "overview",
+        );
         return;
       }
 
@@ -1883,6 +1912,53 @@ export default function App() {
     }
     setProtectedView(false);
     setNotice("Pasta adicionada aos locais confiáveis.");
+  };
+
+  const reloadInteractiveContent = async () => {
+    if (!document || !interactiveMode) return;
+    try {
+      setInteractiveLoading(true);
+      if (interactiveMode === "geospatial") {
+        setGeospatialViewports(await listGeospatialViewports(document.id));
+      } else {
+        setInteractiveAssets(await listInteractiveAssets(document.id));
+      }
+    } catch (error) {
+      setNotice(errorMessage(error));
+    } finally {
+      setInteractiveLoading(false);
+    }
+  };
+
+  const runExtractInteractiveAsset = async (objectId: string, destination: string) => {
+    if (!document) return;
+    try {
+      const size = await extractInteractiveAsset(document.id, objectId, destination);
+      setNotice(`Asset extraído · ${size} byte(s).`);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runResolveGeospatial = async (
+    pageIndex: number,
+    normalizedX: number,
+    normalizedY: number,
+  ) => {
+    if (!document) return;
+    try {
+      setGeospatialCoordinate(
+        await resolveGeospatialCoordinate(
+          document.id,
+          pageIndex,
+          normalizedX,
+          normalizedY,
+        ),
+      );
+    } catch (error) {
+      setNotice(errorMessage(error));
+      setGeospatialCoordinate(null);
+    }
   };
 
   const reloadAdvanced = async () => {
@@ -3517,6 +3593,7 @@ export default function App() {
           onCancel={cancelClosePrompt}
         />
       )}
+      {interactiveMode && document && <InteractiveContentDialog mode={interactiveMode} pageIndex={page} assets={interactiveAssets} viewports={geospatialViewports} coordinate={geospatialCoordinate} loading={interactiveLoading} onClose={() => setInteractiveMode(null)} onReload={() => void reloadInteractiveContent()} onExtract={(objectId, destination) => void runExtractInteractiveAsset(objectId, destination)} onResolve={(pageIndex, normalizedX, normalizedY) => void runResolveGeospatial(pageIndex, normalizedX, normalizedY)} />}
       {optimizeOpen && document && <OptimizeDialog documentPath={document.activePath} audit={optimizationAudit} loading={optimizationAuditLoading} onClose={() => setOptimizeOpen(false)} onAudit={() => void reloadOptimizationAudit()} onRun={(output, options) => void runOptimizeAdvanced(output, options)} />}
       {sharedReviewOpen && document && <SharedReviewDialog documentPath={document.activePath} lastReport={reviewTransferReport} onClose={() => setSharedReviewOpen(false)} onExport={(destination) => void runExportReview(destination)} onImport={(xfdf) => void runImportReview(xfdf)} />}
       {guidedActionsOpen && <GuidedActionsDialog onClose={() => setGuidedActionsOpen(false)} onRun={(kind, inputs, outputDirectory) => void runGuidedAction(kind, inputs, outputDirectory)} />}

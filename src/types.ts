@@ -237,6 +237,15 @@ export interface MetadataUpdate {
   keywords: string;
 }
 
+export interface PdfEncryptionOptions {
+  print: "none" | "low" | "full";
+  allowExtract: boolean;
+  allowModify: boolean;
+  allowAnnotations: boolean;
+  allowForms: boolean;
+  allowAssembly: boolean;
+}
+
 export interface SanitizeOptions {
   removeJavascript: boolean;
   removeOpenActions: boolean;

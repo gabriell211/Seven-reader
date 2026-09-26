@@ -165,6 +165,7 @@ import {
   sessionSetPageGeometry,
   sessionSetPageBoxes,
   searchDocument,
+  searchDocumentOccurrences,
   searchDocumentAdvanced,
   startCombine,
   startConvertToPdf,
@@ -252,6 +253,7 @@ import type {
   RenderResult,
   SanitizeOptions,
   SearchHit,
+  SearchOccurrence,
   StampInput,
   SignRequest,
   SignatureValidationReport,
@@ -352,6 +354,8 @@ export default function App() {
   const [zoom, setZoom] = useState(100);
   const [recents, setRecents] = useState<RecentDocument[]>(loadRecents);
   const [searchHits, setSearchHits] = useState<SearchHit[]>([]);
+  const [searchOccurrences, setSearchOccurrences] = useState<SearchOccurrence[]>([]);
+  const [searchOccurrenceIndex, setSearchOccurrenceIndex] = useState(-1);
   const [advancedSearchHits, setAdvancedSearchHits] = useState<AdvancedSearchHit[]>([]);
   const [jobs, setJobs] = useState<Record<string, JobStatus>>({});
   const [taskHistory, setTaskHistory] = useState<JobStatus[]>(loadTaskHistory);
@@ -696,6 +700,8 @@ export default function App() {
       ? current
       : { ...current, [summary.id]: { entries: [nextPage], index: 0 } });
     setSearchHits([]);
+    setSearchOccurrences([]);
+    setSearchOccurrenceIndex(-1);
     setAdvancedSearchHits([]);
     setRendered(null);
     setRenderedPages([]);
@@ -1309,15 +1315,39 @@ export default function App() {
     await render(nextPage, zoom, false);
   };
 
+  const selectSearchOccurrence = async (index: number) => {
+    if (!document || !searchOccurrences.length) return;
+    const bounded = ((index % searchOccurrences.length) + searchOccurrences.length) % searchOccurrences.length;
+    const occurrence = searchOccurrences[bounded];
+    setSearchOccurrenceIndex(bounded);
+    if (occurrence.pageIndex !== page) {
+      await render(occurrence.pageIndex, zoom);
+    }
+  };
+
   const runSearch = async (query: string) => {
     if (!document || !query.trim()) {
       setSearchHits([]);
+      setSearchOccurrences([]);
+      setSearchOccurrenceIndex(-1);
       return;
     }
     try {
-      const hits = await searchDocument(document.id, query);
+      const [hits, occurrences] = await Promise.all([
+        searchDocument(document.id, query),
+        searchDocumentOccurrences(document.id, query, false, false),
+      ]);
       setSearchHits(hits);
-      setNotice(hits.length ? `${hits.length} página(s) com resultado.` : "Nenhum resultado encontrado.");
+      setSearchOccurrences(occurrences);
+      setSearchOccurrenceIndex(occurrences.length ? 0 : -1);
+      if (occurrences[0] && occurrences[0].pageIndex !== page) {
+        await render(occurrences[0].pageIndex, zoom);
+      }
+      setNotice(
+        occurrences.length
+          ? `${occurrences.length} ocorrência(s) em ${hits.length} página(s).`
+          : "Nenhum resultado encontrado.",
+      );
     } catch (error) {
       setNotice(errorMessage(error));
     }
@@ -3691,6 +3721,8 @@ export default function App() {
           measurements={measurements}
           measurementActivation={measurementActivation}
           searchHits={searchHits}
+          searchOccurrences={searchOccurrences}
+          searchOccurrenceIndex={searchOccurrenceIndex}
           advancedSearchHits={advancedSearchHits}
           page={page}
           zoom={zoom}
@@ -3722,6 +3754,7 @@ export default function App() {
           onVisiblePage={(nextPage) => void updateVisiblePage(nextPage)}
           onViewModeChange={(mode) => void changeViewMode(mode)}
           onSearch={(query) => void runSearch(query)}
+          onSelectSearchOccurrence={(index) => void selectSearchOccurrence(index)}
           onInk={(ink) => void runInkAnnotation(ink)}
           onMarkup={(kind, rect) => void runMarkupAnnotation(kind, rect)}
           onMeasurement={(measurement) => void runMeasurement(measurement)}

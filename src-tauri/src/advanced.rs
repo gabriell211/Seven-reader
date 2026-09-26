@@ -412,7 +412,7 @@ fn attachment_mime_from_name(name: &str) -> String {
     .to_owned()
 }
 
-fn attachment_is_dangerous(name: &str) -> bool {
+pub fn attachment_is_dangerous(name: &str) -> bool {
     let extension = Path::new(name)
         .extension()
         .and_then(|value| value.to_str())
@@ -1777,6 +1777,34 @@ pub fn remove_attachment(
     }
 
     atomic_save(document, output)
+}
+
+pub fn list_attachments(path: &Path) -> Result<Vec<AttachmentInfo>, SevenError> {
+    let document = Document::load(path).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    Ok(attachment_list(&document))
+}
+
+pub fn read_attachment_payload(
+    path: &Path,
+    object_id: &str,
+) -> Result<(AttachmentInfo, Vec<u8>), SevenError> {
+    let document = Document::load(path).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let id = parse_id(object_id)?;
+    let info = attachment_list(&document)
+        .into_iter()
+        .find(|item| item.object_id == object_id)
+        .ok_or_else(|| SevenError::OperationRejected("Componente incorporado não encontrado".into()))?;
+    let spec = document
+        .get_object(id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    let stream = attachment_stream(&document, spec)
+        .ok_or_else(|| SevenError::OperationRejected("EmbeddedFile sem stream acessível".into()))?;
+    let data = stream
+        .decompressed_content()
+        .unwrap_or_else(|_| stream.content.clone());
+    Ok((info, data))
 }
 
 pub fn extract_attachment(path: &Path, object_id: &str, destination: &Path) -> Result<(), SevenError> {

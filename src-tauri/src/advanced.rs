@@ -1,5 +1,5 @@
 use crate::error::SevenError;
-use lopdf::{content::{Content, Operation}, dictionary, Dictionary, Document, Object, ObjectId, Stream};
+use lopdf::{content::{Content, Operation}, dictionary, Dictionary, Document, Object, ObjectId, Stream, StringFormat};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{collections::{HashMap, HashSet}, fs, path::{Path, PathBuf}};
@@ -733,7 +733,7 @@ pub fn add_attachment(
             "Subtype" => Object::Name(mime.as_bytes().to_vec()),
             "Params" => dictionary! {
                 "Size" => data.len() as i64,
-                "CheckSum" => Object::string_literal(hex::encode(Sha256::digest(&data))),
+                "CheckSum" => Object::String(md5::compute(&data).0.to_vec(), StringFormat::Hexadecimal),
             },
         },
         data,

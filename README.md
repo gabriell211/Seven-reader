@@ -1134,8 +1134,8 @@ Opcional para desktop profissional:
 - [x] Pasta de entrada
 - [x] Pasta de saída
 - [x] Log
-- [ ] Retry
-- [ ] Quarentena de erro
+- [x] Retry
+- [x] Quarentena de erro
 
 ---
 

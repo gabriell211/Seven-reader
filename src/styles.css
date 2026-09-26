@@ -1032,3 +1032,12 @@ svg { width: 20px; height: 20px; }
 .page-ruler--horizontal span { position:absolute; top:2px; transform:translateX(-50%); }
 .page-ruler--vertical span { position:absolute; left:2px; transform:translateY(-50%) rotate(-90deg); transform-origin:left center; }
 .immersive-presentation .measurement-toolbar { display:none; }
+
+.viewer-zoom-area .rendered-page--active { cursor:zoom-in; }
+.viewer-dynamic-zoom .rendered-page--active { cursor:ns-resize; }
+.page-loupe { position:absolute; z-index:12; width:132px; height:132px; border:3px solid rgba(255,255,255,.95); border-radius:50%; transform:translate(-50%,-50%); box-shadow:0 9px 30px rgba(20,20,28,.3),inset 0 0 0 1px rgba(55,48,76,.35); background-repeat:no-repeat; background-color:white; pointer-events:none; }
+.reflow-view { width:min(760px,calc(100vw - 120px)); min-height:70vh; padding:34px 42px 64px; border-radius:4px; color:#24252a; background:white; box-shadow:0 10px 30px rgba(25,25,35,.16); }
+.reflow-view header { margin-bottom:24px; padding-bottom:12px; border-bottom:1px solid #e7e6eb; display:flex; justify-content:space-between; gap:12px; color:#777983; font-size:9px; }
+.reflow-view header strong { color:#51535c; font-size:10px; }
+.reflow-text { white-space:pre-wrap; overflow-wrap:anywhere; font:17px/1.72 "Segoe UI Variable Text","Segoe UI",sans-serif; letter-spacing:.01em; }
+.immersive-presentation .reflow-view { width:min(900px,calc(100vw - 48px)); min-height:calc(100vh - 36px); }

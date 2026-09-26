@@ -25,6 +25,7 @@ pub struct Capabilities {
     pub pdftotext: Capability,
     pub openssl: Capability,
     pub tesseract: Capability,
+    pub unpaper: Capability,
     pub web_pdf: Capability,
 }
 
@@ -141,6 +142,7 @@ pub fn detect(state: &AppState) -> Capabilities {
     let pdftotext = command_version(&["pdftotext"], &["-v"]);
     let openssl = command_version(&["openssl"], &["version"]);
     let tesseract = command_version(&["tesseract"], &["--version"]);
+    let unpaper = command_version(&["unpaper"], &["--version"]);
     let web_pdf = match find_browser() {
         Some(path) => Capability {
             available: true,
@@ -172,6 +174,7 @@ pub fn detect(state: &AppState) -> Capabilities {
         pdftotext,
         openssl,
         tesseract,
+        unpaper,
         web_pdf,
     }
 }

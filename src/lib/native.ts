@@ -1756,6 +1756,22 @@ export async function startEncryptPdf(
   return invoke<JobStart>("start_encrypt_pdf", { input, output, userPassword, ownerPassword, options: options ?? null });
 }
 
+export async function startBatchEncryptPdf(
+  inputs: string[],
+  outputDirectory: string,
+  userPassword: string,
+  ownerPassword: string,
+  options?: PdfEncryptionOptions,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_batch_encrypt_pdf", {
+    inputs,
+    outputDirectory,
+    userPassword,
+    ownerPassword,
+    options,
+  });
+}
+
 export async function startDecryptPdf(
   input: string,
   output: string,

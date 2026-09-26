@@ -1,0 +1,24 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "document-windows",
+  "description": "PDF document windows can use reader features but cannot create additional windows.",
+  "windows": [
+    "document-*"
+  ],
+  "permissions": [
+    "core:default",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "notification:default",
+    "opener:default",
+    "process:default",
+    "updater:default",
+    "dialog:allow-message",
+    "clipboard-manager:allow-read-text",
+    "clipboard-manager:allow-write-text",
+    "clipboard-manager:allow-read-image",
+    "clipboard-manager:allow-write-image",
+    "clipboard-manager:allow-clear",
+    "core:window:allow-destroy"
+  ]
+}

@@ -178,7 +178,7 @@ fn average_tsv_confidence(bytes: &[u8]) -> Option<f32> {
         if word.is_empty() {
             continue;
         }
-        let confidence = columns[10].parse::<f32>().ok()?;
+        let Ok(confidence) = columns[10].parse::<f32>() else { continue };
         if confidence < 0.0 {
             continue;
         }
@@ -242,7 +242,7 @@ pub fn detect_language(
         }
         evaluated.push(language.clone());
         let Some(confidence) = average_tsv_confidence(&output.stdout) else { continue };
-        if best.as_ref().is_none_or(|(_, current)| confidence > *current) {
+        if best.as_ref().map_or(true, |(_, current)| confidence > *current) {
             best = Some((language, confidence));
         }
     }

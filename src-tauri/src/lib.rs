@@ -58,6 +58,7 @@ pub fn run() {
             commands::close_document,
             commands::render_page,
             commands::render_pages,
+            commands::get_page_text_status,
             commands::search_document,
             commands::search_document_occurrences,
             commands::search_document_advanced,

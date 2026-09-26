@@ -137,6 +137,14 @@ export async function renderPage(
   return invoke<RenderResult>("render_page", { documentId, pageIndex, targetWidth });
 }
 
+export async function renderPages(
+  documentId: string,
+  pageIndices: number[],
+  targetWidth: number,
+): Promise<RenderResult[]> {
+  return invoke<RenderResult[]>("render_pages", { documentId, pageIndices, targetWidth });
+}
+
 export async function searchDocument(documentId: string, query: string): Promise<SearchHit[]> {
   return invoke<SearchHit[]>("search_document", { documentId, query });
 }

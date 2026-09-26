@@ -61,6 +61,8 @@ pub fn run() {
             commands::materialize_interactive_media,
             commands::list_geospatial_viewports,
             commands::resolve_geospatial_coordinate,
+            commands::locate_geospatial_coordinate,
+            commands::measure_geospatial,
             commands::export_review_xfdf,
             commands::session_import_review_xfdf,
             commands::build_catalog,

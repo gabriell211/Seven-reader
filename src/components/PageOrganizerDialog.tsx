@@ -3,7 +3,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { readImage, readText } from "@tauri-apps/plugin-clipboard-manager";
 import { SevenIcon } from "./SevenIcon";
 import { nativeAssetUrl, renderPage } from "../lib/native";
-import type { Capabilities } from "../types";
+import type { Capabilities, PageGeometryUpdate } from "../types";
 
 export type PageOperation =
   | "reorder"
@@ -46,6 +46,7 @@ interface PageOrganizerDialogProps {
   pageCount?: number;
   capabilities: Capabilities | null;
   onClose: () => void;
+  onGeometry: (update: PageGeometryUpdate) => void;
   onRun: (request: PageOperationRequest) => void;
 }
 
@@ -59,7 +60,7 @@ const operations: Array<{ id: PageOperation; title: string; description: string 
   { id: "split", title: "Dividir", description: "Separe o documento em arquivos menores por quantidade de páginas." },
 ];
 
-export function PageOrganizerDialog({ documentId, fileName, pageCount, capabilities, onClose, onRun }: PageOrganizerDialogProps) {
+export function PageOrganizerDialog({ documentId, fileName, pageCount, capabilities, onClose, onGeometry, onRun }: PageOrganizerDialogProps) {
   const [operation, setOperation] = useState<PageOperation>("reorder");
   const [expression, setExpression] = useState("1-z");
   const [angle, setAngle] = useState<90 | 180 | 270>(90);
@@ -80,6 +81,13 @@ export function PageOrganizerDialog({ documentId, fileName, pageCount, capabilit
   const [insertDpi, setInsertDpi] = useState(150);
   const [clipboardImage, setClipboardImage] = useState<{ rgba: number[]; width: number; height: number } | null>(null);
   const [clipboardError, setClipboardError] = useState("");
+  const [geometryMode, setGeometryMode] = useState<"crop" | "resize">("crop");
+  const [cropLeftPt, setCropLeftPt] = useState(0);
+  const [cropRightPt, setCropRightPt] = useState(0);
+  const [cropTopPt, setCropTopPt] = useState(0);
+  const [cropBottomPt, setCropBottomPt] = useState(0);
+  const [resizeWidthPt, setResizeWidthPt] = useState(595);
+  const [resizeHeightPt, setResizeHeightPt] = useState(842);
   const [pageOrder, setPageOrder] = useState<number[]>(() => Array.from({ length: pageCount ?? 0 }, (_, index) => index));
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [anchor, setAnchor] = useState<number | null>(null);
@@ -258,6 +266,24 @@ export function PageOrganizerDialog({ documentId, fileName, pageCount, capabilit
     }
   };
 
+  const applyGeometry = () => {
+    const positions = selectedPositions();
+    const pageIndices = positions.length
+      ? [...new Set(positions.map((position) => pageOrder[position]))]
+      : [...new Set(pageOrder)];
+
+    onGeometry({
+      mode: geometryMode,
+      pageIndices,
+      cropLeftPt,
+      cropRightPt,
+      cropTopPt,
+      cropBottomPt,
+      widthPt: geometryMode === "resize" ? resizeWidthPt : undefined,
+      heightPt: geometryMode === "resize" ? resizeHeightPt : undefined,
+    });
+  };
+
   const chooseSource = async () => {
     const selected = await open({
       title: operation === "replace" ? "Selecionar PDF com páginas de substituição" : "Selecionar PDF para inserir páginas",
@@ -384,6 +410,30 @@ export function PageOrganizerDialog({ documentId, fileName, pageCount, capabilit
               Carregar mais miniaturas ({pageOrder.length - visibleLimit} restantes)
             </button>
           )}
+
+          <section className="visual-geometry">
+            <div className="workflow-tabs inline">
+              <button className={geometryMode === "crop" ? "active" : ""} onClick={() => setGeometryMode("crop")}>Recortar página</button>
+              <button className={geometryMode === "resize" ? "active" : ""} onClick={() => setGeometryMode("resize")}>Redimensionar página</button>
+            </div>
+            {geometryMode === "crop" ? (
+              <div className="four-column-fields">
+                <label className="workflow-field"><span>Esquerda (pt)</span><input type="number" min={0} value={cropLeftPt} onChange={(e) => setCropLeftPt(Math.max(0, Number(e.target.value) || 0))} /></label>
+                <label className="workflow-field"><span>Direita (pt)</span><input type="number" min={0} value={cropRightPt} onChange={(e) => setCropRightPt(Math.max(0, Number(e.target.value) || 0))} /></label>
+                <label className="workflow-field"><span>Topo (pt)</span><input type="number" min={0} value={cropTopPt} onChange={(e) => setCropTopPt(Math.max(0, Number(e.target.value) || 0))} /></label>
+                <label className="workflow-field"><span>Base (pt)</span><input type="number" min={0} value={cropBottomPt} onChange={(e) => setCropBottomPt(Math.max(0, Number(e.target.value) || 0))} /></label>
+              </div>
+            ) : (
+              <div className="two-column-fields">
+                <label className="workflow-field"><span>Largura (pt)</span><input type="number" min={36} max={20000} value={resizeWidthPt} onChange={(e) => setResizeWidthPt(Math.max(36, Math.min(20000, Number(e.target.value) || 595)))} /></label>
+                <label className="workflow-field"><span>Altura (pt)</span><input type="number" min={36} max={20000} value={resizeHeightPt} onChange={(e) => setResizeHeightPt(Math.max(36, Math.min(20000, Number(e.target.value) || 842)))} /></label>
+              </div>
+            )}
+            <div className="visual-geometry-footer">
+              <span>{selected.size ? `${selected.size} posição(ões) selecionada(s)` : "Sem seleção: aplica a todas as páginas únicas da ordem atual."}</span>
+              <button className="secondary-light-button" onClick={applyGeometry}><SevenIcon name="pages" /> {geometryMode === "crop" ? "Aplicar CropBox" : "Aplicar tamanho"}</button>
+            </div>
+          </section>
 
           <div className="visual-order-footer">
             <span>Arraste miniaturas para reordenar. Ctrl/Cmd seleciona várias; Shift seleciona intervalo.</span>

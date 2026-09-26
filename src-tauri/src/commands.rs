@@ -2570,6 +2570,7 @@ struct CombineInput {
     kind: CombineInputKind,
     name: String,
     converted: Option<std::path::PathBuf>,
+    page_range: String,
 }
 
 #[tauri::command]
@@ -2577,11 +2578,17 @@ pub fn start_combine_mixed_documents(
     app: AppHandle,
     state: State<'_, AppState>,
     inputs: Vec<String>,
+    page_ranges: Vec<String>,
     output: String,
 ) -> CommandResult<JobStart> {
     if inputs.len() < 2 || inputs.len() > 100 {
         return Err(ErrorPayload::from(SevenError::OperationRejected(
             "Selecione entre 2 e 100 arquivos para combinar".into(),
+        )));
+    }
+    if page_ranges.len() != inputs.len() {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "Cada fonte deve possuir um intervalo de páginas".into(),
         )));
     }
 
@@ -2599,6 +2606,7 @@ pub fn start_combine_mixed_documents(
     let mut browser_required = false;
 
     for (index, raw) in inputs.into_iter().enumerate() {
+        let page_range = jobs::validated_page_range(&page_ranges[index]).map_err(ErrorPayload::from)?;
         if raw.starts_with("https://") || raw.starts_with("http://") {
             if raw.len() > 4096 || raw.chars().any(|ch| matches!(ch, '\r' | '\n' | '\0')) {
                 let _ = fs::remove_dir_all(&temp_root);
@@ -2615,6 +2623,7 @@ pub fn start_combine_mixed_documents(
                 kind: CombineInputKind::Web(raw.clone()),
                 name: raw,
                 converted: Some(item_dir.join("pagina-web.pdf")),
+                page_range,
             });
             continue;
         }
@@ -2669,6 +2678,7 @@ pub fn start_combine_mixed_documents(
             kind,
             name,
             converted,
+            page_range,
         });
     }
 
@@ -2799,29 +2809,31 @@ pub fn start_combine_mixed_documents(
             }
 
             let base = converted[0].clone();
+            let preserve_full_structure = batch_items.iter().all(|item| item.page_range == "1-z");
             let mut offsets = Vec::new();
-            let mut page_offset = lopdf::Document::load(&base)
-                .map_err(|error| SevenError::PdfOpen(error.to_string()))?
-                .get_pages()
-                .len();
-
-            for source in converted.iter().skip(1) {
-                offsets.push((source.clone(), page_offset));
-                page_offset += lopdf::Document::load(source)
+            if preserve_full_structure {
+                let mut page_offset = lopdf::Document::load(&base)
                     .map_err(|error| SevenError::PdfOpen(error.to_string()))?
                     .get_pages()
                     .len();
+                for source in converted.iter().skip(1) {
+                    offsets.push((source.clone(), page_offset));
+                    page_offset += lopdf::Document::load(source)
+                        .map_err(|error| SevenError::PdfOpen(error.to_string()))?
+                        .get_pages()
+                        .len();
+                }
             }
 
             let mut args = vec![
                 base.to_string_lossy().into_owned(),
                 "--pages".into(),
                 ".".into(),
-                "1-z".into(),
+                batch_items[0].page_range.clone(),
             ];
-            for source in converted.iter().skip(1) {
+            for (source, item) in converted.iter().skip(1).zip(batch_items.iter().skip(1)) {
                 args.push(source.to_string_lossy().into_owned());
-                args.push("1-z".into());
+                args.push(item.page_range.clone());
             }
             args.push("--".into());
             args.push(batch_output.to_string_lossy().into_owned());
@@ -2837,7 +2849,9 @@ pub fn start_combine_mixed_documents(
                 )));
             }
 
-            advanced::append_bookmarks_from_sources(&batch_output, &offsets)?;
+            if preserve_full_structure {
+                advanced::append_bookmarks_from_sources(&batch_output, &offsets)?;
+            }
             pdf::validate_pdf_path(batch_output.to_string_lossy().as_ref())?;
             Ok(())
         },

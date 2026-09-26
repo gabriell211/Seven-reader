@@ -146,6 +146,23 @@ export interface CatalogHit {
   occurrences: number;
 }
 
+export interface WatchFolderConfig {
+  id: string;
+  name: string;
+  inputDirectory: string;
+  outputDirectory: string;
+  recursive: boolean;
+  enabled: boolean;
+  extensions: string[];
+}
+
+export interface WatchFolderEvent {
+  watcherId: string;
+  state: string;
+  path?: string;
+  detail: string;
+}
+
 export interface JobStart {
   jobId: string;
 }

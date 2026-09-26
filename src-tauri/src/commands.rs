@@ -1478,7 +1478,7 @@ pub async fn search_pdf_portfolio_items(
                 continue;
             }
             let first = lower.find(&needle).unwrap_or(0);
-            let start = first.saturating_sub(120);
+            let start = lower[..first].chars().count().saturating_sub(120);
             let excerpt = haystack
                 .chars()
                 .skip(start)

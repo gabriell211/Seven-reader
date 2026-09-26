@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
-import type { PdfEncryptionOptions, SanitizeAnalysis, SanitizeOptions } from "../types";
+import type { PdfEncryptionOptions, SanitizeAnalysis, SanitizeOptions, SanitizeReport } from "../types";
 import { SevenIcon } from "./SevenIcon";
 
 interface SecurityDialogProps {
@@ -9,6 +9,7 @@ interface SecurityDialogProps {
   onClose: () => void;
   sanitizeAnalysis: SanitizeAnalysis | null;
   sanitizeAnalysisLoading: boolean;
+  sanitizeReport: SanitizeReport | null;
   onAnalyzeSanitization: () => void;
   onEncrypt: (output: string, userPassword: string, ownerPassword: string, options: PdfEncryptionOptions) => void;
   onDecrypt: (output: string, password: string) => void;
@@ -21,6 +22,7 @@ export function SecurityDialog({
   onClose,
   sanitizeAnalysis,
   sanitizeAnalysisLoading,
+  sanitizeReport,
   onAnalyzeSanitization,
   onEncrypt,
   onDecrypt,
@@ -216,7 +218,17 @@ export function SecurityDialog({
                 ))}
               </div>
               <div className="organizer-note"><SevenIcon name="shield" /><span>Sanitização remove referências estruturais selecionadas; nunca executa JavaScript, anexos ou ações do PDF.</span></div>
-              <button className="primary-button workflow-submit" onClick={() => void submitSanitize()}><SevenIcon name="lock" /> Sanitizar cópia</button>
+              {sanitizeReport && (
+                <section className="sanitize-final-report">
+                  <SevenIcon name="shield" />
+                  <div>
+                    <strong>Sanitização concluída</strong>
+                    <span>{sanitizeReport.removedEntries} entrada(s) removida(s){sanitizeReport.removedMetadata ? " · metadados removidos" : ""}</span>
+                    <small>{sanitizeReport.output}</small>
+                  </div>
+                </section>
+              )}
+              <button className="primary-button workflow-submit" onClick={() => void submitSanitize()}><SevenIcon name="lock" /> {sanitizeReport ? "Sanitizar outra cópia" : "Sanitizar cópia"}</button>
             </>
           )}
         </div>

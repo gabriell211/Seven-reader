@@ -45,6 +45,9 @@ interface WorkspaceProps {
   quickToolsPosition: { x: number; y: number } | null;
   sidePanels: SidePanelId[];
   taskHistory: JobStatus[];
+  onPauseJob: (jobId: string) => void;
+  onResumeJob: (jobId: string) => void;
+  onCancelJob: (jobId: string) => void;
   measurements: MeasurementInfo[];
   measurementActivation: number;
   searchHits: SearchHit[];
@@ -131,6 +134,9 @@ export function DocumentWorkspace({
   quickToolsPosition,
   sidePanels,
   taskHistory,
+  onPauseJob,
+  onResumeJob,
+  onCancelJob,
   measurements,
   measurementActivation,
   searchHits,
@@ -1370,7 +1376,17 @@ export function DocumentWorkspace({
                       <small>{job.stage}</small>
                       {job.error && <em>{job.error}</em>}
                     </div>
-                    <b>{job.progress !== undefined ? `${Math.round(job.progress * 100)}%` : job.state}</b>
+                    <div className="panel-task-actions">
+                      <b>{job.progress !== undefined ? `${Math.round(job.progress * 100)}%` : job.state}</b>
+                      {(job.state === "queued" || job.state === "running" || job.state === "paused") && (
+                        <span>
+                          {job.state === "paused"
+                            ? <button onClick={() => onResumeJob(job.id)} title="Retomar"><SevenIcon name="play" /></button>
+                            : <button onClick={() => onPauseJob(job.id)} title="Pausar"><SevenIcon name="pause" /></button>}
+                          <button onClick={() => onCancelJob(job.id)} title="Cancelar"><SevenIcon name="close" /></button>
+                        </span>
+                      )}
+                    </div>
                   </article>
                 ))}
               </div>

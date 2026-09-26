@@ -122,6 +122,7 @@ import {
   sessionUpdatePdfLayerProperties,
   sessionSetPdfLayerVisibility,
   sessionUpdateDocumentMetadata,
+  sessionSetPageGeometry,
   sessionSetPageBoxes,
   searchDocument,
   searchDocumentAdvanced,
@@ -193,6 +194,7 @@ import type {
   PdfActionInfo,
   PrintPreflightReport,
   PageBoxUpdate,
+  PageGeometryUpdate,
   RecentDocument,
   RedactionArea,
   ReviewTransferReport,
@@ -2245,6 +2247,20 @@ export default function App() {
     }
   };
 
+  const runPageGeometry = async (update: PageGeometryUpdate) => {
+    if (!document) return;
+    try {
+      const summary = await sessionSetPageGeometry(document.id, update);
+      await acceptDocumentRevision(
+        summary,
+        update.mode === "crop" ? "CropBox aplicado às páginas selecionadas." : "MediaBox/CropBox redimensionados.",
+      );
+      setOrganizerOpen(false);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
   const runPageOperation = async (request: PageOperationRequest) => {
     const input = await pickInputPdf();
     if (!input) return;
@@ -2754,6 +2770,7 @@ export default function App() {
           pageCount={document?.pageCount}
           capabilities={capabilities}
           onClose={() => setOrganizerOpen(false)}
+          onGeometry={(update) => void runPageGeometry(update)}
           onRun={(request) => void runPageOperation(request)}
         />
       )}

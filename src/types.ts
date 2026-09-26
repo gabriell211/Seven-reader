@@ -1085,6 +1085,7 @@ export interface InteractiveAssetInfo {
   mime: string;
   size: number;
   sha256: string;
+  safeToOpen: boolean;
 }
 
 export interface GeospatialViewportInfo {

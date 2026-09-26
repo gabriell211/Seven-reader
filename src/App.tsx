@@ -4019,6 +4019,11 @@ export default function App() {
           report={advancedReport}
           loading={advancedLoading}
           initialTab={advancedTab}
+          portfolioPreview={portfolioPreview}
+          canScan={Boolean(capabilities?.scanner.available)}
+          canWeb={Boolean(capabilities?.web_pdf.available)}
+          portfolioSearchHits={portfolioSearchHits}
+          portfolioSearching={portfolioSearching}
           onClose={() => setAdvancedTab(null)}
           onReload={() => void reloadAdvanced()}
           onAddBookmark={(title,pageIndex)=>void runAddBookmark(title,pageIndex)}
@@ -4033,7 +4038,27 @@ export default function App() {
           onUpdateAttachment={(objectId,name,description)=>void runUpdateAttachment(objectId,name,description)}
           onRemoveAttachment={(objectId)=>void runRemoveAttachment(objectId)}
           onExtractAttachment={(objectId,destination)=>void runExtractAttachment(objectId,destination)}
+          onPreviewPortfolioItem={(objectId)=>void runPortfolioPreview(objectId)}
+          onSearchPortfolioItems={(query)=>void runPortfolioSearch(query)}
+          onOpenPortfolioItemExternal={(objectId)=>void runPortfolioOpenExternal(objectId)}
+          onOpenPortfolioPdf={(preview)=>void runOpenPortfolioPdf(preview)}
+          onAddPortfolioClipboardText={(text,name,folderPath)=>void runAddPortfolioClipboardText(text,name,folderPath)}
+          onAddPortfolioClipboardImage={(rgba,width,height,name,folderPath)=>void runAddPortfolioClipboardImage(rgba,width,height,name,folderPath)}
+          onAddPortfolioWeb={(url,name,folderPath)=>void runAddPortfolioWeb(url,name,folderPath)}
+          onAddPortfolioScan={(dpi,name,folderPath)=>void runAddPortfolioScan(dpi,name,folderPath)}
+          onAddPortfolioItem={(filePath,displayName,description,folderPath)=>void runAddPortfolioItem(filePath,displayName,description,folderPath)}
+          onConfigurePortfolio={(view)=>void runConfigurePortfolio(view)}
+          onSetPortfolioView={(view)=>void runSetPortfolioView(view)}
+          onImportPortfolioDirectory={(directory,targetPath)=>void runImportPortfolioDirectory(directory,targetPath)}
+          onCreatePortfolioFolder={(folderPath,description)=>void runCreatePortfolioFolder(folderPath,description)}
+          onMovePortfolioItem={(objectId,folderPath)=>void runMovePortfolioItem(objectId,folderPath)}
+          onRenamePortfolioFolder={(folderId,newName)=>void runRenamePortfolioFolder(folderId,newName)}
+          onRemovePortfolioFolder={(folderId)=>void runRemovePortfolioFolder(folderId)}
           onLayerVisibility={(objectId,visible)=>void runLayerVisibility(objectId,visible)}
+          onImportLayer={(imagePath,name,x,y,width,height,visible,locked)=>void runImportLayer(imagePath,name,x,y,width,height,visible,locked)}
+          onReorderLayer={(objectId,direction)=>void runReorderLayer(objectId,direction)}
+          onMergeLayers={(sourceId,targetId)=>void runMergeLayers(sourceId,targetId)}
+          onFlattenLayers={()=>void runFlattenLayers()}
           onUpdateLayer={(update)=>void runUpdateLayerProperties(update)}
           onApplyLayerOverrides={(context)=>void runApplyLayerOverrides(context)}
           onResetLayerVisibility={()=>void runResetLayerVisibility()}

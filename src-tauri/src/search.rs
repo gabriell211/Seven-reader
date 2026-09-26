@@ -24,6 +24,7 @@ pub struct AdvancedSearchOptions {
     pub include_comments: bool,
     pub include_bookmarks: bool,
     pub include_forms: bool,
+    pub include_attachments: bool,
     pub include_metadata: bool,
 }
 
@@ -168,6 +169,46 @@ pub fn search(
                 None,
                 format!("Campo · {}", field.name),
                 combined,
+            );
+        }
+    }
+
+    if options.include_attachments {
+        for attachment in advanced::list_attachments(document.active_path())? {
+            let extension = std::path::Path::new(&attachment.name)
+                .extension()
+                .and_then(|value| value.to_str())
+                .unwrap_or_default()
+                .to_ascii_lowercase();
+            let textual = attachment.mime.starts_with("text/")
+                || matches!(
+                    attachment.mime.as_str(),
+                    "application/json" | "application/xml" | "application/xhtml+xml"
+                )
+                || matches!(
+                    extension.as_str(),
+                    "txt" | "csv" | "json" | "xml" | "html" | "htm" | "md" | "log" | "yaml" | "yml"
+                );
+            if !textual || attachment.size.is_some_and(|size| size > 2 * 1024 * 1024) {
+                continue;
+            }
+            let Ok((_, payload)) = advanced::read_attachment_payload(
+                document.active_path(),
+                &attachment.object_id,
+            ) else {
+                continue;
+            };
+            if payload.len() > 2 * 1024 * 1024 {
+                continue;
+            }
+            let text = String::from_utf8_lossy(&payload).into_owned();
+            push_if_match(
+                &mut hits,
+                &matcher,
+                "attachment",
+                None,
+                format!("Anexo · {}", attachment.name),
+                text,
             );
         }
     }

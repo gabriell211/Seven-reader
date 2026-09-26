@@ -1619,6 +1619,208 @@ pub fn start_insert_clipboard_image_pages(
 }
 
 #[tauri::command]
+pub fn start_insert_web_pages(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: String,
+    output: String,
+    insert_after: usize,
+    url: String,
+) -> CommandResult<JobStart> {
+    let trimmed = url.trim();
+    if trimmed.len() > 4096
+        || trimmed.contains(['\r', '\n', '\0'])
+        || !(trimmed.starts_with("https://") || trimmed.starts_with("http://"))
+    {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "Use uma URL HTTP ou HTTPS válida".into(),
+        )));
+    }
+
+    let browser = capabilities::find_browser().ok_or_else(|| {
+        ErrorPayload::from(SevenError::CapabilityUnavailable(
+            "Chrome, Chromium ou Edge não detectado".into(),
+        ))
+    })?;
+    let qpdf = jobs::require_executable(&["qpdf"], "qpdf").map_err(ErrorPayload::from)?;
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    let source = transient_pdf(&state, "web-pages").map_err(ErrorPayload::from)?;
+
+    let page_count = lopdf::Document::load(&input)
+        .map_err(|error| ErrorPayload::from(SevenError::PdfOpen(error.to_string())))?
+        .get_pages()
+        .len();
+    if insert_after > page_count {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(format!(
+            "A posição de inserção deve ficar entre 0 e {page_count}"
+        ))));
+    }
+
+    let browser_args = vec![
+        "--headless=new".into(),
+        "--disable-gpu".into(),
+        "--disable-extensions".into(),
+        "--incognito".into(),
+        "--no-pdf-header-footer".into(),
+        format!("--print-to-pdf={}", source.to_string_lossy()),
+        trimmed.to_owned(),
+    ];
+
+    let mut qpdf_args = vec![input.to_string_lossy().into_owned(), "--pages".into()];
+    if insert_after > 0 {
+        qpdf_args.push(".".into());
+        qpdf_args.push(format!("1-{insert_after}"));
+    }
+    qpdf_args.push(source.to_string_lossy().into_owned());
+    qpdf_args.push("1-z".into());
+    if insert_after < page_count {
+        qpdf_args.push(".".into());
+        qpdf_args.push(format!("{}-z", insert_after + 1));
+    }
+    qpdf_args.push("--".into());
+    qpdf_args.push(output.to_string_lossy().into_owned());
+
+    Ok(jobs::start_process_sequence_job(
+        app,
+        &state,
+        "insert-web-pages",
+        vec![
+            jobs::ProcessStep {
+                program: browser,
+                args: browser_args,
+                label: "Capturando página web".into(),
+            },
+            jobs::ProcessStep {
+                program: qpdf,
+                args: qpdf_args,
+                label: "Inserindo páginas capturadas".into(),
+            },
+        ],
+        Some(output),
+    ))
+}
+
+#[cfg(target_os = "linux")]
+#[tauri::command]
+pub async fn start_insert_scanned_page(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: String,
+    output: String,
+    insert_after: usize,
+    dpi: u16,
+) -> CommandResult<JobStart> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    let source = transient_pdf(&state, "scan-pages").map_err(ErrorPayload::from)?;
+    let dpi = dpi.clamp(75, 1200);
+    let scan_target = source.clone();
+
+    tauri::async_runtime::spawn_blocking(move || -> Result<(), SevenError> {
+        let scanner = jobs::require_executable(&["scanimage"], "SANE/scanimage")?;
+        let scan = std::process::Command::new(scanner)
+            .arg("--format=png")
+            .arg(format!("--resolution={dpi}"))
+            .stdin(std::process::Stdio::null())
+            .output()
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+        if !scan.status.success() {
+            return Err(SevenError::Operation(format!(
+                "Scanner encerrou com código {:?}",
+                scan.status.code()
+            )));
+        }
+        let temp = scan_target.with_extension("seven-insert-scan.png");
+        fs::write(&temp, scan.stdout).map_err(|error| SevenError::Io(error.to_string()))?;
+        let result = pdf::create_pdf_from_images(&[temp.clone()], &scan_target, dpi);
+        let _ = fs::remove_file(temp);
+        result
+    })
+    .await
+    .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
+    .map_err(ErrorPayload::from)?;
+
+    start_insert_pdf_source_job(app, &state, input, output, source, insert_after, "insert-scanned-page")
+        .map_err(ErrorPayload::from)
+}
+
+#[cfg(target_os = "windows")]
+#[tauri::command]
+pub async fn start_insert_scanned_page(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: String,
+    output: String,
+    insert_after: usize,
+    dpi: u16,
+) -> CommandResult<JobStart> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    let source = transient_pdf(&state, "scan-pages").map_err(ErrorPayload::from)?;
+    let dpi = dpi.clamp(75, 1200);
+    let scan_target = source.clone();
+
+    tauri::async_runtime::spawn_blocking(move || -> Result<(), SevenError> {
+        let powershell = jobs::require_executable(&["powershell"], "Windows PowerShell/WIA")?;
+        let temp = scan_target.with_extension("seven-insert-wia.png");
+        let escaped_temp = temp.to_string_lossy().replace('\'', "''");
+        let script = format!(
+            "$ErrorActionPreference='Stop'; \
+             $dialog=New-Object -ComObject WIA.CommonDialog; \
+             $device=$dialog.ShowSelectDevice(1,$false,$false); \
+             if($null -eq $device){{ throw 'Nenhum scanner selecionado.' }}; \
+             $item=$device.Items.Item(1); \
+             try{{$item.Properties.Item('6147').Value={dpi}}}catch{{}}; \
+             try{{$item.Properties.Item('6148').Value={dpi}}}catch{{}}; \
+             $image=$dialog.ShowTransfer($item,'{{B96B3CAF-0728-11D3-9D7B-0000F81EF32E}}',$false); \
+             if($null -eq $image){{ throw 'Digitalização cancelada.' }}; \
+             $image.SaveFile('{escaped_temp}')"
+        );
+        let result = std::process::Command::new(powershell)
+            .args(["-NoProfile", "-STA", "-Command", &script])
+            .stdin(std::process::Stdio::null())
+            .output()
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+        if !result.status.success() {
+            let stderr = String::from_utf8_lossy(&result.stderr).trim().to_owned();
+            return Err(SevenError::Operation(if stderr.is_empty() {
+                format!("WIA encerrou com código {:?}", result.status.code())
+            } else {
+                stderr
+            }));
+        }
+        if !temp.is_file() {
+            return Err(SevenError::Operation("O scanner não gerou uma imagem".into()));
+        }
+        let created = pdf::create_pdf_from_images(&[temp.clone()], &scan_target, dpi);
+        let _ = fs::remove_file(&temp);
+        created
+    })
+    .await
+    .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
+    .map_err(ErrorPayload::from)?;
+
+    start_insert_pdf_source_job(app, &state, input, output, source, insert_after, "insert-scanned-page")
+        .map_err(ErrorPayload::from)
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
+#[tauri::command]
+pub async fn start_insert_scanned_page(
+    _app: AppHandle,
+    _state: State<'_, AppState>,
+    _input: String,
+    _output: String,
+    _insert_after: usize,
+    _dpi: u16,
+) -> CommandResult<JobStart> {
+    Err(ErrorPayload::from(SevenError::CapabilityUnavailable(
+        "Scanner nativo ainda não disponível neste sistema operacional".into(),
+    )))
+}
+
+#[tauri::command]
 pub fn start_insert_pages(
     app: AppHandle,
     state: State<'_, AppState>,

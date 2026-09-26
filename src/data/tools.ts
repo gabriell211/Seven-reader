@@ -17,7 +17,7 @@ export const tools: ToolDefinition[] = [
   { id: "export", label: "Exportar PDF", description: "Exporte páginas para PNG, JPEG, TIFF, TXT ou PostScript.", icon: "open", group: "Documento", capability: ["ghostscript", "pdftotext"], implemented: true },
   { id: "create", label: "Criar PDF", description: "Crie um documento PDF em branco com tamanho e quantidade de páginas definidos.", icon: "create", group: "Documento", implemented: true },
   { id: "organize", label: "Organizar páginas", description: "Reordene, extraia, gire ou divida páginas com processamento local.", icon: "pages", group: "Documento", capability: "qpdf", implemented: true },
-  { id: "combine", label: "Combinar arquivos", description: "Mescle PDFs usando processamento local.", icon: "merge", group: "Documento", capability: "qpdf", implemented: true },
+  { id: "combine", label: "Combinar arquivos", description: "Mescle PDFs, documentos, imagens e páginas web localmente.", icon: "merge", group: "Documento", capability: "qpdf", implemented: true },
   { id: "properties", label: "Propriedades", description: "Inspecione e altere metadados na sessão atual com Desfazer/Refazer.", icon: "form", group: "Documento", implemented: true },
   { id: "bookmarks", label: "Marcadores", description: "Inspecione, crie e renomeie destinos no outline com edição não destrutiva.", icon: "bookmark", group: "Documento", implemented: true },
   { id: "attachments", label: "Anexos", description: "Incorpore e extraia arquivos EmbeddedFiles; inclusões participam do histórico de edição.", icon: "attachment", group: "Documento", implemented: true },

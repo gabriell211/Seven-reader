@@ -1,5 +1,6 @@
 use crate::{error::SevenError, pdf::NormalizedRect};
-use lopdf::{dictionary, Dictionary, Document, Object};
+use encoding_rs::WINDOWS_1252;
+use lopdf::{dictionary, Dictionary, Document, Object, Stream};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 
@@ -14,6 +15,24 @@ pub struct AnnotationInput {
     pub y: f64,
     pub width: f64,
     pub height: f64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StampInput {
+    pub page_index: usize,
+    pub name: String,
+    pub category: String,
+    pub text: String,
+    pub author: String,
+    pub image_path: Option<String>,
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    pub fill_color: [f64; 3],
+    pub border_color: [f64; 3],
+    pub text_color: [f64; 3],
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -193,6 +212,165 @@ pub fn add_markup_annotation_normalized(
     }
 
     let annotation_id = document.add_object(dictionary);
+    append_page_annotation(&mut document, page_id, annotation_id)?;
+    atomic_save(document, output)
+}
+
+fn pdf_text_hex(value: &str) -> String {
+    let (encoded, _, _) = WINDOWS_1252.encode(value);
+    hex::encode_upper(encoded)
+}
+
+fn validate_rgb(color: [f64; 3]) -> Result<[f64; 3], SevenError> {
+    if color.iter().all(|component| component.is_finite() && (0.0..=1.0).contains(component)) {
+        Ok(color)
+    } else {
+        Err(SevenError::OperationRejected("Cor do carimbo inválida".into()))
+    }
+}
+
+fn stamp_appearance(
+    document: &mut Document,
+    stamp: &StampInput,
+) -> Result<(u32, u16), SevenError> {
+    let fill = validate_rgb(stamp.fill_color)?;
+    let border = validate_rgb(stamp.border_color)?;
+    let text_color = validate_rgb(stamp.text_color)?;
+    let width = stamp.width;
+    let height = stamp.height;
+
+    let font_id = document.add_object(dictionary! {
+        "Type" => "Font",
+        "Subtype" => "Type1",
+        "BaseFont" => "Helvetica-Bold",
+        "Encoding" => "WinAnsiEncoding",
+    });
+
+    let mut resources = dictionary! {
+        "Font" => dictionary! { "F1" => font_id },
+    };
+    let mut content = format!(
+        "q\n{:.4} {:.4} {:.4} rg\n{:.4} {:.4} {:.4} RG\n1.5 w\n0.75 0.75 {:.3} {:.3} re B\n",
+        fill[0], fill[1], fill[2],
+        border[0], border[1], border[2],
+        (width - 1.5).max(1.0),
+        (height - 1.5).max(1.0),
+    );
+
+    if let Some(image_path) = stamp.image_path.as_deref().filter(|value| !value.trim().is_empty()) {
+        let path = Path::new(image_path);
+        if !path.is_file() {
+            return Err(SevenError::NotFound(image_path.to_owned()));
+        }
+        let image_stream = lopdf::xobject::image(path)
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+        let image_id = document.add_object(image_stream);
+        resources.set("XObject", dictionary! { "Im0" => image_id });
+        let padding = 6.0;
+        let image_height = if stamp.text.trim().is_empty() {
+            (height - padding * 2.0).max(1.0)
+        } else {
+            (height * 0.62).max(1.0)
+        };
+        content.push_str(&format!(
+            "q\n{:.3} 0 0 {:.3} {:.3} {:.3} cm\n/Im0 Do\nQ\n",
+            (width - padding * 2.0).max(1.0),
+            image_height,
+            padding,
+            height - padding - image_height,
+        ));
+    }
+
+    let lines = stamp
+        .text
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .take(3)
+        .collect::<Vec<_>>();
+    if !lines.is_empty() {
+        let font_size = (height / (lines.len() as f64 + 1.8)).clamp(7.0, 20.0);
+        let leading = font_size * 1.18;
+        let total_height = leading * lines.len() as f64;
+        let start_y = ((height + total_height) / 2.0 - font_size).max(4.0);
+        content.push_str(&format!(
+            "BT\n/F1 {:.3} Tf\n{:.4} {:.4} {:.4} rg\n",
+            font_size, text_color[0], text_color[1], text_color[2],
+        ));
+        for (index, line) in lines.iter().enumerate() {
+            let approx_width = line.chars().count() as f64 * font_size * 0.54;
+            let x = ((width - approx_width) / 2.0).max(4.0);
+            let y = start_y - index as f64 * leading;
+            content.push_str(&format!(
+                "1 0 0 1 {:.3} {:.3} Tm\n<{}> Tj\n",
+                x, y, pdf_text_hex(line),
+            ));
+        }
+        content.push_str("ET\n");
+    }
+    content.push_str("Q\n");
+
+    let stream = Stream::new(
+        dictionary! {
+            "Type" => "XObject",
+            "Subtype" => "Form",
+            "FormType" => 1,
+            "BBox" => vec![0.into(), 0.into(), width.into(), height.into()],
+            "Resources" => resources,
+        },
+        content.into_bytes(),
+    );
+    Ok(document.add_object(stream))
+}
+
+pub fn add_stamp(
+    input: &Path,
+    output: &Path,
+    stamp: StampInput,
+) -> Result<(), SevenError> {
+    if stamp.name.trim().is_empty() || stamp.name.chars().count() > 120 {
+        return Err(SevenError::OperationRejected("Nome do carimbo inválido".into()));
+    }
+    if stamp.category.chars().count() > 120
+        || stamp.text.chars().count() > 2_000
+        || stamp.author.chars().count() > 256
+    {
+        return Err(SevenError::OperationRejected("Dados do carimbo excedem o limite permitido".into()));
+    }
+    if !stamp.x.is_finite()
+        || !stamp.y.is_finite()
+        || !stamp.width.is_finite()
+        || !stamp.height.is_finite()
+        || stamp.width < 12.0
+        || stamp.height < 12.0
+        || stamp.width > 5_000.0
+        || stamp.height > 5_000.0
+    {
+        return Err(SevenError::OperationRejected("Geometria do carimbo inválida".into()));
+    }
+
+    let mut document = Document::load(input)
+        .map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let page_id = page_id(&document, stamp.page_index)?;
+    let appearance_id = stamp_appearance(&mut document, &stamp)?;
+    let x2 = stamp.x + stamp.width;
+    let y2 = stamp.y + stamp.height;
+
+    let annotation = dictionary! {
+        "Type" => "Annot",
+        "Subtype" => "Stamp",
+        "Rect" => vec![stamp.x.into(), stamp.y.into(), x2.into(), y2.into()],
+        "Name" => Object::Name(stamp.name.as_bytes().to_vec()),
+        "Contents" => Object::string_literal(&stamp.text),
+        "T" => Object::string_literal(&stamp.author),
+        "Subj" => Object::string_literal(&stamp.category),
+        "F" => 4,
+        "C" => vec![stamp.border_color[0].into(), stamp.border_color[1].into(), stamp.border_color[2].into()],
+        "AP" => dictionary! { "N" => appearance_id },
+        "NM" => Object::string_literal(uuid::Uuid::new_v4().to_string()),
+    };
+
+    let annotation_id = document.add_object(annotation);
     append_page_annotation(&mut document, page_id, annotation_id)?;
     atomic_save(document, output)
 }

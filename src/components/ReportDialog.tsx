@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import type {
   AccessibilityProperties,
   AccessibilityReport,
+  CompareOptions,
   CompareReport,
   StructureTagInfo,
   StructureTagUpdate,
 } from "../types";
 import { SevenIcon } from "./SevenIcon";
+import { nativeAssetUrl } from "../lib/native";
 
 interface ReportDialogProps {
   mode: "compare" | "accessibility";
@@ -28,7 +30,8 @@ interface ReportDialogProps {
   onReadAloud?: () => void;
   onPauseResumeReadAloud?: () => void;
   onStopReadAloud?: () => void;
-  onCompare: (other: string) => void;
+  onCompare: (other: string, options: CompareOptions, swap: boolean) => void;
+  onExportCompare?: (destination: string, other: string, swap: boolean) => void;
 }
 
 const tagTypes = [
@@ -58,8 +61,17 @@ export function ReportDialog({
   onPauseResumeReadAloud,
   onStopReadAloud,
   onCompare,
+  onExportCompare,
 }: ReportDialogProps) {
   const [other, setOther] = useState("");
+  const [compareSwap, setCompareSwap] = useState(false);
+  const [comparePageStart, setComparePageStart] = useState("");
+  const [comparePageEnd, setComparePageEnd] = useState("");
+  const [compareTextOnly, setCompareTextOnly] = useState(false);
+  const [compareDocumentType, setCompareDocumentType] = useState<CompareOptions["documentType"]>("auto");
+  const [compareView, setCompareView] = useState<"side" | "single">("side");
+  const [differenceIndex, setDifferenceIndex] = useState(0);
+  const [hiddenCategories, setHiddenCategories] = useState<string[]>([]);
   const [accessibilityTab, setAccessibilityTab] = useState<"checker" | "properties" | "tags" | "reading">("checker");
   const [language, setLanguage] = useState("pt-BR");
   const [title, setTitle] = useState("");
@@ -94,6 +106,19 @@ export function ReportDialog({
     setTagActual(selectedTag.actualText);
   }, [selectedTag]);
 
+  const compareOptions = (): CompareOptions => ({
+    pageStart: comparePageStart ? Math.max(1, Number(comparePageStart) || 1) : undefined,
+    pageEnd: comparePageEnd ? Math.max(1, Number(comparePageEnd) || 1) : undefined,
+    textOnly: compareTextOnly,
+    documentType: compareDocumentType,
+  });
+
+  const runComparison = (path = other, swap = compareSwap) => {
+    if (!path) return;
+    setDifferenceIndex(0);
+    onCompare(path, compareOptions(), swap);
+  };
+
   const chooseOther = async () => {
     const selected = await open({
       title: "Selecionar outra versão",
@@ -103,8 +128,26 @@ export function ReportDialog({
     });
     if (typeof selected === "string") {
       setOther(selected);
-      onCompare(selected);
+      setCompareSwap(false);
+      runComparison(selected, false);
     }
+  };
+
+  const swapComparison = () => {
+    if (!other) return;
+    const next = !compareSwap;
+    setCompareSwap(next);
+    runComparison(other, next);
+  };
+
+  const exportComparison = async () => {
+    if (!comparison || !other || !onExportCompare) return;
+    const destination = await save({
+      title: "Salvar relatório de comparação",
+      defaultPath: "Seven-Reader-Comparacao.pdf",
+      filters: [{ name: "Documento PDF", extensions: ["pdf"] }],
+    });
+    if (destination) onExportCompare(destination, other, compareSwap);
   };
 
   const saveProperties = () => {
@@ -125,6 +168,24 @@ export function ReportDialog({
       actualText: tagActual,
     });
   };
+
+  const compareCategories = useMemo(
+    () => comparison ? Object.keys(comparison.categoryCounts).sort() : [],
+    [comparison],
+  );
+  const visibleDifferences = useMemo(
+    () => comparison?.pages.filter((item) =>
+      item.categories.some((category) => !hiddenCategories.includes(category))
+    ) ?? [],
+    [comparison, hiddenCategories],
+  );
+  const activeDifference = visibleDifferences[Math.min(differenceIndex, Math.max(0, visibleDifferences.length - 1))] ?? null;
+
+  useEffect(() => {
+    if (differenceIndex >= visibleDifferences.length) {
+      setDifferenceIndex(Math.max(0, visibleDifferences.length - 1));
+    }
+  }, [visibleDifferences.length, differenceIndex]);
 
   const failedChecks = accessibility?.checks.filter((check) => !check.passed) ?? [];
 
@@ -152,26 +213,123 @@ export function ReportDialog({
         <div className="workflow-body">
           {mode === "compare" ? (
             <>
-              <button className="secondary-light-button choose-wide" onClick={() => void chooseOther()}>
-                <SevenIcon name="open" /> {other || "Selecionar segunda versão"}
-              </button>
-              {loading && <div className="report-loading"><span className="loader-ring" /> Comparando texto página a página…</div>}
-              {comparison && (
-                <>
-                  <div className="report-summary">
-                    <strong>{comparison.changedPages}</strong><span>páginas diferentes</span>
-                    <small>{comparison.leftPages} páginas na versão atual · {comparison.rightPages} na outra</small>
+              <section className="compare-config">
+                <div className="compare-file-row">
+                  <div>
+                    <span className="eyebrow">ARQUIVO A</span>
+                    <strong title={compareSwap ? other : currentPdf}>{compareSwap ? (other || "Selecione o segundo arquivo") : currentPdf}</strong>
                   </div>
-                  <div className="compare-list">
-                    {comparison.pages.length === 0 && <div className="empty-panel">Nenhuma diferença textual normalizada detectada.</div>}
-                    {comparison.pages.map((item) => (
-                      <article className="compare-item" key={item.pageIndex}>
-                        <header>Página {item.pageIndex + 1}</header>
+                  <button className="compare-swap" disabled={!other} onClick={swapComparison} title="Trocar lados">⇄</button>
+                  <div>
+                    <span className="eyebrow">ARQUIVO B</span>
+                    <strong title={compareSwap ? currentPdf : other}>{compareSwap ? currentPdf : (other || "Selecione o segundo arquivo")}</strong>
+                  </div>
+                </div>
+                <button className="secondary-light-button choose-wide" onClick={() => void chooseOther()}>
+                  <SevenIcon name="open" /> {other || "Selecionar segunda versão"}
+                </button>
+                <div className="compare-options-grid">
+                  <label className="workflow-field"><span>Página inicial</span><input value={comparePageStart} onChange={(event) => setComparePageStart(event.target.value.replace(/[^0-9]/g, ""))} placeholder="1" /></label>
+                  <label className="workflow-field"><span>Página final</span><input value={comparePageEnd} onChange={(event) => setComparePageEnd(event.target.value.replace(/[^0-9]/g, ""))} placeholder="até o fim" /></label>
+                  <label className="workflow-field">
+                    <span>Tipo de documento</span>
+                    <select value={compareDocumentType} onChange={(event) => setCompareDocumentType(event.target.value as CompareOptions["documentType"])}>
+                      <option value="auto">Auto detect</option>
+                      <option value="report">Relatório</option>
+                      <option value="spreadsheet">Planilha</option>
+                      <option value="magazine">Layout de revista</option>
+                      <option value="presentation">Apresentação</option>
+                      <option value="scan">Scan</option>
+                      <option value="drawing">Desenho</option>
+                      <option value="illustration">Ilustração</option>
+                    </select>
+                  </label>
+                  <label className="toggle-row compare-text-only"><input type="checkbox" checked={compareTextOnly} onChange={(event) => setCompareTextOnly(event.target.checked)} /><span><strong>Somente texto</strong><small>Ignora comparação visual/pixel.</small></span></label>
+                </div>
+                <button className="primary-button compare-run" disabled={!other || loading} onClick={() => runComparison()}>
+                  <SevenIcon name="compare" /> Comparar agora
+                </button>
+              </section>
+
+              {loading && <div className="report-loading"><span className="loader-ring" /> Comparando texto, layout, gráficos e anotações…</div>}
+
+              {comparison && !loading && (
+                <>
+                  <div className="compare-summary-grid">
+                    <div><span>Páginas alteradas</span><strong>{comparison.changedPages}</strong></div>
+                    <div><span>Diferenças</span><strong>{comparison.totalDifferences}</strong></div>
+                    <div><span>Tipo detectado</span><strong>{comparison.documentType}</strong></div>
+                    <div><span>Arquivo A</span><strong>{comparison.leftPages} pág.</strong></div>
+                    <div><span>Arquivo B</span><strong>{comparison.rightPages} pág.</strong></div>
+                  </div>
+
+                  <div className="compare-category-filter">
+                    {compareCategories.map((category) => {
+                      const hidden = hiddenCategories.includes(category);
+                      return (
+                        <button key={category} className={hidden ? "hidden" : "active"} onClick={() => setHiddenCategories((current) => hidden ? current.filter((item) => item !== category) : [...current, category])}>
+                          {category} <b>{comparison.categoryCounts[category]}</b>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="compare-navigation">
+                    <button disabled={differenceIndex <= 0} onClick={() => setDifferenceIndex((value) => Math.max(0, value - 1))}>← Diferença anterior</button>
+                    <span>{visibleDifferences.length ? differenceIndex + 1 : 0} / {visibleDifferences.length}</span>
+                    <button disabled={differenceIndex >= visibleDifferences.length - 1} onClick={() => setDifferenceIndex((value) => Math.min(visibleDifferences.length - 1, value + 1))}>Próxima diferença →</button>
+                    <i />
+                    <button className={compareView === "side" ? "active" : ""} onClick={() => setCompareView("side")}>Lado a lado</button>
+                    <button className={compareView === "single" ? "active" : ""} onClick={() => setCompareView("single")}>Página única</button>
+                    <button className="compare-export" onClick={() => void exportComparison()}><SevenIcon name="save" /> Salvar relatório</button>
+                  </div>
+
+                  {!activeDifference ? (
+                    <div className="preflight-ok"><SevenIcon name="shield" /><span>Nenhuma diferença nas categorias visíveis.</span></div>
+                  ) : (
+                    <article className="compare-detail">
+                      <header>
                         <div>
-                          <p><b>Atual</b>{item.leftExcerpt || "Página ausente"}</p>
-                          <p><b>Outra</b>{item.rightExcerpt || "Página ausente"}</p>
+                          <span className="eyebrow">PÁGINA {activeDifference.pageIndex + 1}</span>
+                          <h3>{activeDifference.status}</h3>
                         </div>
-                      </article>
+                        <div className="compare-badges">{activeDifference.categories.map((category) => <span key={category}>{category}</span>)}</div>
+                      </header>
+
+                      {!comparison.textOnly && (activeDifference.leftPreview || activeDifference.rightPreview) && (
+                        <div className={compareView === "side" ? "compare-previews side" : "compare-previews single"}>
+                          {activeDifference.leftPreview && (
+                            <figure><figcaption>Arquivo A</figcaption><img src={nativeAssetUrl(activeDifference.leftPreview)} alt={`Página ${activeDifference.pageIndex + 1} do arquivo A`} /></figure>
+                          )}
+                          {activeDifference.rightPreview && (
+                            <figure><figcaption>Arquivo B</figcaption><img src={nativeAssetUrl(activeDifference.rightPreview)} alt={`Página ${activeDifference.pageIndex + 1} do arquivo B`} /></figure>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="compare-metrics">
+                        <span><b>+{activeDifference.textAdded}</b> palavras</span>
+                        <span><b>-{activeDifference.textRemoved}</b> palavras</span>
+                        {!comparison.textOnly && <span><b>{activeDifference.visualDifferencePercent.toFixed(2)}%</b> visual</span>}
+                        {!comparison.textOnly && <span><b>{activeDifference.graphicsDelta >= 0 ? "+" : ""}{activeDifference.graphicsDelta}</b> gráficos</span>}
+                        {!comparison.textOnly && <span><b>{activeDifference.annotationsDelta >= 0 ? "+" : ""}{activeDifference.annotationsDelta}</b> anotações</span>}
+                        {activeDifference.movedFrom !== undefined && <span><b>→ pág. {activeDifference.movedFrom + 1}</b> conteúdo movido</span>}
+                      </div>
+
+                      <div className="compare-text-panes">
+                        <p><b>Arquivo A</b>{activeDifference.leftExcerpt || "Página ausente / sem texto"}</p>
+                        <p><b>Arquivo B</b>{activeDifference.rightExcerpt || "Página ausente / sem texto"}</p>
+                      </div>
+                    </article>
+                  )}
+
+                  <div className="compare-difference-list">
+                    {visibleDifferences.map((item, index) => (
+                      <button key={item.pageIndex} className={index === differenceIndex ? "active" : ""} onClick={() => setDifferenceIndex(index)}>
+                        <strong>Página {item.pageIndex + 1}</strong>
+                        <span>{item.categories.join(" · ")}</span>
+                        <small>{item.status}</small>
+                      </button>
                     ))}
                   </div>
                 </>

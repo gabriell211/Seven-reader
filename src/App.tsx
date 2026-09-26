@@ -138,6 +138,12 @@ import {
   startSplitPages,
   startWebToPdf,
   startDeletePages,
+  startInsertBlankPages,
+  startInsertImagePages,
+  startInsertTextPages,
+  startInsertClipboardImagePages,
+  startInsertWebPages,
+  startInsertScannedPage,
   startInsertPages,
   startReplacePages,
   signDocument,
@@ -2277,13 +2283,62 @@ export default function App() {
               : request.operation === "delete"
                 ? await startDeletePages(input, output, request.pageExpression)
                 : request.operation === "insert"
-                  ? await startInsertPages(
-                      input,
-                      output,
-                      request.source ?? "",
-                      request.sourceRange ?? "1-z",
-                      request.insertAfter ?? 0,
-                    )
+                  ? request.insertKind === "blank"
+                    ? await startInsertBlankPages(
+                        input,
+                        output,
+                        request.insertAfter ?? 0,
+                        request.pageSize ?? "a4",
+                        request.blankPageCount ?? 1,
+                      )
+                    : request.insertKind === "images"
+                      ? await startInsertImagePages(
+                          input,
+                          output,
+                          request.insertAfter ?? 0,
+                          request.images ?? [],
+                          request.dpi ?? 150,
+                        )
+                      : request.insertKind === "clipboard-text"
+                        ? await startInsertTextPages(
+                            input,
+                            output,
+                            request.insertAfter ?? 0,
+                            request.text ?? "",
+                            request.pageSize ?? "a4",
+                            request.fontSize ?? 11,
+                          )
+                        : request.insertKind === "clipboard-image"
+                          ? await startInsertClipboardImagePages(
+                              input,
+                              output,
+                              request.insertAfter ?? 0,
+                              request.rgba ?? [],
+                              request.imageWidth ?? 0,
+                              request.imageHeight ?? 0,
+                              request.dpi ?? 150,
+                            )
+                          : request.insertKind === "web"
+                            ? await startInsertWebPages(
+                                input,
+                                output,
+                                request.insertAfter ?? 0,
+                                request.url ?? "",
+                              )
+                            : request.insertKind === "scan"
+                              ? await startInsertScannedPage(
+                                  input,
+                                  output,
+                                  request.insertAfter ?? 0,
+                                  request.dpi ?? 150,
+                                )
+                              : await startInsertPages(
+                                  input,
+                                  output,
+                                  request.source ?? "",
+                                  request.sourceRange ?? "1-z",
+                                  request.insertAfter ?? 0,
+                                )
                   : request.operation === "replace"
                     ? await startReplacePages(
                         input,
@@ -2697,6 +2752,7 @@ export default function App() {
           documentId={document?.id ?? ""}
           fileName={document?.name ?? "Selecionar PDF"}
           pageCount={document?.pageCount}
+          capabilities={capabilities}
           onClose={() => setOrganizerOpen(false)}
           onRun={(request) => void runPageOperation(request)}
         />

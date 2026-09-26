@@ -543,6 +543,7 @@ export default function App() {
       const next: RecentDocument[] = [
         {
           path: summary.path,
+          activePath: summary.activePath,
           name: summary.name,
           pageCount: summary.pageCount,
           lastOpenedAt: Date.now(),
@@ -778,6 +779,7 @@ export default function App() {
           const existing = byPath.get(path);
           byPath.set(path, {
             path,
+            activePath: existing?.activePath ?? path,
             name,
             pageCount: existing?.pageCount,
             lastOpenedAt: existing?.lastOpenedAt ?? now - index,

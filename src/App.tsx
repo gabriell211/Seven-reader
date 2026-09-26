@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebviewWindow, WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { confirm, message, open, save } from "@tauri-apps/plugin-dialog";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { openPath as openSystemPath, openUrl } from "@tauri-apps/plugin-opener";
 import { SplashScreen } from "./components/SplashScreen";
 import { Home } from "./components/Home";
 import { DocumentWorkspace } from "./components/DocumentWorkspace";
@@ -74,6 +74,7 @@ import {
   listPrinters,
   printDocumentAdvanced,
   extractInteractiveAsset,
+  materializeInteractiveMedia,
   listGeospatialViewports,
   resolveGeospatialCoordinate,
   getDocumentMetadata,
@@ -2100,6 +2101,24 @@ export default function App() {
     }
   };
 
+  const runOpenInteractiveMedia = async (asset: InteractiveAssetInfo) => {
+    if (!document || !asset.safeToOpen) {
+      setNotice("Este asset não é um formato de áudio/vídeo permitido para abertura externa.");
+      return;
+    }
+    const accepted = await confirm(
+      `Abrir "${asset.name}" no aplicativo padrão do sistema?\n\nO arquivo será extraído para o cache local isolado do Seven Reader. Nenhum script ou Launch action será executado.`,
+      { title: "Seven Reader · Abrir mídia", kind: "warning" },
+    );
+    if (!accepted) return;
+    try {
+      const path = await materializeInteractiveMedia(document.id, asset.objectId, asset.name);
+      await openSystemPath(path);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
   const runResolveGeospatial = async (
     pageIndex: number,
     normalizedX: number,
@@ -3785,7 +3804,7 @@ export default function App() {
       )}
       {articlesOpen && document && <ArticlesDialog pageIndex={page} initialSelection={printSelection ?? undefined} articles={articles} loading={articlesLoading} onClose={() => { setArticlesOpen(false); setArticleFocusRect(null); }} onReload={() => void reloadArticles()} onNavigate={(pageIndex, rect) => void navigateArticleBox(pageIndex, rect)} onFinishReading={() => void finishArticleReading()} onAddBox={(request) => void runAddArticleBox(request)} onUpdateArticle={(update) => void runUpdateArticle(update)} onUpdateBox={(update) => void runUpdateArticleBox(update)} onMoveBox={(objectId, direction) => void runMoveArticleBox(objectId, direction)} onDeleteBox={(objectId) => void runDeleteArticleBox(objectId)} onDeleteArticle={(objectId) => void runDeleteArticle(objectId)} onMerge={(targetId, sourceId) => void runMergeArticles(targetId, sourceId)} />}
       {printOpen && document && <PrintDialog fileName={document.name} currentPage={page} pageCount={document.pageCount} selection={printSelection ?? undefined} previewPath={rendered?.cachePath} printers={printers} loading={printersLoading} advancedAvailable={Boolean(capabilities?.ghostscript?.available)} qpdfAvailable={Boolean(capabilities?.qpdf?.available)} onClose={() => setPrintOpen(false)} onReload={() => void reloadPrinters()} onPrint={(options) => void runPrintAdvanced(options)} onSystemPrint={() => void runSystemPrint()} />}
-      {interactiveMode && document && <InteractiveContentDialog mode={interactiveMode} pageIndex={page} assets={interactiveAssets} viewports={geospatialViewports} coordinate={geospatialCoordinate} loading={interactiveLoading} onClose={() => setInteractiveMode(null)} onReload={() => void reloadInteractiveContent()} onExtract={(objectId, destination) => void runExtractInteractiveAsset(objectId, destination)} onResolve={(pageIndex, normalizedX, normalizedY) => void runResolveGeospatial(pageIndex, normalizedX, normalizedY)} />}
+      {interactiveMode && document && <InteractiveContentDialog mode={interactiveMode} pageIndex={page} assets={interactiveAssets} viewports={geospatialViewports} coordinate={geospatialCoordinate} loading={interactiveLoading} onClose={() => setInteractiveMode(null)} onReload={() => void reloadInteractiveContent()} onExtract={(objectId, destination) => void runExtractInteractiveAsset(objectId, destination)} onOpenMedia={(asset) => void runOpenInteractiveMedia(asset)} onResolve={(pageIndex, normalizedX, normalizedY) => void runResolveGeospatial(pageIndex, normalizedX, normalizedY)} />}
       {optimizeOpen && document && <OptimizeDialog documentPath={document.activePath} audit={optimizationAudit} loading={optimizationAuditLoading} onClose={() => setOptimizeOpen(false)} onAudit={() => void reloadOptimizationAudit()} onRun={(output, options) => void runOptimizeAdvanced(output, options)} />}
       {sharedReviewOpen && document && <SharedReviewDialog documentPath={document.activePath} lastReport={reviewTransferReport} onClose={() => setSharedReviewOpen(false)} onExport={(destination) => void runExportReview(destination)} onImport={(xfdf) => void runImportReview(xfdf)} />}
       {guidedActionsOpen && <GuidedActionsDialog onClose={() => setGuidedActionsOpen(false)} onRun={(kind, inputs, outputDirectory) => void runGuidedAction(kind, inputs, outputDirectory)} />}

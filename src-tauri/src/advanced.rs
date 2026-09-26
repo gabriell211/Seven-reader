@@ -50,6 +50,19 @@ pub struct AttachmentInfo {
     pub mime: String,
     pub sha256: String,
     pub object_id: String,
+    pub collection_path: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PortfolioFolderInfo {
+    pub object_id: String,
+    pub id: i64,
+    pub name: String,
+    pub path: String,
+    pub description: String,
+    pub parent_object_id: Option<String>,
+    pub depth: usize,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -95,6 +108,7 @@ pub struct AdvancedPdfReport {
     pub layers: Vec<LayerInfo>,
     pub is_portfolio: bool,
     pub portfolio_view: Option<String>,
+    pub portfolio_folders: Vec<PortfolioFolderInfo>,
     pub has_rich_media: bool,
     pub has_three_d: bool,
     pub has_geospatial: bool,
@@ -292,6 +306,82 @@ fn name_tree_pairs(document: &Document, root: &Object, output: &mut Vec<(String,
     }
 }
 
+fn collection_dictionary<'a>(document: &'a Document) -> Option<&'a Dictionary> {
+    let collection = document.catalog().ok()?.get(b"Collection").ok()?;
+    match collection {
+        Object::Dictionary(dictionary) => Some(dictionary),
+        Object::Reference(id) => document.get_object(*id).ok()?.as_dict().ok(),
+        _ => None,
+    }
+}
+
+fn walk_portfolio_folders(
+    document: &Document,
+    current: Option<ObjectId>,
+    parent_path: &str,
+    parent_object_id: Option<ObjectId>,
+    depth: usize,
+    visited: &mut HashSet<ObjectId>,
+    output: &mut Vec<PortfolioFolderInfo>,
+) {
+    let mut cursor = current;
+    while let Some(id) = cursor {
+        if !visited.insert(id) {
+            return;
+        }
+        let Ok(folder) = document.get_object(id).and_then(Object::as_dict) else { return };
+        let name = folder.get(b"Name").ok().map(object_text).unwrap_or_default();
+        let path = if parent_path == "/" || parent_path.is_empty() {
+            format!("/{}", name)
+        } else {
+            format!("{}/{}", parent_path.trim_end_matches('/'), name)
+        };
+        output.push(PortfolioFolderInfo {
+            object_id: id_string(id),
+            id: folder.get(b"ID").ok().and_then(|value| value.as_i64().ok()).unwrap_or(-1),
+            name: name.clone(),
+            path: path.clone(),
+            description: folder.get(b"Desc").ok().map(object_text).unwrap_or_default(),
+            parent_object_id: parent_object_id.map(id_string),
+            depth,
+        });
+
+        let child = folder.get(b"Child").ok().and_then(|value| value.as_reference().ok());
+        if child.is_some() {
+            walk_portfolio_folders(document, child, &path, Some(id), depth + 1, visited, output);
+        }
+        cursor = folder.get(b"Next").ok().and_then(|value| value.as_reference().ok());
+    }
+}
+
+fn portfolio_folder_list(document: &Document) -> Vec<PortfolioFolderInfo> {
+    let Some(collection) = collection_dictionary(document) else { return Vec::new() };
+    let Some(root_id) = collection.get(b"Folders").ok().and_then(|value| value.as_reference().ok()) else {
+        return Vec::new();
+    };
+    let Ok(root) = document.get_object(root_id).and_then(Object::as_dict) else { return Vec::new() };
+    let mut output = vec![PortfolioFolderInfo {
+        object_id: id_string(root_id),
+        id: root.get(b"ID").ok().and_then(|value| value.as_i64().ok()).unwrap_or(0),
+        name: root.get(b"Name").ok().map(object_text).filter(|value| !value.is_empty()).unwrap_or_else(|| "Raiz".into()),
+        path: "/".into(),
+        description: root.get(b"Desc").ok().map(object_text).unwrap_or_default(),
+        parent_object_id: None,
+        depth: 0,
+    }];
+    let first = root.get(b"Child").ok().and_then(|value| value.as_reference().ok());
+    walk_portfolio_folders(
+        document,
+        first,
+        "/",
+        Some(root_id),
+        1,
+        &mut HashSet::from([root_id]),
+        &mut output,
+    );
+    output
+}
+
 fn attachment_mime_from_name(name: &str) -> String {
     let extension = Path::new(name)
         .extension()
@@ -410,12 +500,23 @@ fn attachment_list(document: &Document) -> Vec<AttachmentInfo> {
     name_tree_pairs(document, embedded, &mut pairs, &mut HashSet::new());
     pairs
         .into_iter()
-        .filter_map(|(name, id)| {
+        .filter_map(|(tree_name, id)| {
             let spec = document.get_object(id).ok()?.as_dict().ok()?;
             let description = spec.get(b"Desc").ok().map(object_text).unwrap_or_default();
             let stream = attachment_stream(document, spec)?;
             let data = stream.decompressed_content().unwrap_or_else(|_| stream.content.clone());
             let size = Some(data.len());
+            let name = spec
+                .get(b"UF")
+                .or_else(|_| spec.get(b"F"))
+                .ok()
+                .map(object_text)
+                .filter(|value| !value.is_empty())
+                .unwrap_or_else(|| tree_name.rsplit('/').next().unwrap_or(&tree_name).to_owned());
+            let collection_path = tree_name
+                .rsplit_once('/')
+                .map(|(folder, _)| format!("/{}", folder.trim_matches('/')))
+                .unwrap_or_else(|| "/".into());
             let mime = stream
                 .dict
                 .get(b"Subtype")
@@ -424,7 +525,15 @@ fn attachment_list(document: &Document) -> Vec<AttachmentInfo> {
                 .filter(|value| !value.is_empty())
                 .unwrap_or_else(|| attachment_mime_from_name(&name));
             let sha256 = hex::encode(Sha256::digest(&data));
-            Some(AttachmentInfo { name, description, size, mime, sha256, object_id: id_string(id) })
+            Some(AttachmentInfo {
+                name,
+                description,
+                size,
+                mime,
+                sha256,
+                object_id: id_string(id),
+                collection_path,
+            })
         })
         .collect()
 }
@@ -677,10 +786,7 @@ pub fn inspect(path: &Path) -> Result<AdvancedPdfReport, SevenError> {
     let catalog = document.catalog().map_err(|error| SevenError::Operation(error.to_string()))?;
     let (rich, three_d, geo, js, launch, suspicious) = scan_active_content(&document);
     let is_portfolio = catalog.get(b"Collection").is_ok();
-    let portfolio_view = catalog
-        .get(b"Collection")
-        .ok()
-        .and_then(|object| object.as_dict().ok())
+    let portfolio_view = collection_dictionary(&document)
         .and_then(|dictionary| dictionary.get(b"View").ok())
         .map(object_text);
     Ok(AdvancedPdfReport {
@@ -689,6 +795,7 @@ pub fn inspect(path: &Path) -> Result<AdvancedPdfReport, SevenError> {
         layers: layer_list(&document),
         is_portfolio,
         portfolio_view,
+        portfolio_folders: portfolio_folder_list(&document),
         has_rich_media: rich,
         has_three_d: three_d,
         has_geospatial: geo,

@@ -110,6 +110,7 @@ pub fn run() {
             commands::session_add_pdf_attachment,
             commands::session_update_pdf_attachment,
             commands::session_remove_pdf_attachment,
+            commands::session_add_pdf_portfolio_item,
             commands::session_configure_pdf_portfolio,
             commands::session_set_pdf_portfolio_view,
             commands::session_create_pdf_portfolio_folder,

@@ -125,6 +125,10 @@ import {
   sessionResetPdfLayerVisibility,
   sessionUpdatePdfLayerProperties,
   sessionSetPdfLayerVisibility,
+  sessionImportImageAsPdfLayer,
+  sessionReorderPdfLayer,
+  sessionMergePdfLayers,
+  sessionFlattenPdfLayers,
   sessionUpdateDocumentMetadata,
   sessionSetPageGeometry,
   sessionSetPageBoxes,
@@ -1823,6 +1827,64 @@ export default function App() {
       const summary = await sessionUpdatePdfLayerProperties(document.id, update);
       await acceptDocumentRevision(summary, "Propriedades da camada atualizadas.");
       await refreshAdvancedFrom(summary);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runImportLayer = async (
+    imagePath: string,
+    name: string,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    visible: boolean,
+    locked: boolean,
+  ) => {
+    if (!document) return;
+    try {
+      const summary = await sessionImportImageAsPdfLayer(
+        document.id, page, imagePath, name, x, y, width, height, visible, locked,
+      );
+      await acceptDocumentRevision(summary, `Layer "${name}" importada na página ${page + 1}.`);
+      await reloadAdvanced(summary.activePath);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runReorderLayer = async (objectId: string, direction: "up" | "down") => {
+    if (!document) return;
+    try {
+      const summary = await sessionReorderPdfLayer(document.id, objectId, direction);
+      await acceptDocumentRevision(summary, "Ordem das layers atualizada.");
+      await reloadAdvanced(summary.activePath);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runMergeLayers = async (sourceId: string, targetId: string) => {
+    if (!document) return;
+    try {
+      const summary = await sessionMergePdfLayers(document.id, sourceId, targetId);
+      await acceptDocumentRevision(summary, "Layers mescladas.");
+      await reloadAdvanced(summary.activePath);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runFlattenLayers = async () => {
+    if (!document) return;
+    try {
+      const result = await sessionFlattenPdfLayers(document.id);
+      await acceptDocumentRevision(
+        result.document,
+        `Layers achatadas em ${result.changedPages} página(s), respeitando a visibilidade atual.`,
+      );
+      await reloadAdvanced(result.document.activePath);
     } catch (error) {
       setNotice(errorMessage(error));
     }

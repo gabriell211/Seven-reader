@@ -127,6 +127,132 @@ pub struct OcrWord {
     pub height: u32,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OcrLanguageDetection {
+    pub language: String,
+    pub confidence: f32,
+    pub evaluated: Vec<String>,
+}
+
+pub fn list_languages() -> Result<Vec<String>, SevenError> {
+    let executable = which::which("tesseract")
+        .map_err(|_| SevenError::CapabilityUnavailable("Tesseract".into()))?;
+    let output = Command::new(executable)
+        .arg("--list-langs")
+        .stdin(Stdio::null())
+        .output()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    if !output.status.success() {
+        return Err(SevenError::Operation(format!(
+            "Tesseract encerrou com código {:?}",
+            output.status.code()
+        )));
+    }
+    let text = String::from_utf8(output.stdout)
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    let mut languages = text
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .filter(|line| !line.starts_with("List of available languages"))
+        .filter(|line| *line != "osd")
+        .filter(|line| line.chars().all(|character| character.is_ascii_alphanumeric() || matches!(character, '_' | '-')))
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    languages.sort();
+    languages.dedup();
+    Ok(languages)
+}
+
+fn average_tsv_confidence(bytes: &[u8]) -> Option<f32> {
+    let text = String::from_utf8_lossy(bytes);
+    let mut weighted = 0.0f32;
+    let mut weight = 0.0f32;
+    for line in text.lines().skip(1) {
+        let columns = line.split('\t').collect::<Vec<_>>();
+        if columns.len() < 12 {
+            continue;
+        }
+        let word = columns[11].trim();
+        if word.is_empty() {
+            continue;
+        }
+        let confidence = columns[10].parse::<f32>().ok()?;
+        if confidence < 0.0 {
+            continue;
+        }
+        let word_weight = word.chars().count().clamp(1, 20) as f32;
+        weighted += confidence * word_weight;
+        weight += word_weight;
+    }
+    (weight > 0.0).then_some(weighted / weight)
+}
+
+pub fn detect_language(
+    state: &AppState,
+    document: &OpenDocument,
+    page_index: usize,
+    candidates: Vec<String>,
+) -> Result<OcrLanguageDetection, SevenError> {
+    if candidates.is_empty() || candidates.len() > 12 {
+        return Err(SevenError::OperationRejected(
+            "Informe entre 1 e 12 idiomas candidatos".into(),
+        ));
+    }
+    let installed = list_languages()?;
+    let installed = installed.into_iter().collect::<std::collections::HashSet<_>>();
+    let mut candidates = candidates
+        .into_iter()
+        .filter(|language| {
+            !language.is_empty()
+                && language.len() <= 32
+                && language.chars().all(|character| character.is_ascii_alphanumeric() || matches!(character, '_' | '-'))
+                && installed.contains(language)
+        })
+        .collect::<Vec<_>>();
+    candidates.sort();
+    candidates.dedup();
+    if candidates.is_empty() {
+        return Err(SevenError::OperationRejected(
+            "Nenhum dos idiomas candidatos está instalado no Tesseract".into(),
+        ));
+    }
+
+    let rendered = pdf::render_page(state, document, page_index, 1800)?;
+    let executable = which::which("tesseract")
+        .map_err(|_| SevenError::CapabilityUnavailable("Tesseract".into()))?;
+    let mut best: Option<(String, f32)> = None;
+    let mut evaluated = Vec::new();
+
+    for language in candidates {
+        let output = Command::new(&executable)
+            .arg(&rendered.cache_path)
+            .arg("stdout")
+            .arg("-l")
+            .arg(&language)
+            .arg("--psm")
+            .arg("6")
+            .arg("tsv")
+            .stdin(Stdio::null())
+            .output()
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+        if !output.status.success() {
+            continue;
+        }
+        evaluated.push(language.clone());
+        let Some(confidence) = average_tsv_confidence(&output.stdout) else { continue };
+        if best.as_ref().is_none_or(|(_, current)| confidence > *current) {
+            best = Some((language, confidence));
+        }
+    }
+
+    let (language, confidence) = best.ok_or_else(|| SevenError::OperationRejected(
+        "Não houve texto suficiente para detectar o idioma nesta página".into(),
+    ))?;
+    Ok(OcrLanguageDetection { language, confidence, evaluated })
+}
+
 pub fn review_page(
     state: &AppState,
     document: &OpenDocument,

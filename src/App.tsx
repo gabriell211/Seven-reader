@@ -8,6 +8,7 @@ import { Home } from "./components/Home";
 import { DocumentWorkspace } from "./components/DocumentWorkspace";
 import { PageOrganizerDialog, type PageOperationRequest } from "./components/PageOrganizerDialog";
 import { CreatePdfDialog, type BlankPageSize } from "./components/CreatePdfDialog";
+import { CombineDialog } from "./components/CombineDialog";
 import { ConversionDialog } from "./components/ConversionDialog";
 import { SecurityDialog } from "./components/SecurityDialog";
 import { PropertiesDialog } from "./components/PropertiesDialog";
@@ -196,7 +197,7 @@ import {
   searchDocument,
   searchDocumentOccurrences,
   searchDocumentAdvanced,
-  startCombine,
+  startCombineMixed,
   startConvertToPdf,
   startBatchConvertToPdf,
   startBatchOcr,
@@ -435,6 +436,7 @@ export default function App() {
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [organizerOpen, setOrganizerOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [combineDialogOpen, setCombineDialogOpen] = useState(false);
   const [conversionOpen, setConversionOpen] = useState(false);
   const [watchFolders, setWatchFolders] = useState<WatchFolderConfig[]>([]);
   const [watchFolderEvents, setWatchFolderEvents] = useState<WatchFolderEvent[]>([]);
@@ -1819,24 +1821,7 @@ export default function App() {
       }
 
       if (tool === "combine") {
-        const selected = await open({
-          title: "Combinar PDFs",
-          multiple: true,
-          directory: false,
-          filters: [{ name: "Documentos PDF", extensions: ["pdf"] }],
-        });
-        if (!Array.isArray(selected) || selected.length < 2) {
-          setNotice("Selecione pelo menos dois PDFs para combinar.");
-          return;
-        }
-        const output = await save({
-          title: "Salvar PDF combinado",
-          defaultPath: "Seven-Reader-Combinado.pdf",
-          filters: [{ name: "Documento PDF", extensions: ["pdf"] }],
-        });
-        if (!output) return;
-        const started = await startCombine(selected, output);
-        setNotice(`Combinação iniciada · job ${started.jobId.slice(0, 8)}`);
+        setCombineDialogOpen(true);
         return;
       }
 
@@ -1864,6 +1849,19 @@ export default function App() {
 
 
 
+
+  const runCombineMixedDocuments = async (inputs: string[], output: string) => {
+    try {
+      const started = await startCombineMixed(inputs, output);
+      setCombineDialogOpen(false);
+      setNotice(`Combinação iniciada · ${inputs.length} arquivo(s) · job ${started.jobId.slice(0, 8)}`);
+    } catch (error) {
+      const text = errorMessage(error);
+      setNotice(text);
+      await message(text, { title: "Seven Reader · Combinar arquivos", kind: "error" });
+      throw error;
+    }
+  };
 
   const reloadOptimizationAudit = async () => {
     if (!document) return;
@@ -4093,6 +4091,14 @@ export default function App() {
           onSave={() => void resolveClosePrompt(true)}
           onDiscard={() => void resolveClosePrompt(false)}
           onCancel={cancelClosePrompt}
+        />
+      )}
+      {combineDialogOpen && (
+        <CombineDialog
+          openDocuments={openTabs}
+          officeAvailable={Boolean(capabilities?.office.available)}
+          onClose={() => setCombineDialogOpen(false)}
+          onCombine={runCombineMixedDocuments}
         />
       )}
       {articlesOpen && document && <ArticlesDialog pageIndex={page} initialSelection={printSelection ?? undefined} articles={articles} loading={articlesLoading} onClose={() => { setArticlesOpen(false); setArticleFocusRect(null); }} onReload={() => void reloadArticles()} onNavigate={(pageIndex, rect) => void navigateArticleBox(pageIndex, rect)} onFinishReading={() => void finishArticleReading()} onAddBox={(request) => void runAddArticleBox(request)} onUpdateArticle={(update) => void runUpdateArticle(update)} onUpdateBox={(update) => void runUpdateArticleBox(update)} onMoveBox={(objectId, direction) => void runMoveArticleBox(objectId, direction)} onDeleteBox={(objectId) => void runDeleteArticleBox(objectId)} onDeleteArticle={(objectId) => void runDeleteArticle(objectId)} onMerge={(targetId, sourceId) => void runMergeArticles(targetId, sourceId)} />}

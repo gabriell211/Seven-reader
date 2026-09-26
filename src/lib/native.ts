@@ -33,6 +33,7 @@ import type {
   ManagedElementInfo,
   PageLabelOptions,
   PagePreflight,
+  PageTransferResult,
   MetadataUpdate,
   NamedDestinationInfo,
   NewFormField,
@@ -124,6 +125,22 @@ export async function restoreDocumentSession(
     path,
     workingPath,
     password: password ?? null,
+  });
+}
+
+export async function sessionTransferPages(
+  sourceDocumentId: string,
+  targetDocumentId: string,
+  pageRange: string,
+  insertAfter: number,
+  movePages: boolean,
+): Promise<PageTransferResult> {
+  return invoke<PageTransferResult>("session_transfer_pages", {
+    sourceDocumentId,
+    targetDocumentId,
+    pageRange,
+    insertAfter,
+    movePages,
   });
 }
 

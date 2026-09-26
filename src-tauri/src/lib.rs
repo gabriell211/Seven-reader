@@ -1,6 +1,7 @@
 mod accessibility;
 mod advanced;
 mod annotations;
+mod articles;
 mod capabilities;
 mod catalog;
 mod commands;
@@ -46,6 +47,14 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_capabilities,
+            commands::list_pdf_articles,
+            commands::session_add_pdf_article_box,
+            commands::session_update_pdf_article,
+            commands::session_update_pdf_article_box,
+            commands::session_move_pdf_article_box,
+            commands::session_delete_pdf_article_box,
+            commands::session_delete_pdf_article,
+            commands::session_merge_pdf_articles,
             commands::list_interactive_assets,
             commands::extract_interactive_asset,
             commands::list_geospatial_viewports,

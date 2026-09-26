@@ -3,7 +3,7 @@ use lopdf::{Dictionary, Document, Object, ObjectId, Stream};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     fs,
     path::Path,
 };
@@ -81,14 +81,6 @@ fn dictionary_from_object<'a>(document: &'a Document, object: &'a Object) -> Opt
     match object {
         Object::Dictionary(dictionary) => Some(dictionary),
         Object::Reference(id) => document.get_object(*id).ok()?.as_dict().ok(),
-        _ => None,
-    }
-}
-
-fn stream_from_object<'a>(document: &'a Document, object: &'a Object) -> Option<(Option<ObjectId>, &'a Stream)> {
-    match object {
-        Object::Stream(stream) => Some((None, stream)),
-        Object::Reference(id) => document.get_object(*id).ok()?.as_stream().ok().map(|stream| (Some(*id), stream)),
         _ => None,
     }
 }

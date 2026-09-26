@@ -1850,9 +1850,13 @@ export default function App() {
 
 
 
-  const runCombineMixedDocuments = async (inputs: string[], output: string) => {
+  const runCombineMixedDocuments = async (
+    inputs: string[],
+    pageRanges: string[],
+    output: string,
+  ) => {
     try {
-      const started = await startCombineMixed(inputs, output);
+      const started = await startCombineMixed(inputs, pageRanges, output);
       setCombineDialogOpen(false);
       setNotice(`Combinação iniciada · ${inputs.length} arquivo(s) · job ${started.jobId.slice(0, 8)}`);
     } catch (error) {

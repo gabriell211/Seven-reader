@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type { Capabilities, OcrOptions, OcrWord, ScannedPage } from "../types";
+import type { Capabilities, OcrLanguageDetection, OcrOptions, OcrWord, ScannedPage } from "../types";
 import { nativeAssetUrl } from "../lib/native";
 import { SevenIcon } from "./SevenIcon";
 
@@ -15,6 +15,7 @@ interface OcrDialogProps {
   onRunOcr: (output: string, options: OcrOptions) => void;
   onRunBatchOcr: (inputs: string[], outputDirectory: string, options: OcrOptions) => void;
   onReview: (language: string, threshold: number) => void;
+  onDetectLanguage: (candidates: string[]) => Promise<OcrLanguageDetection>;
   onScanPage: (dpi: number, colorMode: "color" | "gray" | "lineart") => Promise<ScannedPage>;
   onDeleteScanPages: (inputs: string[]) => Promise<void> | void;
   onFinalizeScan: (inputs: string[], output: string, dpi: number, options?: OcrOptions) => Promise<void> | void;
@@ -31,6 +32,7 @@ export function OcrDialog({
   onRunOcr,
   onRunBatchOcr,
   onReview,
+  onDetectLanguage,
   onScanPage,
   onDeleteScanPages,
   onFinalizeScan,
@@ -58,6 +60,8 @@ export function OcrDialog({
   const [scanBusy, setScanBusy] = useState(false);
   const [scanError, setScanError] = useState("");
   const [scanOcrAfter, setScanOcrAfter] = useState(true);
+  const [detectingLanguage, setDetectingLanguage] = useState(false);
+  const [languageDetection, setLanguageDetection] = useState<OcrLanguageDetection | null>(null);
 
   const buildOptions = (sidecar?: string): OcrOptions => ({
     language,
@@ -77,6 +81,27 @@ export function OcrDialog({
     optimize,
     rotatePagesThreshold,
   });
+
+  const detectLanguage = async () => {
+    if (!documentId) return;
+    const preferred = language
+      .split("+")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const candidates = Array.from(new Set([
+      ...preferred,
+      "por", "eng", "spa", "fra", "deu", "ita",
+    ])).slice(0, 12);
+    try {
+      setDetectingLanguage(true);
+      setLanguageDetection(null);
+      const result = await onDetectLanguage(candidates);
+      setLanguage(result.language);
+      setLanguageDetection(result);
+    } finally {
+      setDetectingLanguage(false);
+    }
+  };
 
   const runOcr = async () => {
     if (!documentPath) return;
@@ -192,7 +217,13 @@ export function OcrDialog({
         <div className="workflow-body">
           {tab === "ocr" && (
             <>
-              <label className="workflow-field"><span>Idiomas Tesseract</span><input value={language} onChange={(event) => setLanguage(event.target.value)} spellCheck={false} /><small>Ex.: por+eng, eng, spa.</small></label>
+              <div className="ocr-language-row">
+                <label className="workflow-field"><span>Idiomas Tesseract</span><input value={language} onChange={(event) => { setLanguage(event.target.value); setLanguageDetection(null); }} spellCheck={false} /><small>Ex.: por+eng, eng, spa.</small></label>
+                <button className="secondary-light-button" disabled={!capabilities?.tesseract.available || !documentId || detectingLanguage} onClick={() => void detectLanguage()}>
+                  <SevenIcon name="search" /> {detectingLanguage ? "Detectando…" : "Detectar automaticamente"}
+                </button>
+              </div>
+              {languageDetection && <div className="capability-inline ok"><SevenIcon name="ocr" /><div><strong>Idioma detectado: {languageDetection.language}</strong><small>Confiança média {languageDetection.confidence.toFixed(1)}% · {languageDetection.evaluated.length} modelo(s) avaliado(s).</small></div></div>}
               <div className="two-column-fields">
                 <label className="workflow-field"><span>Tipo de saída</span><select value={outputType} onChange={(event) => setOutputType(event.target.value as OcrOptions["outputType"])}><option value="auto">Automático / PDF-A quando seguro</option><option value="pdf">PDF normal</option><option value="pdfa">PDF/A-2b</option><option value="pdfa-1">PDF/A-1b</option><option value="pdfa-2">PDF/A-2b explícito</option><option value="pdfa-3">PDF/A-3b</option></select></label>
                 <label className="workflow-field"><span>Texto existente</span><select value={mode} onChange={(event) => setMode(event.target.value as OcrOptions["mode"])}><option value="skip">Pular páginas com texto</option><option value="redo">Refazer camada OCR</option><option value="force">Forçar OCR completo</option></select></label>

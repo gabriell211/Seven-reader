@@ -3595,6 +3595,47 @@ export default function App() {
     }
   };
 
+  const persistWatchFolders = (items: WatchFolderConfig[]) => {
+    setWatchFolders(items);
+    localStorage.setItem(WATCH_FOLDERS_KEY, JSON.stringify(items));
+  };
+
+  const upsertWatchFolder = async (config: WatchFolderConfig) => {
+    try {
+      const started = await startWatchFolder(config);
+      const next = [...watchFolders.filter((item) => item.id !== started.id), started]
+        .sort((left, right) => left.name.localeCompare(right.name));
+      persistWatchFolders(next);
+      setNotice(started.enabled ? `Watch Folder "${started.name}" ativado.` : `Watch Folder "${started.name}" salvo desativado.`);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const toggleWatchFolder = async (id: string, enabled: boolean) => {
+    const current = watchFolders.find((item) => item.id === id);
+    if (!current) return;
+    try {
+      if (enabled) {
+        await upsertWatchFolder({ ...current, enabled: true });
+      } else {
+        try { await stopWatchFolder(id); } catch { /* may already be stopped */ }
+        const next = watchFolders.map((item) => item.id === id ? { ...item, enabled: false } : item);
+        persistWatchFolders(next);
+        setNotice(`Watch Folder "${current.name}" desativado.`);
+      }
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const removeWatchFolder = async (id: string) => {
+    try { await stopWatchFolder(id); } catch { /* inactive watcher */ }
+    const current = watchFolders.find((item) => item.id === id);
+    persistWatchFolders(watchFolders.filter((item) => item.id !== id));
+    setNotice(current ? `Watch Folder "${current.name}" removido.` : "Watch Folder removido.");
+  };
+
   const runExport = async (
     input: string,
     output: string,

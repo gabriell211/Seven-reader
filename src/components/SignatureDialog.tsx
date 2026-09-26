@@ -1,9 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import type {
   AnnotationInput,
+  InkAnnotationInput,
   PadesLevelId,
   SignRequest,
+  SignatureImageInput,
   SignatureValidationReport,
 } from "../types";
 import { SevenIcon } from "./SevenIcon";
@@ -16,8 +18,30 @@ interface SignatureDialogProps {
   loading: boolean;
   onClose: () => void;
   onElectronic: (output: string, annotation: AnnotationInput) => void;
+  onElectronicInk: (output: string, ink: InkAnnotationInput) => void;
+  onElectronicImage: (output: string, signature: SignatureImageInput) => void;
   onDigital: (output: string, request: SignRequest) => void;
   onValidate: (trustDirectory?: string, allowOnline?: boolean) => void;
+}
+
+type SavedElectronicSignature =
+  | { id: string; name: string; kind: "typed"; visualName: string; visualLabel: string }
+  | { id: string; name: string; kind: "draw"; author: string; points: Array<[number, number]>; lineWidth: number }
+  | { id: string; name: string; kind: "image"; author: string; imagePath: string };
+
+const ELECTRONIC_SIGNATURES_KEY = "seven-reader:electronic-signatures:v1";
+
+function loadElectronicSignatures(): SavedElectronicSignature[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(ELECTRONIC_SIGNATURES_KEY) ?? "[]");
+    return Array.isArray(parsed) ? parsed.slice(0, 24) : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistElectronicSignatures(items: SavedElectronicSignature[]) {
+  localStorage.setItem(ELECTRONIC_SIGNATURES_KEY, JSON.stringify(items.slice(0, 24)));
 }
 
 export function SignatureDialog({
@@ -28,12 +52,21 @@ export function SignatureDialog({
   loading,
   onClose,
   onElectronic,
+  onElectronicInk,
+  onElectronicImage,
   onDigital,
   onValidate,
 }: SignatureDialogProps) {
   const [tab, setTab] = useState(initialTab);
   const [visualName, setVisualName] = useState("");
   const [visualLabel, setVisualLabel] = useState("Assinado eletronicamente");
+  const [electronicMode, setElectronicMode] = useState<"typed" | "draw" | "image">("typed");
+  const [imagePath, setImagePath] = useState("");
+  const [drawPoints, setDrawPoints] = useState<Array<[number, number]>>([]);
+  const [lineWidth, setLineWidth] = useState(2.2);
+  const [savedName, setSavedName] = useState("Minha assinatura");
+  const [savedElectronic, setSavedElectronic] = useState<SavedElectronicSignature[]>(loadElectronicSignatures);
+  const drawingRef = useRef(false);
   const [x, setX] = useState(48);
   const [y, setY] = useState(48);
   const [width, setWidth] = useState(220);
@@ -59,6 +92,88 @@ export function SignatureDialog({
     () => Boolean(pkcs12Path && password && fieldName.trim() && (!needsTsa || tsaUrl.trim())),
     [pkcs12Path, password, fieldName, needsTsa, tsaUrl],
   );
+
+  const chooseSignatureImage = async () => {
+    const selected = await open({
+      title: "Selecionar imagem da assinatura",
+      multiple: false,
+      directory: false,
+      filters: [{ name: "Imagem da assinatura", extensions: ["png", "jpg", "jpeg"] }],
+    });
+    if (typeof selected === "string") {
+      setImagePath(selected);
+      setElectronicMode("image");
+    }
+  };
+
+  const pointFromEvent = (event: ReactPointerEvent<SVGSVGElement>): [number, number] => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return [
+      Math.max(0, Math.min(1, (event.clientX - rect.left) / Math.max(1, rect.width))),
+      Math.max(0, Math.min(1, (event.clientY - rect.top) / Math.max(1, rect.height))),
+    ];
+  };
+
+  const beginDrawing = (event: ReactPointerEvent<SVGSVGElement>) => {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drawingRef.current = true;
+    setDrawPoints([pointFromEvent(event)]);
+  };
+
+  const continueDrawing = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (!drawingRef.current) return;
+    const point = pointFromEvent(event);
+    setDrawPoints((current) => {
+      const previous = current[current.length - 1];
+      if (previous && Math.hypot(previous[0] - point[0], previous[1] - point[1]) < 0.002) return current;
+      return [...current, point].slice(0, 20_000);
+    });
+  };
+
+  const endDrawing = (event: ReactPointerEvent<SVGSVGElement>) => {
+    drawingRef.current = false;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const saveElectronicPreset = () => {
+    const name = savedName.trim() || "Assinatura";
+    let item: SavedElectronicSignature | null = null;
+    if (electronicMode === "typed" && visualName.trim()) {
+      item = { id: crypto.randomUUID(), name, kind: "typed", visualName: visualName.trim(), visualLabel: visualLabel.trim() };
+    } else if (electronicMode === "draw" && drawPoints.length >= 2) {
+      item = { id: crypto.randomUUID(), name, kind: "draw", author: visualName.trim() || "Seven Reader", points: drawPoints, lineWidth };
+    } else if (electronicMode === "image" && imagePath) {
+      item = { id: crypto.randomUUID(), name, kind: "image", author: visualName.trim() || "Seven Reader", imagePath };
+    }
+    if (!item) return;
+    const next = [item, ...savedElectronic.filter((saved) => saved.name !== name)].slice(0, 24);
+    setSavedElectronic(next);
+    persistElectronicSignatures(next);
+  };
+
+  const removeElectronicPreset = (id: string) => {
+    const next = savedElectronic.filter((item) => item.id !== id);
+    setSavedElectronic(next);
+    persistElectronicSignatures(next);
+  };
+
+  const loadElectronicPreset = (item: SavedElectronicSignature) => {
+    setSavedName(item.name);
+    setElectronicMode(item.kind);
+    if (item.kind === "typed") {
+      setVisualName(item.visualName);
+      setVisualLabel(item.visualLabel);
+    } else if (item.kind === "draw") {
+      setVisualName(item.author);
+      setDrawPoints(item.points);
+      setLineWidth(item.lineWidth);
+    } else {
+      setVisualName(item.author);
+      setImagePath(item.imagePath);
+    }
+  };
 
   const choosePkcs12 = async () => {
     const selected = await open({
@@ -92,6 +207,37 @@ export function SignatureDialog({
       pageIndex,
       kind: "freetext",
       text: [visualName.trim(), visualLabel.trim()].filter(Boolean).join(" · "),
+      author: visualName.trim() || "Seven Reader",
+      x,
+      y,
+      width,
+      height,
+    });
+  };
+
+  const applyElectronicInk = async () => {
+    if (drawPoints.length < 2 || width <= 0 || height <= 0) return;
+    const output = await chooseOutput("assinado-desenho");
+    if (!output) return;
+    onElectronicInk(output, {
+      pageIndex,
+      author: visualName.trim() || "Seven Reader",
+      points: drawPoints,
+      lineWidth,
+      x,
+      y,
+      width,
+      height,
+    });
+  };
+
+  const applyElectronicImage = async () => {
+    if (!imagePath || width <= 0 || height <= 0) return;
+    const output = await chooseOutput("assinado-imagem");
+    if (!output) return;
+    onElectronicImage(output, {
+      pageIndex,
+      imagePath,
       author: visualName.trim() || "Seven Reader",
       x,
       y,
@@ -148,16 +294,109 @@ export function SignatureDialog({
                 <SevenIcon name="sign" />
                 <div><strong>Assinatura eletrônica visual</strong><span>Cria uma marca visível no PDF. Não possui certificado, CMS, ByteRange nem validade criptográfica PAdES.</span></div>
               </div>
+
+              <div className="segmented electronic-signature-modes">
+                <button className={electronicMode === "typed" ? "active" : ""} onClick={() => setElectronicMode("typed")}>Digitar</button>
+                <button className={electronicMode === "draw" ? "active" : ""} onClick={() => setElectronicMode("draw")}>Desenhar</button>
+                <button className={electronicMode === "image" ? "active" : ""} onClick={() => setElectronicMode("image")}>Imagem</button>
+              </div>
+
               <label className="workflow-field"><span>Nome do assinante</span><input value={visualName} onChange={(event) => setVisualName(event.target.value)} placeholder="Seu nome" /></label>
-              <label className="workflow-field"><span>Texto adicional</span><input value={visualLabel} onChange={(event) => setVisualLabel(event.target.value)} /></label>
-              <div className="signature-preview"><span>{visualName || "Seu nome"}</span><small>{visualLabel}</small></div>
+
+              {electronicMode === "typed" && (
+                <>
+                  <label className="workflow-field"><span>Texto adicional</span><input value={visualLabel} onChange={(event) => setVisualLabel(event.target.value)} /></label>
+                  <div className="signature-preview"><span>{visualName || "Seu nome"}</span><small>{visualLabel}</small></div>
+                </>
+              )}
+
+              {electronicMode === "draw" && (
+                <section className="signature-draw-panel">
+                  <div className="signature-draw-head">
+                    <div><strong>Desenhe sua assinatura</strong><small>O traço será gravado como anotação Ink vetorial.</small></div>
+                    <button className="secondary-light-button" disabled={!drawPoints.length} onClick={() => setDrawPoints([])}>Limpar</button>
+                  </div>
+                  <svg
+                    className="signature-draw-canvas"
+                    viewBox="0 0 1000 300"
+                    preserveAspectRatio="none"
+                    onPointerDown={beginDrawing}
+                    onPointerMove={continueDrawing}
+                    onPointerUp={endDrawing}
+                    onPointerCancel={endDrawing}
+                    onPointerLeave={(event) => drawingRef.current && endDrawing(event)}
+                    aria-label="Área para desenhar assinatura"
+                  >
+                    <polyline
+                      points={drawPoints.map(([px, py]) => `${(px * 1000).toFixed(1)},${(py * 300).toFixed(1)}`).join(" ")}
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={Math.max(1, lineWidth * 1.5)}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  </svg>
+                  <label className="workflow-field"><span>Espessura do traço</span><input type="range" min={0.5} max={8} step={0.25} value={lineWidth} onChange={(event) => setLineWidth(Number(event.target.value))} /><small>{lineWidth.toFixed(2)} pt</small></label>
+                </section>
+              )}
+
+              {electronicMode === "image" && (
+                <section className="signature-image-panel">
+                  <button className="certificate-picker" onClick={() => void chooseSignatureImage()}>
+                    <SevenIcon name="open" />
+                    <div><strong>{imagePath ? "Imagem selecionada" : "Selecionar PNG/JPEG"}</strong><small>{imagePath || "A imagem será incorporada ao PDF, sem link externo."}</small></div>
+                  </button>
+                </section>
+              )}
+
               <div className="rect-grid">
                 <label className="workflow-field"><span>X</span><input type="number" value={x} onChange={(event) => setX(Number(event.target.value))} /></label>
                 <label className="workflow-field"><span>Y</span><input type="number" value={y} onChange={(event) => setY(Number(event.target.value))} /></label>
                 <label className="workflow-field"><span>Largura</span><input type="number" min={1} value={width} onChange={(event) => setWidth(Number(event.target.value))} /></label>
                 <label className="workflow-field"><span>Altura</span><input type="number" min={1} value={height} onChange={(event) => setHeight(Number(event.target.value))} /></label>
               </div>
-              <button className="primary-button workflow-submit" disabled={!visualName.trim()} onClick={() => void applyElectronic()}><SevenIcon name="sign" /> Aplicar na página {pageIndex + 1}</button>
+
+              <section className="saved-signature-box">
+                <div className="saved-signature-save">
+                  <label className="workflow-field"><span>Salvar para reutilizar neste dispositivo</span><input value={savedName} maxLength={80} onChange={(event) => setSavedName(event.target.value)} /></label>
+                  <button className="secondary-light-button" disabled={
+                    electronicMode === "typed" ? !visualName.trim() :
+                    electronicMode === "draw" ? drawPoints.length < 2 :
+                    !imagePath
+                  } onClick={saveElectronicPreset}>Salvar assinatura</button>
+                </div>
+                {savedElectronic.length > 0 && (
+                  <div className="saved-signature-list">
+                    {savedElectronic.map((item) => (
+                      <div key={item.id}>
+                        <button className="saved-signature-load" onClick={() => loadElectronicPreset(item)}>
+                          <SevenIcon name="sign" />
+                          <span><strong>{item.name}</strong><small>{item.kind === "typed" ? "Digitada" : item.kind === "draw" ? "Desenhada" : "Imagem"}</small></span>
+                        </button>
+                        <button className="danger-quiet" onClick={() => removeElectronicPreset(item.id)}>Remover</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <button
+                className="primary-button workflow-submit"
+                disabled={
+                  width <= 0 || height <= 0 ||
+                  (electronicMode === "typed" && !visualName.trim()) ||
+                  (electronicMode === "draw" && drawPoints.length < 2) ||
+                  (electronicMode === "image" && !imagePath)
+                }
+                onClick={() => void (
+                  electronicMode === "typed" ? applyElectronic() :
+                  electronicMode === "draw" ? applyElectronicInk() :
+                  applyElectronicImage()
+                )}
+              >
+                <SevenIcon name="sign" /> Aplicar na página {pageIndex + 1}
+              </button>
             </>
           )}
 

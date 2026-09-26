@@ -59,6 +59,7 @@ pub fn run() {
             commands::render_page,
             commands::render_pages,
             commands::search_document,
+            commands::search_document_occurrences,
             commands::search_document_advanced,
             commands::extract_text_in_rect,
             commands::crop_page_selection,

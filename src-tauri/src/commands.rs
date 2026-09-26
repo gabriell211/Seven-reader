@@ -3520,7 +3520,7 @@ fn scan_image_blocking(output: &std::path::Path, dpi: u16, color_mode: &str, sca
 }
 
 #[cfg(target_os = "windows")]
-fn scan_image_blocking(output: &std::path::Path, dpi: u16, color_mode: &str, _scanner_id: Option<&str>) -> Result<(), SevenError> {
+fn scan_image_blocking(output: &std::path::Path, dpi: u16, color_mode: &str, scanner_id: Option<&str>) -> Result<(), SevenError> {
     let powershell = jobs::require_executable(&["powershell"], "Windows PowerShell/WIA")?;
     let intent = match color_mode {
         "color" => 1,
@@ -3529,11 +3529,20 @@ fn scan_image_blocking(output: &std::path::Path, dpi: u16, color_mode: &str, _sc
         _ => return Err(SevenError::OperationRejected("Modo de cor do scanner inválido".into())),
     };
     let escaped_output = output.to_string_lossy().replace('\'', "''");
+    let escaped_scanner = scanner_id
+        .map(|value| value.replace('\'', "''"))
+        .unwrap_or_default();
+    let device_selection = if escaped_scanner.is_empty() {
+        "$device=$dialog.ShowSelectDevice(1,$false,$false); if($null -eq $device){ throw 'Nenhum scanner selecionado.' };".to_owned()
+    } else {
+        format!(
+            "$manager=New-Object -ComObject WIA.DeviceManager; $info=@($manager.DeviceInfos) | Where-Object {{$_.Type -eq 1 -and $_.DeviceID -eq '{escaped_scanner}'}} | Select-Object -First 1; if($null -eq $info){{ throw 'Scanner configurado não foi encontrado.' }}; $device=$info.Connect();"
+        )
+    };
     let script = format!(
         "$ErrorActionPreference='Stop'; \
          $dialog=New-Object -ComObject WIA.CommonDialog; \
-         $device=$dialog.ShowSelectDevice(1,$false,$false); \
-         if($null -eq $device){{ throw 'Nenhum scanner selecionado.' }}; \
+         {device_selection} \
          $item=$device.Items.Item(1); \
          try{{$item.Properties.Item('6146').Value={intent}}}catch{{}}; \
          try{{$item.Properties.Item('6147').Value={dpi}}}catch{{}}; \

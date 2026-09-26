@@ -153,6 +153,7 @@ export interface WatchFolderConfig {
   outputDirectory: string;
   recursive: boolean;
   enabled: boolean;
+  preset: "standard" | "compact" | "print";
   extensions: string[];
 }
 

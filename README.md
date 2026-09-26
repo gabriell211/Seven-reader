@@ -1170,11 +1170,11 @@ Opcional para desktop profissional:
 ## Saída
 
 - [x] Criar novo PDF
-- [ ] Anexar a PDF
+- [x] Anexar a PDF
 - [ ] Salvar múltiplos PDFs
 - [x] OCR após scan
 - [ ] Adicionar metadados
-- [ ] Criar PDF/A-1b
+- [x] Criar PDF/A-1b
 - [x] Scan mais páginas
 - [ ] Scan verso
 - [x] Finalizar

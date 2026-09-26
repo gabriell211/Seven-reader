@@ -3200,6 +3200,7 @@ pub fn start_optimize_pdf_advanced(
                 remove_annotations: options.remove_annotations,
                 remove_forms: options.remove_forms,
                 remove_multimedia: options.remove_multimedia,
+                cleanup_structure: options.cleanup,
             },
         )
         .map_err(ErrorPayload::from)?;

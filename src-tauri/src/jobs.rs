@@ -410,6 +410,20 @@ where
     JobStart { job_id: id }
 }
 
+struct CleanupPaths(Vec<PathBuf>);
+
+impl Drop for CleanupPaths {
+    fn drop(&mut self) {
+        for path in &self.0 {
+            if path.is_file() {
+                let _ = std::fs::remove_file(path);
+            } else if path.is_dir() {
+                let _ = std::fs::remove_dir_all(path);
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ProcessStep {
     pub program: PathBuf,
@@ -423,6 +437,17 @@ pub fn start_process_sequence_job(
     kind: &str,
     steps: Vec<ProcessStep>,
     output_path: Option<PathBuf>,
+) -> JobStart {
+    start_process_sequence_job_with_cleanup(app, state, kind, steps, output_path, Vec::new())
+}
+
+pub fn start_process_sequence_job_with_cleanup(
+    app: AppHandle,
+    state: &AppState,
+    kind: &str,
+    steps: Vec<ProcessStep>,
+    output_path: Option<PathBuf>,
+    cleanup_paths: Vec<PathBuf>,
 ) -> JobStart {
     let id = Uuid::new_v4().to_string();
     let cancel = Arc::new(AtomicBool::new(false));
@@ -442,6 +467,7 @@ pub fn start_process_sequence_job(
     let id_for_thread = id.clone();
 
     thread::spawn(move || {
+        let _cleanup = CleanupPaths(cleanup_paths);
         if steps.is_empty() {
             update_job(
                 &jobs,

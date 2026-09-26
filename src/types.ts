@@ -712,6 +712,17 @@ export interface PrintPreflightReport {
   warnings: string[];
 }
 
+export interface PageGeometryUpdate {
+  mode: "crop" | "resize";
+  pageIndices: number[];
+  cropLeftPt: number;
+  cropRightPt: number;
+  cropTopPt: number;
+  cropBottomPt: number;
+  widthPt?: number;
+  heightPt?: number;
+}
+
 export interface PageBoxUpdate {
   pageStart: number;
   pageEnd: number;

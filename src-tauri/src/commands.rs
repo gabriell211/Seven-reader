@@ -1238,6 +1238,94 @@ pub struct SessionFlattenLayersResult {
     pub changed_pages: usize,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionPortfolioFolderResult {
+    pub document: pdf::DocumentSummary,
+    pub changed: usize,
+}
+
+#[tauri::command]
+pub fn session_configure_pdf_portfolio(
+    state: State<'_, AppState>,
+    document_id: String,
+    view: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "configure-portfolio", move |input, output| {
+        advanced::configure_portfolio(input, output, &view)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_set_pdf_portfolio_view(
+    state: State<'_, AppState>,
+    document_id: String,
+    view: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "portfolio-view", move |input, output| {
+        advanced::set_portfolio_view(input, output, &view)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_create_pdf_portfolio_folder(
+    state: State<'_, AppState>,
+    document_id: String,
+    path: String,
+    description: String,
+) -> CommandResult<SessionPortfolioFolderResult> {
+    session::apply_revision(&state, &document_id, "portfolio-folder", move |input, output| {
+        advanced::create_portfolio_folder(input, output, &path, &description)
+    })
+    .map(|(document, changed)| SessionPortfolioFolderResult { document, changed })
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_move_pdf_portfolio_item(
+    state: State<'_, AppState>,
+    document_id: String,
+    object_id: String,
+    folder_path: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "portfolio-move-item", move |input, output| {
+        advanced::move_attachment_to_portfolio_folder(input, output, &object_id, &folder_path)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_rename_pdf_portfolio_folder(
+    state: State<'_, AppState>,
+    document_id: String,
+    folder_id: String,
+    new_name: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "portfolio-rename-folder", move |input, output| {
+        advanced::rename_portfolio_folder(input, output, &folder_id, &new_name)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_remove_pdf_portfolio_folder(
+    state: State<'_, AppState>,
+    document_id: String,
+    folder_id: String,
+) -> CommandResult<SessionPortfolioFolderResult> {
+    session::apply_revision(&state, &document_id, "portfolio-remove-folder", move |input, output| {
+        advanced::remove_portfolio_folder(input, output, &folder_id)
+    })
+    .map(|(document, changed)| SessionPortfolioFolderResult { document, changed })
+    .map_err(ErrorPayload::from)
+}
+
 #[tauri::command]
 pub fn session_import_image_as_pdf_layer(
     state: State<'_, AppState>,

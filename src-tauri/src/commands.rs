@@ -2666,6 +2666,19 @@ pub fn get_print_preflight(path: String) -> CommandResult<print_production::Prin
 }
 
 #[tauri::command]
+pub fn session_set_page_geometry(
+    state: State<'_, AppState>,
+    document_id: String,
+    update: print_production::PageGeometryUpdate,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "page-geometry", move |input, output| {
+        print_production::set_page_geometry(input, output, update)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn session_set_page_boxes(
     state: State<'_, AppState>,
     document_id: String,

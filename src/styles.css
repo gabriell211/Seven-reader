@@ -1132,7 +1132,7 @@ svg { width: 20px; height: 20px; }
 .portfolio-folder-edit input { width:84px; height:27px; padding:0 5px; border:1px solid #d8d7dd; border-radius:6px; background:white; font-size:8px; }
 .portfolio-folder-edit button { min-height:27px; padding:0 6px; border:1px solid #dedde3; border-radius:6px; background:white; cursor:pointer; font-size:7.5px; }
 .portfolio-components { min-width:0; display:grid; gap:10px; align-content:start; }
-.portfolio-component-toolbar { min-height:50px; padding:8px 10px; border:1px solid #e1e0e6; border-radius:10px; display:grid; grid-template-columns:minmax(120px,1fr) minmax(130px,220px) 110px; gap:8px; align-items:center; background:white; }
+.portfolio-component-toolbar { min-height:50px; padding:8px 10px; border:1px solid #e1e0e6; border-radius:10px; display:grid; grid-template-columns:minmax(120px,1fr) minmax(130px,220px) 110px auto; gap:8px; align-items:center; background:white; }
 .portfolio-component-toolbar > div { min-width:0; display:grid; gap:2px; }
 .portfolio-component-toolbar strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; }
 .portfolio-component-toolbar small { color:#96979f; font-size:8px; }

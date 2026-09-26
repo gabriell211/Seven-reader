@@ -897,21 +897,21 @@ Opções:
 
 ## Fontes
 
-- [ ] Arquivo
+- [x] Arquivo
 - [ ] Vários arquivos
-- [ ] Página em branco
-- [ ] Scanner
-- [ ] Área de transferência
-- [ ] Página web
+- [x] Página em branco
+- [x] Scanner
+- [x] Área de transferência
+- [x] Página web
 - [ ] Site com múltiplos níveis
-- [ ] Portfólio PDF
-- [ ] Imagem
+- [x] Portfólio PDF
+- [x] Imagem
 - [ ] Impressora virtual no Windows quando implementável
 
 ## Página web para PDF
 
-- [ ] URL
-- [ ] HTML local
+- [x] URL
+- [x] HTML local
 - [ ] Capturar um nível
 - [ ] Capturar N níveis
 - [ ] Capturar site inteiro
@@ -924,16 +924,16 @@ Opções:
 - [ ] Encoding
 - [ ] Layout
 - [ ] Fila de URLs
-- [ ] Adicionar páginas capturadas a PDF existente
+- [x] Adicionar páginas capturadas a PDF existente
 
 ## Página em branco
 
-- [ ] Tamanho
+- [x] Tamanho
 - [ ] Orientação
-- [ ] Texto estático
-- [ ] Imagens
+- [x] Texto estático
+- [x] Imagens
 - [ ] Form fields
-- [ ] Metadados
+- [x] Metadados
 
 ---
 
@@ -943,17 +943,17 @@ O sistema deve possuir uma camada de capabilities. Formatos que exigem software 
 
 ## Microsoft Office
 
-- [ ] DOC
-- [ ] DOCX
-- [ ] XLS
-- [ ] XLSX
-- [ ] PPT
-- [ ] PPTX
+- [x] DOC
+- [x] DOCX
+- [x] XLS
+- [x] XLSX
+- [x] PPT
+- [x] PPTX
 
 ## Texto
 
-- [ ] TXT
-- [ ] RTF
+- [x] TXT
+- [x] RTF
 
 ## PostScript
 
@@ -963,11 +963,11 @@ O sistema deve possuir uma camada de capabilities. Formatos que exigem software 
 
 ## Imagens
 
-- [ ] BMP
-- [ ] JPEG/JPG
+- [x] BMP
+- [x] JPEG/JPG
 - [ ] GIF
-- [ ] TIFF
-- [ ] PNG
+- [x] TIFF
+- [x] PNG
 - [ ] PCX
 - [ ] RLE
 - [ ] DIB
@@ -975,14 +975,14 @@ O sistema deve possuir uma camada de capabilities. Formatos que exigem software 
 
 ## Web
 
-- [ ] HTML
-- [ ] URL
+- [x] HTML
+- [x] URL
 
 ## OpenDocument / Office alternativo
 
-- [ ] ODT
-- [ ] ODP
-- [ ] ODS
+- [x] ODT
+- [x] ODP
+- [x] ODS
 - [ ] ODG
 - [ ] ODF
 - [ ] SXW
@@ -1018,25 +1018,25 @@ A conversão deve usar um **workspace integrado à janela principal**, seguindo 
 
 ## Janela de conversão
 
-- [ ] Painel/workspace integrado à janela principal
+- [x] Painel/workspace integrado à janela principal
 - [ ] Drag and drop
-- [ ] Vários arquivos
-- [ ] Fila
-- [ ] Progresso individual
+- [x] Vários arquivos
+- [x] Fila
+- [x] Progresso individual
 - [ ] Progresso total
-- [ ] Pausar
-- [ ] Retomar
-- [ ] Cancelar
-- [ ] Retry
-- [ ] Histórico
-- [ ] Pasta de saída
+- [x] Pausar
+- [x] Retomar
+- [x] Cancelar
+- [x] Retry
+- [x] Histórico
+- [x] Pasta de saída
 - [ ] Abrir pasta
 - [ ] Padrão de nomes
 - [ ] Sobrescrever
 - [ ] Renomear automaticamente
-- [ ] Processar em background
-- [ ] Notificação ao terminar
-- [ ] Log por arquivo
+- [x] Processar em background
+- [x] Notificação ao terminar
+- [x] Log por arquivo
 - [ ] Relatório final
 
 ## Detecção automática
@@ -1065,33 +1065,33 @@ Ao adicionar um arquivo, detectar:
 - [ ] PPTX
 - [ ] PPT
 - [ ] RTF
-- [ ] TXT
+- [x] TXT
 - [ ] HTML
 - [ ] Markdown como extensão própria
-- [ ] JPG
-- [ ] PNG
-- [ ] TIFF
+- [x] JPG
+- [x] PNG
+- [x] TIFF
 - [ ] BMP
-- [ ] PostScript
-- [ ] PDF/A
-- [ ] PDF/X quando compatível
-- [ ] PDF otimizado
+- [x] PostScript
+- [x] PDF/A
+- [x] PDF/X quando compatível
+- [x] PDF otimizado
 
 ## Opções
 
-- [ ] Preservar layout
-- [ ] Preservar imagens
-- [ ] Preservar tabelas
+- [x] Preservar layout
+- [x] Preservar imagens
+- [x] Preservar tabelas
 - [ ] Detectar colunas
-- [ ] Preservar links
-- [ ] Preservar bookmarks
+- [x] Preservar links
+- [x] Preservar bookmarks
 - [ ] Intervalo
-- [ ] DPI
-- [ ] Qualidade
-- [ ] Compressão
+- [x] DPI
+- [x] Qualidade
+- [x] Compressão
 - [ ] OCR automático
 - [ ] Idioma OCR
-- [ ] Imagens por página
+- [x] Imagens por página
 - [ ] Uma imagem por documento
 - [ ] Convenção de nomes
 

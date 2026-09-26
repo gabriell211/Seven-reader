@@ -206,6 +206,18 @@ export async function extractInteractiveAsset(
   return invoke<number>("extract_interactive_asset", { documentId, objectId, destination });
 }
 
+export async function materializeInteractiveMedia(
+  documentId: string,
+  objectId: string,
+  displayName: string,
+): Promise<string> {
+  return invoke<string>("materialize_interactive_media", {
+    documentId,
+    objectId,
+    displayName,
+  });
+}
+
 export async function listGeospatialViewports(
   documentId: string,
 ): Promise<GeospatialViewportInfo[]> {

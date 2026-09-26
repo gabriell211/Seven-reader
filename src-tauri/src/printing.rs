@@ -22,9 +22,15 @@ pub struct PrintOptions {
     pub page_set: String,
     pub reverse: bool,
     pub duplex: String,
+    pub manual_pass: String,
+    pub n_up: u8,
+    pub n_up_layout: String,
     pub orientation: String,
     pub paper_size: String,
     pub scaling: String,
+    pub color_mode: String,
+    pub print_as_image: bool,
+    pub raster_dpi: u16,
     pub print_annotations: bool,
     pub print_forms: bool,
 }
@@ -43,6 +49,18 @@ impl PrintOptions {
         if !matches!(self.duplex.as_str(), "printer" | "simplex" | "long" | "short") {
             return Err(SevenError::OperationRejected("Duplex inválido".into()));
         }
+        if !matches!(self.manual_pass.as_str(), "none" | "front" | "back") {
+            return Err(SevenError::OperationRejected("Passagem manual inválida".into()));
+        }
+        if !matches!(self.n_up, 1 | 2 | 4 | 6 | 9 | 16) {
+            return Err(SevenError::OperationRejected("Páginas por folha deve ser 1, 2, 4, 6, 9 ou 16".into()));
+        }
+        if !matches!(
+            self.n_up_layout.as_str(),
+            "lrtb" | "lrbt" | "rltb" | "rlbt" | "tblr" | "tbrl" | "btlr" | "btrl"
+        ) {
+            return Err(SevenError::OperationRejected("Ordem N-up inválida".into()));
+        }
         if !matches!(self.orientation.as_str(), "auto" | "portrait" | "landscape") {
             return Err(SevenError::OperationRejected("Orientação inválida".into()));
         }
@@ -51,6 +69,12 @@ impl PrintOptions {
         }
         if !matches!(self.scaling.as_str(), "fit" | "actual") {
             return Err(SevenError::OperationRejected("Escala de impressão inválida".into()));
+        }
+        if !matches!(self.color_mode.as_str(), "auto" | "color" | "grayscale") {
+            return Err(SevenError::OperationRejected("Modo de cor inválido".into()));
+        }
+        if !(72..=1200).contains(&self.raster_dpi) {
+            return Err(SevenError::OperationRejected("DPI de rasterização deve ficar entre 72 e 1200".into()));
         }
         if self.page_range.chars().count() > 512 {
             return Err(SevenError::OperationRejected("Intervalo de páginas muito longo".into()));
@@ -133,7 +157,12 @@ pub fn selected_pages(
         "even" => page % 2 == 0,
         _ => true,
     });
-    if options.reverse {
+    match options.manual_pass.as_str() {
+        "front" => pages.retain(|page| page % 2 == 1),
+        "back" => pages.retain(|page| page % 2 == 0),
+        _ => {}
+    }
+    if options.reverse ^ (options.manual_pass == "back") {
         pages.reverse();
     }
     if pages.is_empty() {
@@ -313,6 +342,96 @@ fn selection_crop_step(
     })
 }
 
+fn nup_shape(n_up: u8) -> &'static str {
+    match n_up {
+        2 => "2x1",
+        4 => "2x2",
+        6 => "3x2",
+        9 => "3x3",
+        16 => "4x4",
+        _ => "1x1",
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn reorder_for_nup(mut pages: Vec<usize>, n_up: u8, layout: &str) -> Vec<usize> {
+    if n_up == 1 || layout == "lrtb" {
+        return pages;
+    }
+    let (columns, rows) = match n_up {
+        2 => (2usize, 1usize),
+        4 => (2, 2),
+        6 => (3, 2),
+        9 => (3, 3),
+        16 => (4, 4),
+        _ => return pages,
+    };
+    let positions = match layout {
+        "lrtb" => (0..n_up as usize).collect::<Vec<_>>(),
+        "lrbt" => (0..columns).flat_map(|x| (0..rows).rev().map(move |y| y * columns + x)).collect(),
+        "rltb" => (0..rows).flat_map(|y| (0..columns).rev().map(move |x| y * columns + x)).collect(),
+        "rlbt" => (0..columns).rev().flat_map(|x| (0..rows).rev().map(move |y| y * columns + x)).collect(),
+        "tblr" => (0..columns).flat_map(|x| (0..rows).map(move |y| y * columns + x)).collect(),
+        "tbrl" => (0..columns).rev().flat_map(|x| (0..rows).map(move |y| y * columns + x)).collect(),
+        "btlr" => (0..columns).flat_map(|x| (0..rows).rev().map(move |y| y * columns + x)).collect(),
+        "btrl" => (0..columns).rev().flat_map(|x| (0..rows).rev().map(move |y| y * columns + x)).collect(),
+        _ => return pages,
+    };
+
+    let original = pages.clone();
+    pages.clear();
+    for chunk in original.chunks(n_up as usize) {
+        let mut row_major = vec![None; n_up as usize];
+        for (source_index, page) in chunk.iter().copied().enumerate() {
+            if let Some(&position) = positions.get(source_index) {
+                row_major[position] = Some(page);
+            }
+        }
+        pages.extend(row_major.into_iter().flatten());
+    }
+    pages
+}
+
+fn rendered_print_pdf_step(
+    input: &Path,
+    output: &Path,
+    options: &PrintOptions,
+) -> Result<jobs::ProcessStep, SevenError> {
+    let gs = jobs::require_executable(&["gswin64c", "gswin32c", "gs"], "Ghostscript")?;
+    let device = if options.print_as_image {
+        if options.color_mode == "grayscale" { "pdfimage8" } else { "pdfimage24" }
+    } else {
+        "pdfwrite"
+    };
+    let mut args = vec![
+        "-dBATCH".into(),
+        "-dNOPAUSE".into(),
+        "-dSAFER".into(),
+        format!("-sDEVICE={device}"),
+        format!("-sOutputFile={}", output.to_string_lossy()),
+        format!("-dShowAnnots={}", if options.print_annotations { "true" } else { "false" }),
+        format!("-dShowAcroForm={}", if options.print_forms { "true" } else { "false" }),
+    ];
+    if options.print_as_image {
+        args.push(format!("-r{}", options.raster_dpi));
+        args.push("-dDownScaleFactor=1".into());
+        args.push("-sCompression=Flate".into());
+    } else if options.color_mode == "grayscale" {
+        args.push("-sColorConversionStrategy=Gray".into());
+        args.push("-dProcessColorModel=/DeviceGray".into());
+    }
+    args.push(input.to_string_lossy().into_owned());
+    Ok(jobs::ProcessStep {
+        program: gs,
+        args,
+        label: if options.print_as_image {
+            "Rasterizando páginas para Print as Image".into()
+        } else {
+            "Preparando conteúdo de impressão".into()
+        },
+    })
+}
+
 fn page_subset_step(
     input: &Path,
     pages: &[usize],
@@ -355,6 +474,9 @@ fn print_steps(
     if options.scaling == "fit" {
         base.push("-dPDFFitPage".into());
     }
+    if options.n_up > 1 {
+        base.push(format!("-sNupControl={}", nup_shape(options.n_up)));
+    }
     if options.orientation == "auto" {
         base.push("-dAutoRotatePages=/PageByPage".into());
     }
@@ -365,7 +487,7 @@ fn print_steps(
     let mut device = Vec::new();
     if options.duplex != "printer" || options.orientation != "auto" {
         let mut entries = Vec::new();
-        match options.duplex.as_str() {
+        match if options.manual_pass == "none" { options.duplex.as_str() } else { "simplex" } {
             "simplex" => entries.push("/Duplex false".to_owned()),
             "long" => {
                 entries.push("/Duplex true".to_owned());
@@ -412,7 +534,7 @@ fn print_steps(
         args.extend(["-d".into(), printer.clone()]);
     }
     args.extend(["-n".into(), options.copies.to_string()]);
-    match options.duplex.as_str() {
+    match if options.manual_pass == "none" { options.duplex.as_str() } else { "simplex" } {
         "simplex" => args.extend(["-o".into(), "sides=one-sided".into()]),
         "long" => args.extend(["-o".into(), "sides=two-sided-long-edge".into()]),
         "short" => args.extend(["-o".into(), "sides=two-sided-short-edge".into()]),
@@ -420,6 +542,15 @@ fn print_steps(
     }
     if options.scaling == "fit" {
         args.extend(["-o".into(), "fit-to-page".into()]);
+    }
+    if options.n_up > 1 {
+        args.extend(["-o".into(), format!("number-up={}", options.n_up)]);
+        args.extend(["-o".into(), format!("number-up-layout={}", options.n_up_layout)]);
+    }
+    match options.color_mode.as_str() {
+        "color" => args.extend(["-o".into(), "print-color-mode=color".into()]),
+        "grayscale" => args.extend(["-o".into(), "print-color-mode=monochrome".into()]),
+        _ => {}
     }
     if options.orientation == "landscape" {
         args.extend(["-o".into(), "landscape".into()]);
@@ -457,17 +588,30 @@ pub fn start_print_job(
 ) -> Result<jobs::JobStart, SevenError> {
     options.validate()?;
     validate_printer(&options)?;
-    let pages = selected_pages(&input, &options)?;
+    let mut pages = selected_pages(&input, &options)?;
+    #[cfg(target_os = "windows")]
+    {
+        pages = reorder_for_nup(pages, options.n_up, &options.n_up_layout);
+    }
     let page_count = lopdf::Document::load(&input)
         .map_err(|error| SevenError::PdfOpen(error.to_string()))?
         .get_pages()
         .len();
     let all_pages = pages.len() == page_count
-        && pages.iter().copied().eq(1..=page_count);
+        && pages.iter().copied().eq(1..=page_count)
+        && options.manual_pass == "none"
+        && options.page_set == "all"
+        && !options.reverse
+        && {
+            #[cfg(target_os = "windows")]
+            { options.n_up_layout == "lrtb" }
+            #[cfg(not(target_os = "windows"))]
+            { true }
+        };
 
     let mut cleanup = Vec::new();
     let mut steps = Vec::new();
-    let effective = if options.page_mode == "selection" {
+    let mut effective = if options.page_mode == "selection" {
         let directory = state.cache_dir.join("jobs");
         fs::create_dir_all(&directory).map_err(|error| SevenError::Io(error.to_string()))?;
         let cropped = directory.join(format!("print-selection-{}.pdf", uuid::Uuid::new_v4()));
@@ -487,6 +631,20 @@ pub fn start_print_job(
         cleanup.push(subset.clone());
         subset
     };
+
+    let needs_render_preparation =
+        options.print_as_image
+        || options.color_mode == "grayscale"
+        || (!cfg!(target_os = "windows") && (!options.print_annotations || !options.print_forms));
+    if needs_render_preparation {
+        let directory = state.cache_dir.join("jobs");
+        fs::create_dir_all(&directory).map_err(|error| SevenError::Io(error.to_string()))?;
+        let prepared = directory.join(format!("print-rendered-{}.pdf", uuid::Uuid::new_v4()));
+        steps.push(rendered_print_pdf_step(&effective, &prepared, &options)?);
+        cleanup.push(prepared.clone());
+        effective = prepared;
+    }
+
     steps.extend(print_steps(&effective, &options)?);
 
     Ok(jobs::start_process_sequence_job_with_cleanup(

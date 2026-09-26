@@ -925,9 +925,10 @@ export interface PrinterInfo {
 export interface PrintOptions {
   printer?: string;
   copies: number;
-  pageMode: "all" | "current" | "range";
+  pageMode: "all" | "current" | "range" | "selection";
   currentPage: number;
   pageRange: string;
+  selectionRect?: NormalizedRect;
   pageSet: "all" | "odd" | "even";
   reverse: boolean;
   duplex: "printer" | "simplex" | "long" | "short";

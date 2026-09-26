@@ -56,6 +56,19 @@ pub struct PageBoxUpdate {
     pub crop_to_trim: bool,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PageGeometryUpdate {
+    pub mode: String,
+    pub page_indices: Vec<usize>,
+    pub crop_left_pt: f64,
+    pub crop_right_pt: f64,
+    pub crop_top_pt: f64,
+    pub crop_bottom_pt: f64,
+    pub width_pt: Option<f64>,
+    pub height_pt: Option<f64>,
+}
+
 fn number(value: &Object) -> Option<f64> {
     match value {
         Object::Integer(value) => Some(*value as f64),
@@ -377,6 +390,112 @@ fn inset_box(media: [f64; 4], inset: f64) -> Result<[f64; 4], SevenError> {
         ));
     }
     Ok(result)
+}
+
+pub fn set_page_geometry(
+    input: &Path,
+    output: &Path,
+    update: PageGeometryUpdate,
+) -> Result<(), SevenError> {
+    if update.page_indices.is_empty() || update.page_indices.len() > 5000 {
+        return Err(SevenError::OperationRejected(
+            "Selecione entre 1 e 5.000 páginas".into(),
+        ));
+    }
+    if !matches!(update.mode.as_str(), "crop" | "resize") {
+        return Err(SevenError::OperationRejected("Modo de geometria inválido".into()));
+    }
+    for value in [
+        update.crop_left_pt,
+        update.crop_right_pt,
+        update.crop_top_pt,
+        update.crop_bottom_pt,
+    ] {
+        if !value.is_finite() || value < 0.0 || value > 10_000.0 {
+            return Err(SevenError::OperationRejected("Margem de recorte inválida".into()));
+        }
+    }
+
+    let mut document = Document::load(input)
+        .map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let pages = document.get_pages();
+    let total = pages.len();
+
+    for page_index in update.page_indices {
+        if page_index >= total {
+            return Err(SevenError::OperationRejected(format!(
+                "A página {} não existe",
+                page_index + 1
+            )));
+        }
+        let page_id = *pages
+            .get(&((page_index + 1) as u32))
+            .ok_or_else(|| SevenError::OperationRejected("Página não encontrada".into()))?;
+        let media = inherited_box(&document, page_id, b"MediaBox")
+            .unwrap_or([0.0, 0.0, 612.0, 792.0]);
+
+        let page = document
+            .get_object_mut(page_id)
+            .map_err(|error| SevenError::Operation(error.to_string()))?
+            .as_dict_mut()
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+
+        if update.mode == "crop" {
+            let crop = [
+                media[0] + update.crop_left_pt,
+                media[1] + update.crop_bottom_pt,
+                media[2] - update.crop_right_pt,
+                media[3] - update.crop_top_pt,
+            ];
+            if crop[2] <= crop[0] + 1.0 || crop[3] <= crop[1] + 1.0 {
+                return Err(SevenError::OperationRejected(
+                    "As margens removem toda a área visível da página".into(),
+                ));
+            }
+            page.set(
+                "CropBox",
+                crop.into_iter().map(Object::from).collect::<Vec<_>>(),
+            );
+        } else {
+            let width = update.width_pt.unwrap_or(media[2] - media[0]);
+            let height = update.height_pt.unwrap_or(media[3] - media[1]);
+            if !width.is_finite()
+                || !height.is_finite()
+                || !(36.0..=20_000.0).contains(&width)
+                || !(36.0..=20_000.0).contains(&height)
+            {
+                return Err(SevenError::OperationRejected(
+                    "Largura/altura devem ficar entre 36 e 20.000 pontos".into(),
+                ));
+            }
+            let resized = [0.0, 0.0, width, height];
+            let values = resized.into_iter().map(Object::from).collect::<Vec<_>>();
+            page.set("MediaBox", values.clone());
+            page.set("CropBox", values.clone());
+            if page.get(b"TrimBox").is_ok() {
+                page.set("TrimBox", values.clone());
+            }
+            if page.get(b"BleedBox").is_ok() {
+                page.set("BleedBox", values.clone());
+            }
+            if page.get(b"ArtBox").is_ok() {
+                page.set("ArtBox", values);
+            }
+        }
+    }
+
+    let temp = output.with_extension("seven-geometry.tmp.pdf");
+    document.compress();
+    document.save(&temp)
+        .map_err(|error| SevenError::Io(error.to_string()))?;
+    Document::load(&temp)
+        .map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    if output.exists() {
+        fs::remove_file(output)
+            .map_err(|error| SevenError::Io(error.to_string()))?;
+    }
+    fs::rename(&temp, output)
+        .map_err(|error| SevenError::Io(error.to_string()))
 }
 
 pub fn set_page_boxes(input: &Path, output: &Path, update: PageBoxUpdate) -> Result<(), SevenError> {

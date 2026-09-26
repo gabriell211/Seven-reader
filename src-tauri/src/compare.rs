@@ -9,7 +9,7 @@ use lopdf::{content::Content, Document, Object};
 use pdfium_render::prelude::{PdfPageIndex, PdfRenderConfig};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::{collections::{HashMap, HashSet}, fs, path::{Path, PathBuf}};
+use std::{collections::{HashMap, HashSet}, fs, path::Path};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]

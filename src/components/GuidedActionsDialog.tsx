@@ -13,7 +13,12 @@ export type GuidedActionKind =
   | "footer"
   | "bates"
   | "redact"
-  | "encrypt";
+  | "encrypt"
+  | "split"
+  | "extract"
+  | "rename"
+  | "validate-pdfa"
+  | "preflight";
 
 export interface GuidedActionRunOptions {
   text: string;
@@ -26,6 +31,11 @@ export interface GuidedActionRunOptions {
   wholeWord: boolean;
   userPassword: string;
   ownerPassword: string;
+  pagesPerFile: number;
+  pageRange: string;
+  renamePrefix: string;
+  renameSuffix: string;
+  pdfaFlavour: string;
   sanitize: {
     removeJavascript: boolean;
     removeOpenActions: boolean;
@@ -64,6 +74,11 @@ const defaults: GuidedActionPreset[] = [
   { id: "bates-batch", name: "Numeração Bates em lote", kind: "bates" },
   { id: "redact-batch", name: "Redação por busca", kind: "redact" },
   { id: "encrypt-batch", name: "Proteger com senha AES-256", kind: "encrypt" },
+  { id: "split-batch", name: "Dividir PDFs", kind: "split" },
+  { id: "extract-batch", name: "Extrair páginas em lote", kind: "extract" },
+  { id: "rename-batch", name: "Renomear cópias em lote", kind: "rename" },
+  { id: "pdfa-batch", name: "Validar PDF/A em lote", kind: "validate-pdfa" },
+  { id: "preflight-batch", name: "Preflight em lote", kind: "preflight" },
 ];
 
 function loadPresets(): GuidedActionPreset[] {
@@ -100,6 +115,11 @@ export function GuidedActionsDialog({ onClose, onRun }: GuidedActionsDialogProps
   const [wholeWord, setWholeWord] = useState(false);
   const [userPassword, setUserPassword] = useState("");
   const [ownerPassword, setOwnerPassword] = useState("");
+  const [pagesPerFile, setPagesPerFile] = useState(10);
+  const [pageRange, setPageRange] = useState("1-z");
+  const [renamePrefix, setRenamePrefix] = useState("");
+  const [renameSuffix, setRenameSuffix] = useState("-processado");
+  const [pdfaFlavour, setPdfaFlavour] = useState("2b");
   const [sanitize, setSanitize] = useState<GuidedActionRunOptions["sanitize"]>({
     removeJavascript: true,
     removeOpenActions: true,
@@ -129,6 +149,11 @@ export function GuidedActionsDialog({ onClose, onRun }: GuidedActionsDialogProps
     wholeWord,
     userPassword,
     ownerPassword,
+    pagesPerFile,
+    pageRange,
+    renamePrefix,
+    renameSuffix,
+    pdfaFlavour,
     sanitize,
   };
 
@@ -139,7 +164,10 @@ export function GuidedActionsDialog({ onClose, onRun }: GuidedActionsDialogProps
     (!requiresText || text.trim().length > 0)
     && (!requiresQuery || query.trim().length > 0)
     && (current?.kind !== "sanitize" || sanitizeHasSelection)
-    && (current?.kind !== "encrypt" || (userPassword.length > 0 && ownerPassword.length > 0));
+    && (current?.kind !== "encrypt" || (userPassword.length > 0 && ownerPassword.length > 0))
+    && (current?.kind !== "split" || (pagesPerFile >= 1 && pagesPerFile <= 500))
+    && (current?.kind !== "extract" || pageRange.trim().length > 0)
+    && (current?.kind !== "rename" || renamePrefix.trim().length > 0 || renameSuffix.trim().length > 0);
 
   const chooseInputs = async () => {
     if (!current) return;
@@ -202,7 +230,7 @@ export function GuidedActionsDialog({ onClose, onRun }: GuidedActionsDialogProps
               {presets.map((preset) => (
                 <div className={selected === preset.id ? "guided-preset active" : "guided-preset"} key={preset.id}>
                   <button onClick={() => { setSelected(preset.id); setInputs([]); }}>
-                    <SevenIcon name={preset.kind === "ocr" ? "ocr" : preset.kind === "optimize" ? "compress" : preset.kind === "convert" ? "convert" : preset.kind === "redact" ? "redact" : preset.kind === "sanitize" || preset.kind === "metadata" || preset.kind === "encrypt" ? "shield" : "edit"} />
+                    <SevenIcon name={preset.kind === "ocr" ? "ocr" : preset.kind === "optimize" ? "compress" : preset.kind === "convert" ? "convert" : preset.kind === "redact" ? "redact" : preset.kind === "split" || preset.kind === "extract" ? "pages" : preset.kind === "rename" ? "edit" : preset.kind === "sanitize" || preset.kind === "metadata" || preset.kind === "encrypt" || preset.kind === "validate-pdfa" || preset.kind === "preflight" ? "shield" : "edit"} />
                     <span><strong>{preset.name}</strong><small>{preset.kind}</small></span>
                   </button>
                   {preset.id.startsWith("custom-") && <button className="guided-delete" onClick={() => removePreset(preset.id)}><SevenIcon name="close" /></button>}
@@ -214,7 +242,7 @@ export function GuidedActionsDialog({ onClose, onRun }: GuidedActionsDialogProps
               {current && (
                 <>
                   <div className="guided-summary">
-                    <SevenIcon name={current.kind === "ocr" ? "ocr" : current.kind === "optimize" ? "compress" : current.kind === "convert" ? "convert" : current.kind === "redact" ? "redact" : current.kind === "sanitize" || current.kind === "metadata" || current.kind === "encrypt" ? "shield" : "edit"} />
+                    <SevenIcon name={current.kind === "ocr" ? "ocr" : current.kind === "optimize" ? "compress" : current.kind === "convert" ? "convert" : current.kind === "redact" ? "redact" : current.kind === "split" || current.kind === "extract" ? "pages" : current.kind === "rename" ? "edit" : current.kind === "sanitize" || current.kind === "metadata" || current.kind === "encrypt" || current.kind === "validate-pdfa" || current.kind === "preflight" ? "shield" : "edit"} />
                     <div><strong>{current.name}</strong><small>Processamento local · saída em nova pasta · original preservado.</small></div>
                   </div>
 
@@ -302,6 +330,59 @@ export function GuidedActionsDialog({ onClose, onRun }: GuidedActionsDialogProps
                     </section>
                   )}
 
+                  {current.kind === "split" && (
+                    <section className="guided-options-box">
+                      <label className="workflow-field">
+                        <span>Máximo de páginas por arquivo</span>
+                        <input type="number" min={1} max={500} value={pagesPerFile} onChange={(event) => setPagesPerFile(Math.max(1, Math.min(500, Number(event.target.value) || 1)))} />
+                        <small>Cada PDF ganha uma subpasta própria com partes numeradas.</small>
+                      </label>
+                    </section>
+                  )}
+
+                  {current.kind === "extract" && (
+                    <section className="guided-options-box">
+                      <label className="workflow-field">
+                        <span>Intervalo de páginas</span>
+                        <input value={pageRange} onChange={(event) => setPageRange(event.target.value)} placeholder="1-5,8,10-z" />
+                        <small>O mesmo intervalo é aplicado a cada PDF. Use a sintaxe de páginas do qpdf.</small>
+                      </label>
+                    </section>
+                  )}
+
+                  {current.kind === "rename" && (
+                    <section className="guided-options-box">
+                      <div className="two-column-fields">
+                        <label className="workflow-field"><span>Prefixo</span><input value={renamePrefix} onChange={(event) => setRenamePrefix(event.target.value)} placeholder="2026-" /></label>
+                        <label className="workflow-field"><span>Sufixo</span><input value={renameSuffix} onChange={(event) => setRenameSuffix(event.target.value)} placeholder="-processado" /></label>
+                      </div>
+                      <div className="organizer-note"><SevenIcon name="shield" /><span>Cria cópias renomeadas na pasta de saída. Os arquivos originais não são movidos nem apagados.</span></div>
+                    </section>
+                  )}
+
+                  {current.kind === "validate-pdfa" && (
+                    <section className="guided-options-box">
+                      <label className="workflow-field">
+                        <span>Perfil PDF/A</span>
+                        <select value={pdfaFlavour} onChange={(event) => setPdfaFlavour(event.target.value)}>
+                          <option value="1b">PDF/A-1b</option>
+                          <option value="2b">PDF/A-2b</option>
+                          <option value="2u">PDF/A-2u</option>
+                          <option value="3b">PDF/A-3b</option>
+                          <option value="3u">PDF/A-3u</option>
+                          <option value="4">PDF/A-4</option>
+                          <option value="4e">PDF/A-4e</option>
+                          <option value="4f">PDF/A-4f</option>
+                        </select>
+                        <small>Gera um relatório JSON veraPDF por documento.</small>
+                      </label>
+                    </section>
+                  )}
+
+                  {current.kind === "preflight" && (
+                    <div className="organizer-note"><SevenIcon name="shield" /><span>Analisa fontes, caixas de página, OutputIntent, espaços de cor, transparência, overprint e spot colors; gera um JSON por PDF.</span></div>
+                  )}
+
                   <button className="primary-button workflow-submit" disabled={!inputs.length || !outputDirectory || !configurationValid} onClick={() => onRun(current.kind, inputs, outputDirectory, runOptions)}>
                     <SevenIcon name="automation" /> Executar ação
                   </button>
@@ -325,6 +406,11 @@ export function GuidedActionsDialog({ onClose, onRun }: GuidedActionsDialogProps
               <option value="bates">Bates</option>
               <option value="redact">Redação por busca</option>
               <option value="encrypt">Proteger com senha AES-256</option>
+              <option value="split">Dividir PDFs</option>
+              <option value="extract">Extrair páginas</option>
+              <option value="rename">Renomear cópias</option>
+              <option value="validate-pdfa">Validar PDF/A</option>
+              <option value="preflight">Preflight</option>
             </select>
             <button className="secondary-light-button" disabled={!newName.trim()} onClick={addPreset}><SevenIcon name="create" /> Adicionar</button>
           </div>

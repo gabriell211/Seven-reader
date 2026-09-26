@@ -58,6 +58,13 @@ interface WorkspaceProps {
   onCloseSideBySide: () => void;
   onSplitRender: (page: number, zoom: number) => void;
   onSplitOrientationChange: (orientation: "vertical" | "horizontal") => void;
+  onTransferPages: (
+    sourceDocumentId: string,
+    targetDocumentId: string,
+    pageRange: string,
+    insertAfter: number,
+    movePages: boolean,
+  ) => void;
   onNavigateBack: () => void;
   onNavigateForward: () => void;
   onQuickToolsPositionChange: (position: { x: number; y: number } | null) => void;
@@ -128,6 +135,7 @@ export function DocumentWorkspace({
   onCloseSideBySide,
   onSplitRender,
   onSplitOrientationChange,
+  onTransferPages,
   onNavigateBack,
   onNavigateForward,
   onQuickToolsPositionChange,
@@ -204,6 +212,9 @@ export function DocumentWorkspace({
   const [reflowEnabled, setReflowEnabled] = useState(false);
   const [reflowText, setReflowText] = useState("");
   const [reflowLoading, setReflowLoading] = useState(false);
+  const [transferDirection, setTransferDirection] = useState<"secondary-to-primary" | "primary-to-secondary">("secondary-to-primary");
+  const [transferRange, setTransferRange] = useState("");
+  const [transferInsertAfter, setTransferInsertAfter] = useState(0);
   const [dynamicScale, setDynamicScale] = useState(1);
   const dynamicZoomRef = useRef<{ pointerId: number; startY: number; startZoom: number; previewZoom: number } | null>(null);
   const panRef = useRef<{ pointerId: number; startX: number; startY: number; scrollLeft: number; scrollTop: number } | null>(null);
@@ -243,6 +254,18 @@ export function DocumentWorkspace({
       .finally(() => active && setReflowLoading(false));
     return () => { active = false; };
   }, [reflowEnabled, document.id, document.revision, page]);
+
+  useEffect(() => {
+    if (!splitDocument) {
+      setTransferRange("");
+      setTransferInsertAfter(0);
+      return;
+    }
+    const sourcePage = transferDirection === "secondary-to-primary" ? splitPage : page;
+    const targetDocument = transferDirection === "secondary-to-primary" ? document : splitDocument;
+    setTransferRange(String(sourcePage + 1));
+    setTransferInsertAfter(targetDocument.pageCount);
+  }, [splitDocument?.id, transferDirection]);
 
   useEffect(() => {
     const onFullscreenChange = () => {
@@ -761,6 +784,19 @@ export function DocumentWorkspace({
     onRender(page, state.previewZoom);
   };
 
+  const submitPageTransfer = (movePages: boolean) => {
+    if (!splitDocument || !transferRange.trim()) return;
+    const source = transferDirection === "secondary-to-primary" ? splitDocument : document;
+    const target = transferDirection === "secondary-to-primary" ? document : splitDocument;
+    onTransferPages(
+      source.id,
+      target.id,
+      transferRange.trim(),
+      Math.max(0, Math.min(target.pageCount, Math.trunc(transferInsertAfter))),
+      movePages,
+    );
+  };
+
   const submitSearch = () => {
     onSearch(search);
     setLeftPanel("search");
@@ -1209,6 +1245,28 @@ export function DocumentWorkspace({
                   <button onClick={onCloseSideBySide} title="Fechar painel lado a lado"><SevenIcon name="close" /></button>
                 </div>
               </header>
+              <div className="page-transfer-bar">
+                <select value={transferDirection} onChange={(event) => setTransferDirection(event.target.value as typeof transferDirection)}>
+                  <option value="secondary-to-primary">{splitDocument.name} → {document.name}</option>
+                  <option value="primary-to-secondary">{document.name} → {splitDocument.name}</option>
+                </select>
+                <label>
+                  <span>Páginas</span>
+                  <input value={transferRange} onChange={(event) => setTransferRange(event.target.value)} placeholder="1-3,5" />
+                </label>
+                <label>
+                  <span>Inserir depois</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={transferDirection === "secondary-to-primary" ? document.pageCount : splitDocument.pageCount}
+                    value={transferInsertAfter}
+                    onChange={(event) => setTransferInsertAfter(Math.max(0, Number(event.target.value) || 0))}
+                  />
+                </label>
+                <button disabled={!transferRange.trim()} onClick={() => submitPageTransfer(false)}>Copiar</button>
+                <button className="move-pages-button" disabled={!transferRange.trim()} onClick={() => submitPageTransfer(true)}>Mover</button>
+              </div>
               <div className="secondary-pane-canvas">
                 <div className="rendered-page secondary-rendered-page" style={{ width: splitRendered.width }}>
                   <img src={nativeAssetUrl(splitRendered.cachePath)} alt={`Página ${splitPage + 1} de ${splitDocument.name}`} draggable={false} />

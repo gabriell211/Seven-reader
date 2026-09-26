@@ -917,6 +917,27 @@ export interface FontPreflight {
   subset: boolean;
 }
 
+export interface PrinterInfo {
+  name: string;
+  isDefault: boolean;
+}
+
+export interface PrintOptions {
+  printer?: string;
+  copies: number;
+  pageMode: "all" | "current" | "range";
+  currentPage: number;
+  pageRange: string;
+  pageSet: "all" | "odd" | "even";
+  reverse: boolean;
+  duplex: "printer" | "simplex" | "long" | "short";
+  orientation: "auto" | "portrait" | "landscape";
+  paperSize: "printer" | "a4" | "letter" | "legal";
+  scaling: "fit" | "actual";
+  printAnnotations: boolean;
+  printForms: boolean;
+}
+
 export interface PrintPreflightReport {
   pdfVersion: string;
   pageCount: number;

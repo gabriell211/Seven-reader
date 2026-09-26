@@ -80,6 +80,81 @@ pub fn commit_revision(
     Ok(pdf::summary(document))
 }
 
+pub fn commit_revision_pair(
+    state: &AppState,
+    first_document_id: &str,
+    first_expected_revision: u64,
+    first_output: PathBuf,
+    second_document_id: &str,
+    second_expected_revision: u64,
+    second_output: PathBuf,
+) -> Result<(pdf::DocumentSummary, pdf::DocumentSummary), SevenError> {
+    if first_document_id == second_document_id {
+        return Err(SevenError::OperationRejected(
+            "A transferência exige dois documentos diferentes".into(),
+        ));
+    }
+
+    pdf::validate_pdf_path(first_output.to_string_lossy().as_ref())?;
+    pdf::validate_pdf_path(second_output.to_string_lossy().as_ref())?;
+    let first_metadata = fs::metadata(&first_output).map_err(|error| SevenError::Io(error.to_string()))?;
+    let second_metadata = fs::metadata(&second_output).map_err(|error| SevenError::Io(error.to_string()))?;
+
+    let mut documents = state.documents.lock();
+    let first_revision = documents
+        .get(first_document_id)
+        .ok_or(SevenError::DocumentNotOpen)?
+        .revision;
+    let second_revision = documents
+        .get(second_document_id)
+        .ok_or(SevenError::DocumentNotOpen)?
+        .revision;
+
+    if first_revision != first_expected_revision || second_revision != second_expected_revision {
+        let _ = fs::remove_file(&first_output);
+        let _ = fs::remove_file(&second_output);
+        return Err(SevenError::OperationRejected(
+            "Um dos documentos mudou durante a transferência. Nenhuma alteração foi aplicada.".into(),
+        ));
+    }
+
+    {
+        let first = documents
+            .get_mut(first_document_id)
+            .ok_or(SevenError::DocumentNotOpen)?;
+        first.undo_stack.push(first.working_path.clone());
+        if first.undo_stack.len() > 100 {
+            first.undo_stack.remove(0);
+        }
+        first.redo_stack.clear();
+        first.working_path = Some(first_output);
+        first.file_size = first_metadata.len();
+        first.revision = first.revision.saturating_add(1);
+    }
+
+    {
+        let second = documents
+            .get_mut(second_document_id)
+            .ok_or(SevenError::DocumentNotOpen)?;
+        second.undo_stack.push(second.working_path.clone());
+        if second.undo_stack.len() > 100 {
+            second.undo_stack.remove(0);
+        }
+        second.redo_stack.clear();
+        second.working_path = Some(second_output);
+        second.file_size = second_metadata.len();
+        second.revision = second.revision.saturating_add(1);
+    }
+
+    let first_summary = pdf::summary(
+        documents.get(first_document_id).ok_or(SevenError::DocumentNotOpen)?
+    );
+    let second_summary = pdf::summary(
+        documents.get(second_document_id).ok_or(SevenError::DocumentNotOpen)?
+    );
+    Ok((first_summary, second_summary))
+}
+
 pub fn apply_revision<T, F>(
     state: &AppState,
     document_id: &str,

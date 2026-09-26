@@ -83,7 +83,9 @@ import {
   applyRedactions,
   reviewOcrPage,
   sanitizeDocument,
-  scanPageToPdf,
+  scanPageImage,
+  deleteScanPages,
+  finalizeScanSession,
   saveCopy,
   saveDocument,
   undoDocument,
@@ -2988,14 +2990,45 @@ export default function App() {
     }
   };
 
-  const runScan = async (output: string, dpi: number) => {
+  const captureScanPage = async (
+    dpi: number,
+    colorMode: "color" | "gray" | "lineart",
+  ) => {
     try {
-      await scanPageToPdf(output, dpi);
-      setOcrOpen(false);
-      setNotice("Digitalização salva como PDF.");
-      await openPath(output);
+      return await scanPageImage(dpi, colorMode);
     } catch (error) {
       setNotice(errorMessage(error));
+      throw error;
+    }
+  };
+
+  const discardScanPages = async (inputs: string[]) => {
+    if (!inputs.length) return;
+    try {
+      await deleteScanPages(inputs);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const finishScanSession = async (
+    inputs: string[],
+    output: string,
+    dpi: number,
+    options?: OcrOptions,
+  ) => {
+    try {
+      const result = await finalizeScanSession(inputs, output, dpi, options);
+      setOcrOpen(false);
+      if (result.jobId) {
+        setNotice(`Digitalização concluída · OCR iniciado · job ${result.jobId.slice(0, 8)}`);
+      } else {
+        setNotice("Digitalização multipágina salva como PDF.");
+        await openPath(result.output);
+      }
+    } catch (error) {
+      setNotice(errorMessage(error));
+      throw error;
     }
   };
 
@@ -3609,7 +3642,9 @@ export default function App() {
           onRunOcr={(output, options) => void runAdvancedOcr(output, options)}
           onRunBatchOcr={(inputs, outputDirectory, options) => void runBatchOcr(inputs, outputDirectory, options)}
           onReview={(language, threshold) => void reviewCurrentOcrPage(language, threshold)}
-          onScan={(output, dpi) => void runScan(output, dpi)}
+          onScanPage={(dpi, colorMode) => captureScanPage(dpi, colorMode)}
+          onDeleteScanPages={(inputs) => discardScanPages(inputs)}
+          onFinalizeScan={(inputs, output, dpi, options) => finishScanSession(inputs, output, dpi, options)}
         />
       )}
       {conversionOpen && (

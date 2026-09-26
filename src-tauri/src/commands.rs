@@ -1246,6 +1246,30 @@ pub struct SessionPortfolioFolderResult {
 }
 
 #[tauri::command]
+pub fn session_add_pdf_portfolio_item(
+    state: State<'_, AppState>,
+    document_id: String,
+    file_path: String,
+    display_name: String,
+    description: String,
+    folder_path: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    let file_path = std::path::PathBuf::from(file_path);
+    session::apply_revision(&state, &document_id, "portfolio-add-item", move |input, output| {
+        advanced::add_attachment_to_portfolio_folder(
+            input,
+            output,
+            &file_path,
+            &display_name,
+            &description,
+            &folder_path,
+        )
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn session_configure_pdf_portfolio(
     state: State<'_, AppState>,
     document_id: String,

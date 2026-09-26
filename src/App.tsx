@@ -41,6 +41,7 @@ import {
   sessionImportReviewXfdf,
   addAnnotation,
   addInkAnnotation,
+  addSignatureImage,
   cancelJob,
   pauseJob,
   resumeJob,
@@ -303,6 +304,7 @@ import type {
   SearchOccurrence,
   StampInput,
   SignRequest,
+  SignatureImageInput,
   SignatureValidationReport,
   TextPlacement,
   ToolId,
@@ -2958,6 +2960,30 @@ export default function App() {
     }
   };
 
+  const runElectronicInkSignature = async (output: string, ink: InkAnnotationInput) => {
+    if (!document) return;
+    try {
+      await addInkAnnotation(document.activePath, output, ink);
+      setSignatureTab(null);
+      setNotice("Assinatura eletrônica desenhada aplicada como Ink vetorial.");
+      await openPath(output);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runElectronicImageSignature = async (output: string, signature: SignatureImageInput) => {
+    if (!document) return;
+    try {
+      await addSignatureImage(document.activePath, output, signature);
+      setSignatureTab(null);
+      setNotice("Assinatura eletrônica por imagem incorporada ao PDF.");
+      await openPath(output);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
   const runDigitalSignature = async (output: string, request: SignRequest) => {
     if (!document) return;
     try {
@@ -4118,6 +4144,8 @@ export default function App() {
           loading={signatureLoading}
           onClose={() => setSignatureTab(null)}
           onElectronic={(output, annotation) => void runElectronicSignature(output, annotation)}
+          onElectronicInk={(output, ink) => void runElectronicInkSignature(output, ink)}
+          onElectronicImage={(output, signature) => void runElectronicImageSignature(output, signature)}
           onDigital={(output, request) => void runDigitalSignature(output, request)}
           onValidate={(trustDirectory, allowOnline) => void runSignatureValidation(trustDirectory, allowOnline)}
         />

@@ -19,6 +19,7 @@ interface InteractiveContentDialogProps {
   onClose: () => void;
   onReload: () => void;
   onExtract: (objectId: string, destination: string) => void;
+  onOpenMedia: (asset: InteractiveAssetInfo) => void;
   onResolve: (pageIndex: number, normalizedX: number, normalizedY: number) => void;
 }
 
@@ -38,6 +39,7 @@ export function InteractiveContentDialog({
   onClose,
   onReload,
   onExtract,
+  onOpenMedia,
   onResolve,
 }: InteractiveContentDialogProps) {
   const [geoPage, setGeoPage] = useState(pageIndex + 1);
@@ -90,14 +92,17 @@ export function InteractiveContentDialog({
                       <small>Página {asset.pageIndex + 1} · {asset.subtype || asset.mime} · {bytes(asset.size)}</small>
                       <code>SHA-256 {asset.sha256.slice(0, 24)}…</code>
                     </div>
-                    <button className="secondary-light-button" onClick={() => void extract(asset)}>Extrair</button>
+                    <div className="interactive-asset-actions">
+                      {asset.safeToOpen && <button className="primary-button" onClick={() => onOpenMedia(asset)}><SevenIcon name="open" /> Abrir mídia</button>}
+                      <button className="secondary-light-button" onClick={() => void extract(asset)}>Extrair</button>
+                    </div>
                   </article>
                 ))}
               </div>
               {filteredAssets.length === 0 && <div className="empty-panel">Nenhum stream compatível encontrado para esta categoria.</div>}
               <div className="organizer-note organizer-note--warning">
                 <SevenIcon name="shield" />
-                <span>{mode === "3d" ? "U3D/PRC pode ser extraído para análise em software externo; renderização 3D ativa não é executada dentro do Seven Reader." : "Assets Rich Media podem ser extraídos manualmente, mas reprodução/execução automática permanece bloqueada."}</span>
+                <span>{mode === "3d" ? "U3D/PRC pode ser extraído para análise em software externo; renderização 3D ativa não é executada dentro do Seven Reader." : "Áudio/vídeo em formatos permitidos pode ser aberto explicitamente no player padrão. Reprodução automática, scripts, Launch e tipos desconhecidos permanecem bloqueados."}</span>
               </div>
             </>
           )}

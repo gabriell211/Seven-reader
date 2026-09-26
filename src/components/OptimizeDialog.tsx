@@ -71,7 +71,7 @@ export function OptimizeDialog({
   const [presets, setPresets] = useState<SavedPreset[]>(loadPresets);
   const [presetName, setPresetName] = useState("");
 
-  useEffect(() => { onAudit(); }, [onAudit]);
+  useEffect(() => { onAudit(); }, []);
   useEffect(() => localStorage.setItem(KEY, JSON.stringify(presets)), [presets]);
 
   const estimatedSize = useMemo(() => {
@@ -161,9 +161,9 @@ export function OptimizeDialog({
 
           <main className="optimizer-options">
             <div className="optimizer-presets">
-              <button onClick={() => setOptions(defaultOptions)}>Equilibrado</button>
-              <button onClick={() => setOptions({ ...defaultOptions, colorDpi: 96, grayscaleDpi: 96, monochromeDpi: 200, jpegQuality: 65 })}>Tela</button>
-              <button onClick={() => setOptions({ ...defaultOptions, colorDpi: 300, grayscaleDpi: 300, monochromeDpi: 600, jpegQuality: 92, linearize: false })}>Impressão</button>
+              <button onClick={() => setOptions({ ...defaultOptions, colorDpi: 300, grayscaleDpi: 300, monochromeDpi: 600, jpegQuality: 92, linearize: false })}>Baixa compactação</button>
+              <button onClick={() => setOptions(defaultOptions)}>Média</button>
+              <button onClick={() => setOptions({ ...defaultOptions, colorDpi: 96, grayscaleDpi: 96, monochromeDpi: 200, jpegQuality: 65 })}>Alta compactação</button>
               {presets.map((preset) => (
                 <button key={preset.id} onClick={() => setOptions(preset.options)}>{preset.name}</button>
               ))}

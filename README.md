@@ -687,7 +687,7 @@ Não converter o documento inteiro em imagens para simular edição.
 - [ ] Mover
 - [ ] Redimensionar
 - [ ] Rotacionar
-- [ ] Duplicar
+- [x] Duplicar
 - [ ] Excluir
 - [ ] Ordem de empilhamento
 - [ ] Propriedades
@@ -1101,39 +1101,39 @@ Ao adicionar um arquivo, detectar:
 
 ## Presets
 
-- [ ] Criar preset
+- [x] Criar preset
 - [ ] Duplicar
-- [ ] Editar
-- [ ] Excluir
-- [ ] Importar
-- [ ] Exportar
+- [x] Editar
+- [x] Excluir
+- [x] Importar
+- [x] Exportar
 
 ## Configurações
 
-- [ ] Qualidade de imagem
-- [ ] Downsampling
-- [ ] Compressão
-- [ ] Font embedding
-- [ ] Subset de fontes
-- [ ] Perfis ICC
-- [ ] RGB
-- [ ] CMYK
-- [ ] Gray
-- [ ] Rendering intent
-- [ ] Preservar overprint
-- [ ] Metadados
-- [ ] PDF standards
-- [ ] Compatibilidade de versão PDF
+- [x] Qualidade de imagem
+- [x] Downsampling
+- [x] Compressão
+- [x] Font embedding
+- [x] Subset de fontes
+- [x] Perfis ICC
+- [x] RGB
+- [x] CMYK
+- [x] Gray
+- [x] Rendering intent
+- [x] Preservar overprint
+- [x] Metadados
+- [x] PDF standards
+- [x] Compatibilidade de versão PDF
 
 ## Pastas monitoradas
 
 Opcional para desktop profissional:
 
-- [ ] Watch folder
-- [ ] Preset por pasta
-- [ ] Pasta de entrada
-- [ ] Pasta de saída
-- [ ] Log
+- [x] Watch folder
+- [x] Preset por pasta
+- [x] Pasta de entrada
+- [x] Pasta de saída
+- [x] Log
 - [ ] Retry
 - [ ] Quarentena de erro
 
@@ -3370,8 +3370,8 @@ Após estabilização do núcleo:
 - [ ] HTML
 - [ ] Text
 - [ ] PostScript
-- [ ] Presets
-- [ ] Watch folders
+- [x] Presets
+- [x] Watch folders
 
 ## 0.6 — Scan & OCR
 

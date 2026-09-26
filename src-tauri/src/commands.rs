@@ -3186,7 +3186,8 @@ pub fn start_optimize_pdf_advanced(
         || options.remove_forms
         || options.remove_multimedia;
 
-    let effective_input = if has_discard {
+    let mut cleanup_paths = Vec::new();
+    let effective_input = if has_discard || options.cleanup {
         let sanitized = jobs_dir.join(format!("sanitize-{}.pdf", uuid::Uuid::new_v4()));
         document_ops::sanitize_document(
             &input,
@@ -3204,6 +3205,7 @@ pub fn start_optimize_pdf_advanced(
             },
         )
         .map_err(ErrorPayload::from)?;
+        cleanup_paths.push(sanitized.clone());
         sanitized
     } else {
         input
@@ -3213,6 +3215,7 @@ pub fn start_optimize_pdf_advanced(
     if needs_qpdf {
         let qpdf = jobs::require_executable(&["qpdf"], "qpdf").map_err(ErrorPayload::from)?;
         let intermediate = jobs_dir.join(format!("optimize-{}.pdf", uuid::Uuid::new_v4()));
+        cleanup_paths.push(intermediate.clone());
         let gs_args = options
             .ghostscript_args(&effective_input, &intermediate)
             .map_err(ErrorPayload::from)?;
@@ -3229,7 +3232,7 @@ pub fn start_optimize_pdf_advanced(
         qpdf_args.push(intermediate.to_string_lossy().into_owned());
         qpdf_args.push(output.to_string_lossy().into_owned());
 
-        Ok(jobs::start_process_sequence_job(
+        Ok(jobs::start_process_sequence_job_with_cleanup(
             app,
             &state,
             "optimize-advanced",
@@ -3237,8 +3240,8 @@ pub fn start_optimize_pdf_advanced(
                 jobs::ProcessStep {
                     program: ghostscript,
                     args: gs_args,
-                    label: if has_discard {
-                        "Compactando PDF sanitizado".into()
+                    label: if has_discard || options.cleanup {
+                        "Compactando PDF limpo".into()
                     } else {
                         "Compactando e regravando PDF".into()
                     },
@@ -3254,8 +3257,9 @@ pub fn start_optimize_pdf_advanced(
                 },
             ],
             Some(output),
+            cleanup_paths,
         ))
-    } else {
+    } else if cleanup_paths.is_empty() {
         let args = options
             .ghostscript_args(&effective_input, &output)
             .map_err(ErrorPayload::from)?;
@@ -3266,6 +3270,22 @@ pub fn start_optimize_pdf_advanced(
             ghostscript,
             args,
             Some(output),
+        ))
+    } else {
+        let args = options
+            .ghostscript_args(&effective_input, &output)
+            .map_err(ErrorPayload::from)?;
+        Ok(jobs::start_process_sequence_job_with_cleanup(
+            app,
+            &state,
+            "optimize-advanced",
+            vec![jobs::ProcessStep {
+                program: ghostscript,
+                args,
+                label: "Compactando PDF sanitizado".into(),
+            }],
+            Some(output),
+            cleanup_paths,
         ))
     }
 }

@@ -39,6 +39,8 @@ import {
   addAnnotation,
   addInkAnnotation,
   cancelJob,
+  pauseJob,
+  resumeJob,
   closeDocument,
   compareDocumentsAdvanced,
   exportCompareReportPdf,
@@ -615,7 +617,7 @@ export default function App() {
   }, [native, openTabs, tabViews, document?.id, page, zoom, settings.defaultZoom]);
 
   const activeJobs = useMemo(
-    () => Object.values(jobs).filter((job) => job.state === "queued" || job.state === "running"),
+    () => Object.values(jobs).filter((job) => job.state === "queued" || job.state === "running" || job.state === "paused"),
     [jobs],
   );
 
@@ -3686,7 +3688,12 @@ export default function App() {
             <div className="job-chip" key={job.id}>
               <span className="job-pulse" />
               <div><strong>{job.kind}</strong><small>{job.stage}</small></div>
-              <button onClick={() => void cancelJob(job.id)}>Cancelar</button>
+              <div className="job-chip-actions">
+                {job.state === "paused"
+                  ? <button onClick={() => void resumeJob(job.id)}>Retomar</button>
+                  : <button onClick={() => void pauseJob(job.id)}>Pausar</button>}
+                <button onClick={() => void cancelJob(job.id)}>Cancelar</button>
+              </div>
             </div>
           ))}
         </div>
@@ -3718,6 +3725,9 @@ export default function App() {
           quickToolsPosition={settings.quickToolsPosition}
           sidePanels={settings.sidePanels}
           taskHistory={taskHistory}
+          onPauseJob={(jobId) => void pauseJob(jobId)}
+          onResumeJob={(jobId) => void resumeJob(jobId)}
+          onCancelJob={(jobId) => void cancelJob(jobId)}
           measurements={measurements}
           measurementActivation={measurementActivation}
           searchHits={searchHits}

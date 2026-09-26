@@ -3040,7 +3040,7 @@ fn scan_image_blocking(output: &std::path::Path, dpi: u16, color_mode: &str) -> 
         "lineart" => 4,
         _ => return Err(SevenError::OperationRejected("Modo de cor do scanner inválido".into())),
     };
-    let escaped_output = output.to_string_lossy().replace(''', "''");
+    let escaped_output = output.to_string_lossy().replace('\'', "''");
     let script = format!(
         "$ErrorActionPreference='Stop'; \
          $dialog=New-Object -ComObject WIA.CommonDialog; \

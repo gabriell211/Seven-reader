@@ -129,6 +129,7 @@ import {
   sessionAddPdfPortfolioItem,
   sessionConfigurePdfPortfolio,
   sessionSetPdfPortfolioView,
+  sessionImportPdfPortfolioDirectory,
   sessionCreatePdfPortfolioFolder,
   sessionMovePdfPortfolioItem,
   sessionRenamePdfPortfolioFolder,
@@ -1982,6 +1983,19 @@ export default function App() {
       const summary = await sessionSetPdfPortfolioView(document.id, view);
       await acceptDocumentRevision(summary, "Visualização inicial do portfólio atualizada.");
       await reloadAdvanced(summary.activePath);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runImportPortfolioDirectory = async (directory: string, targetPath: string) => {
+    if (!document) return;
+    try {
+      const result = await sessionImportPdfPortfolioDirectory(document.id, directory, targetPath);
+      await acceptPortfolioRevision(
+        result.document,
+        `Pasta importada · ${result.report.addedFiles} arquivo(s), ${result.report.createdFolders} pasta(s), ${result.report.skippedFiles} ignorado(s).`,
+      );
     } catch (error) {
       setNotice(errorMessage(error));
     }

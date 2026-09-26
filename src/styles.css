@@ -1881,3 +1881,7 @@ html[data-motion="reduced"] *,html[data-motion="reduced"] *::before,html[data-mo
 .combine-web-source .workflow-field { margin:0; }
 .combine-web-source>button { min-height:34px; }
 @media(max-width:760px){.combine-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.combine-web-source{grid-template-columns:1fr}}
+
+.combine-page-range { margin-top:4px; display:grid; grid-template-columns:auto minmax(100px,180px); gap:6px; align-items:center; }
+.combine-page-range>span { color:#777985; font-size:7.6px; font-weight:700; }
+.combine-page-range input { min-width:0; height:28px; padding:0 7px; border:1px solid #dddbe3; border-radius:7px; background:#fff; font-size:8px; }

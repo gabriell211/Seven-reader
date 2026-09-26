@@ -306,6 +306,30 @@ pub fn extract_interactive_asset(
 }
 
 #[tauri::command]
+pub fn materialize_interactive_media(
+    state: State<'_, AppState>,
+    document_id: String,
+    object_id: String,
+    display_name: String,
+) -> CommandResult<String> {
+    let document = state
+        .documents
+        .lock()
+        .get(&document_id)
+        .cloned()
+        .ok_or_else(|| ErrorPayload::from(SevenError::DocumentNotOpen))?;
+    let cache_dir = state.cache_dir.join("interactive-media");
+    interactive::materialize_interactive_media(
+        document.active_path(),
+        &object_id,
+        &display_name,
+        &cache_dir,
+    )
+    .map(|path| path.to_string_lossy().into_owned())
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn list_geospatial_viewports(
     state: State<'_, AppState>,
     document_id: String,

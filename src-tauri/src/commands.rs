@@ -221,6 +221,77 @@ pub async fn restore_document_session(
     Ok(summary)
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalFileStatus {
+    pub exists: bool,
+    pub changed: bool,
+    pub file_size: Option<u64>,
+    pub modified_ns: Option<String>,
+}
+
+#[tauri::command]
+pub fn get_external_file_status(
+    state: State<'_, AppState>,
+    document_id: String,
+) -> CommandResult<ExternalFileStatus> {
+    let document = state
+        .documents
+        .lock()
+        .get(&document_id)
+        .cloned()
+        .ok_or_else(|| ErrorPayload::from(SevenError::DocumentNotOpen))?;
+    match fs::metadata(&document.path) {
+        Ok(metadata) => {
+            let modified = pdf::modified_ns(&metadata);
+            Ok(ExternalFileStatus {
+                exists: true,
+                changed: metadata.len() != document.source_file_size
+                    || modified != document.source_modified_ns,
+                file_size: Some(metadata.len()),
+                modified_ns: Some(modified.to_string()),
+            })
+        }
+        Err(_) => Ok(ExternalFileStatus {
+            exists: false,
+            changed: true,
+            file_size: None,
+            modified_ns: None,
+        }),
+    }
+}
+
+#[tauri::command]
+pub async fn reload_document_from_source(
+    state: State<'_, AppState>,
+    document_id: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    let snapshot = state
+        .documents
+        .lock()
+        .get(&document_id)
+        .cloned()
+        .ok_or_else(|| ErrorPayload::from(SevenError::DocumentNotOpen))?;
+    if snapshot.is_dirty() {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "Há alterações locais não salvas. Salve como uma cópia ou descarte as alterações antes de recarregar.".into(),
+        )));
+    }
+
+    let path = snapshot.path.clone();
+    let password = snapshot.password.clone();
+    let mut refreshed = tauri::async_runtime::spawn_blocking(move || pdf::inspect(&path, password))
+        .await
+        .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
+        .map_err(ErrorPayload::from)?;
+
+    refreshed.id = snapshot.id.clone();
+    refreshed.revision = snapshot.revision.saturating_add(1);
+    let summary = pdf::summary(&refreshed);
+    state.documents.lock().insert(document_id, refreshed);
+    Ok(summary)
+}
+
 #[tauri::command]
 pub fn close_document(state: State<'_, AppState>, document_id: String) -> CommandResult<()> {
     state.documents.lock().remove(&document_id);

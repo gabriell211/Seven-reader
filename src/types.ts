@@ -662,6 +662,18 @@ export interface PortfolioFolderInfo {
   depth: number;
 }
 
+export interface PortfolioDirectoryImportReport {
+  addedFiles: number;
+  createdFolders: number;
+  skippedFiles: number;
+  totalBytes: number;
+}
+
+export interface SessionPortfolioDirectoryImportResult {
+  document: DocumentSummary;
+  report: PortfolioDirectoryImportReport;
+}
+
 export interface SessionPortfolioFolderResult {
   document: DocumentSummary;
   changed: number;

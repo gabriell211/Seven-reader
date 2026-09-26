@@ -45,6 +45,8 @@ import type {
   OverlayTextOptions,
   PdfActionInfo,
   PrintPreflightReport,
+  PortfolioPreview,
+  PortfolioSearchHit,
   PageBoxUpdate,
   PageGeometryUpdate,
   RedactionArea,
@@ -595,6 +597,27 @@ export async function sessionRemovePdfAttachment(
   return invoke<DocumentSummary>("session_remove_pdf_attachment", {
     documentId, objectId,
   });
+}
+
+export async function materializePdfPortfolioItem(
+  documentId: string,
+  objectId: string,
+): Promise<PortfolioPreview> {
+  return invoke<PortfolioPreview>("materialize_pdf_portfolio_item", { documentId, objectId });
+}
+
+export async function openPdfPortfolioItemExternal(
+  documentId: string,
+  objectId: string,
+): Promise<void> {
+  await invoke("open_pdf_portfolio_item_external", { documentId, objectId });
+}
+
+export async function searchPdfPortfolioItems(
+  documentId: string,
+  query: string,
+): Promise<PortfolioSearchHit[]> {
+  return invoke<PortfolioSearchHit[]>("search_pdf_portfolio_items", { documentId, query });
 }
 
 export async function sessionAddPdfPortfolioItem(

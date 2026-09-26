@@ -44,6 +44,12 @@ import {
   createPdfFromText,
   createBlankDocument,
   getAccessibilityReport,
+  listAccessibilityTags,
+  sessionUpdateAccessibilityProperties,
+  sessionUpdateStructureTag,
+  sessionDeleteStructureTag,
+  sessionMoveStructureTag,
+  sessionAutoTagBasic,
   getCapabilities,
   getExternalFileStatus,
   reloadDocumentFromSource,
@@ -184,6 +190,9 @@ import {
 import { canRunTool } from "./data/tools";
 import type {
   AccessibilityReport,
+  AccessibilityProperties,
+  StructureTagInfo,
+  StructureTagUpdate,
   AdvancedPdfReport,
   AdvancedSearchHit,
   AdvancedSearchOptions,
@@ -350,6 +359,8 @@ export default function App() {
   const [reportMode, setReportMode] = useState<"compare" | "accessibility" | null>(null);
   const [metadata, setMetadata] = useState<DocumentMetadata | null>(null);
   const [accessibilityReport, setAccessibilityReport] = useState<AccessibilityReport | null>(null);
+  const [accessibilityTags, setAccessibilityTags] = useState<StructureTagInfo[]>([]);
+  const [speechState, setSpeechState] = useState<"idle" | "speaking" | "paused">("idle");
   const [compareReport, setCompareReport] = useState<CompareReport | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [ocrOpen, setOcrOpen] = useState(false);
@@ -3053,11 +3064,116 @@ export default function App() {
     }
   };
 
+  const refreshAccessibility = async (summary = document) => {
+    if (!summary) return;
+    const [report, tags] = await Promise.all([
+      getAccessibilityReport(summary.activePath),
+      listAccessibilityTags(summary.id),
+    ]);
+    setAccessibilityReport(report);
+    setAccessibilityTags(tags);
+  };
+
+  const updateAccessibilityProperties = async (properties: AccessibilityProperties) => {
+    if (!document) return;
+    try {
+      const summary = await sessionUpdateAccessibilityProperties(document.id, properties);
+      await acceptDocumentRevision(summary, "Propriedades de acessibilidade atualizadas.");
+      await refreshAccessibility(summary);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const updateAccessibilityTag = async (update: StructureTagUpdate) => {
+    if (!document) return;
+    try {
+      const summary = await sessionUpdateStructureTag(document.id, update);
+      await acceptDocumentRevision(summary, "Tag estrutural atualizada.");
+      await refreshAccessibility(summary);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const deleteAccessibilityTag = async (objectId: string) => {
+    if (!document) return;
+    try {
+      const summary = await sessionDeleteStructureTag(document.id, objectId);
+      await acceptDocumentRevision(summary, "Tag estrutural removida.");
+      await refreshAccessibility(summary);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const moveAccessibilityTag = async (objectId: string, direction: "up" | "down") => {
+    if (!document) return;
+    try {
+      const summary = await sessionMoveStructureTag(document.id, objectId, direction);
+      await acceptDocumentRevision(summary, "Ordem de leitura estrutural atualizada.");
+      await refreshAccessibility(summary);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const autoTagDocument = async () => {
+    if (!document) return;
+    try {
+      const result = await sessionAutoTagBasic(document.id);
+      await acceptDocumentRevision(result.document, `Autotag básico aplicado em ${result.taggedPages} página(s).`);
+      await refreshAccessibility(result.document);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const readCurrentPageAloud = async () => {
+    if (!document || !("speechSynthesis" in window)) return;
+    try {
+      const result = await extractTextInRect(document.id, page, { x: 0, y: 0, width: 1, height: 1 });
+      const value = result.text.trim();
+      if (!value) {
+        setNotice("A página atual não possui texto para leitura. Execute OCR se for uma digitalização.");
+        return;
+      }
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(value);
+      utterance.lang = accessibilityReport?.language || "pt-BR";
+      utterance.rate = settings.readAloudRate;
+      utterance.pitch = settings.readAloudPitch;
+      utterance.onstart = () => setSpeechState("speaking");
+      utterance.onend = () => setSpeechState("idle");
+      utterance.onerror = () => setSpeechState("idle");
+      window.speechSynthesis.speak(utterance);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const pauseResumeReadAloud = () => {
+    if (!("speechSynthesis" in window)) return;
+    if (speechState === "speaking") {
+      window.speechSynthesis.pause();
+      setSpeechState("paused");
+    } else if (speechState === "paused") {
+      window.speechSynthesis.resume();
+      setSpeechState("speaking");
+    }
+  };
+
+  const stopReadAloud = () => {
+    if (!("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    setSpeechState("idle");
+  };
+
   const runAccessibility = async () => {
     if (!document) return;
     try {
       setReportLoading(true);
-      setAccessibilityReport(await getAccessibilityReport(document.activePath));
+      await refreshAccessibility();
     } catch (error) {
       setNotice(errorMessage(error));
     } finally {
@@ -3331,10 +3447,21 @@ export default function App() {
           mode={reportMode}
           currentPdf={document.path}
           accessibility={accessibilityReport}
+          accessibilityTags={accessibilityTags}
           comparison={compareReport}
           loading={reportLoading}
           onClose={() => setReportMode(null)}
           onAccessibility={() => void runAccessibility()}
+          onUpdateAccessibilityProperties={(properties) => void updateAccessibilityProperties(properties)}
+          onUpdateAccessibilityTag={(update) => void updateAccessibilityTag(update)}
+          onDeleteAccessibilityTag={(objectId) => void deleteAccessibilityTag(objectId)}
+          onMoveAccessibilityTag={(objectId, direction) => void moveAccessibilityTag(objectId, direction)}
+          onAutoTag={() => void autoTagDocument()}
+          speechAvailable={"speechSynthesis" in window}
+          speechState={speechState}
+          onReadAloud={() => void readCurrentPageAloud()}
+          onPauseResumeReadAloud={pauseResumeReadAloud}
+          onStopReadAloud={stopReadAloud}
           onCompare={(other) => void runCompare(other)}
         />
       )}

@@ -326,6 +326,21 @@ export interface OcrWord {
   top: number;
   width: number;
   height: number;
+  occurrence: number;
+  normalizedX: number;
+  normalizedY: number;
+  normalizedWidth: number;
+  normalizedHeight: number;
+}
+
+export interface OcrReviewResult {
+  previewPath: string;
+  previewWidth: number;
+  previewHeight: number;
+  totalWords: number;
+  suspectWords: number;
+  averageConfidence: number;
+  words: OcrWord[];
 }
 
 export type AnnotationKind = "note" | "highlight" | "underline" | "strikeout" | "stamp" | "freetext" | "ink";

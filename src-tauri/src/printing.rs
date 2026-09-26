@@ -1,6 +1,7 @@
-use crate::{error::SevenError, jobs, state::AppState};
+use crate::{error::SevenError, jobs, pdf::NormalizedRect, state::AppState};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, path::{Path, PathBuf}, process::Command};
+use lopdf::Object;
+use std::{collections::HashSet, fs, path::{Path, PathBuf}, process::Command};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -17,6 +18,7 @@ pub struct PrintOptions {
     pub page_mode: String,
     pub current_page: usize,
     pub page_range: String,
+    pub selection_rect: Option<NormalizedRect>,
     pub page_set: String,
     pub reverse: bool,
     pub duplex: String,
@@ -32,7 +34,7 @@ impl PrintOptions {
         if !(1..=99).contains(&self.copies) {
             return Err(SevenError::OperationRejected("Cópias deve ficar entre 1 e 99".into()));
         }
-        if !matches!(self.page_mode.as_str(), "all" | "current" | "range") {
+        if !matches!(self.page_mode.as_str(), "all" | "current" | "range" | "selection") {
             return Err(SevenError::OperationRejected("Modo de páginas inválido".into()));
         }
         if !matches!(self.page_set.as_str(), "all" | "odd" | "even") {
@@ -52,6 +54,12 @@ impl PrintOptions {
         }
         if self.page_range.chars().count() > 512 {
             return Err(SevenError::OperationRejected("Intervalo de páginas muito longo".into()));
+        }
+        if self.page_mode == "selection" {
+            self.selection_rect
+                .as_ref()
+                .ok_or_else(|| SevenError::OperationRejected("Nenhuma área selecionada para impressão".into()))?
+                .validated()?;
         }
         Ok(())
     }
@@ -109,7 +117,7 @@ pub fn selected_pages(
 
     let mut pages = match options.page_mode.as_str() {
         "all" => (1..=page_count).collect::<Vec<_>>(),
-        "current" => {
+        "current" | "selection" => {
             let page = options.current_page.saturating_add(1);
             if page > page_count {
                 return Err(SevenError::OperationRejected("Página atual fora do documento".into()));
@@ -224,6 +232,85 @@ fn validate_printer(options: &PrintOptions) -> Result<(), SevenError> {
         }
     }
     Ok(())
+}
+
+fn object_number(value: &Object) -> Option<f64> {
+    match value {
+        Object::Integer(value) => Some(*value as f64),
+        Object::Real(value) => Some(f64::from(*value)),
+        _ => None,
+    }
+}
+
+fn inherited_box(
+    document: &lopdf::Document,
+    mut page_id: lopdf::ObjectId,
+    key: &[u8],
+) -> Option<[f64; 4]> {
+    for _ in 0..32 {
+        let dictionary = document.get_object(page_id).ok()?.as_dict().ok()?;
+        if let Ok(Object::Array(values)) = dictionary.get(key) {
+            if values.len() >= 4 {
+                return Some([
+                    object_number(&values[0])?,
+                    object_number(&values[1])?,
+                    object_number(&values[2])?,
+                    object_number(&values[3])?,
+                ]);
+            }
+        }
+        page_id = dictionary.get(b"Parent").ok()?.as_reference().ok()?;
+    }
+    None
+}
+
+fn selection_crop_step(
+    input: &Path,
+    page_index: usize,
+    rect: &NormalizedRect,
+    output: &Path,
+) -> Result<jobs::ProcessStep, SevenError> {
+    let rect = rect.validated()?;
+    let document = lopdf::Document::load(input)
+        .map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let page_id = document
+        .get_pages()
+        .get(&((page_index + 1) as u32))
+        .copied()
+        .ok_or_else(|| SevenError::OperationRejected("Página selecionada não existe".into()))?;
+    let page_box = inherited_box(&document, page_id, b"CropBox")
+        .or_else(|| inherited_box(&document, page_id, b"MediaBox"))
+        .unwrap_or([0.0, 0.0, 612.0, 792.0]);
+    let page_width = (page_box[2] - page_box[0]).abs().max(1.0);
+    let page_height = (page_box[3] - page_box[1]).abs().max(1.0);
+    let left = page_box[0] + f64::from(rect.x) * page_width;
+    let top = page_box[3] - f64::from(rect.y) * page_height;
+    let width = f64::from(rect.width) * page_width;
+    let height = f64::from(rect.height) * page_height;
+    let bottom = top - height;
+
+    let gs = jobs::require_executable(&["gswin64c", "gswin32c", "gs"], "Ghostscript")?;
+    Ok(jobs::ProcessStep {
+        program: gs,
+        args: vec![
+            "-dBATCH".into(),
+            "-dNOPAUSE".into(),
+            "-dSAFER".into(),
+            "-sDEVICE=pdfwrite".into(),
+            "-dCompatibilityLevel=1.7".into(),
+            format!("-dFirstPage={}", page_index + 1),
+            format!("-dLastPage={}", page_index + 1),
+            "-dFIXEDMEDIA".into(),
+            format!("-dDEVICEWIDTHPOINTS={width:.4}"),
+            format!("-dDEVICEHEIGHTPOINTS={height:.4}"),
+            format!("-sOutputFile={}", output.to_string_lossy()),
+            "-c".into(),
+            format!("<< /PageOffset [{:.4} {:.4}] >> setpagedevice", -left, -bottom),
+            "-f".into(),
+            input.to_string_lossy().into_owned(),
+        ],
+        label: "Preparando área selecionada para impressão".into(),
+    })
 }
 
 fn page_subset_step(
@@ -380,7 +467,17 @@ pub fn start_print_job(
 
     let mut cleanup = Vec::new();
     let mut steps = Vec::new();
-    let effective = if all_pages {
+    let effective = if options.page_mode == "selection" {
+        let directory = state.cache_dir.join("jobs");
+        fs::create_dir_all(&directory).map_err(|error| SevenError::Io(error.to_string()))?;
+        let cropped = directory.join(format!("print-selection-{}.pdf", uuid::Uuid::new_v4()));
+        let rect = options.selection_rect
+            .as_ref()
+            .ok_or_else(|| SevenError::OperationRejected("Nenhuma área selecionada".into()))?;
+        steps.push(selection_crop_step(&input, options.current_page, rect, &cropped)?);
+        cleanup.push(cropped.clone());
+        cropped
+    } else if all_pages {
         input.clone()
     } else {
         let directory = state.cache_dir.join("jobs");

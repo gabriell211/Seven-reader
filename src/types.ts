@@ -415,6 +415,7 @@ export interface AnnotationInfo {
   text: string;
   author: string;
   rect: [number, number, number, number];
+  normalizedRect: NormalizedRect;
 }
 
 export interface FormFieldInfo {

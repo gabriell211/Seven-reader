@@ -48,6 +48,12 @@ export interface DocumentSummary {
 
 export type ViewMode = "single" | "continuous" | "facing" | "facing-continuous";
 
+export interface PageTransferResult {
+  target: DocumentSummary;
+  source?: DocumentSummary;
+  moved: boolean;
+}
+
 export interface ExternalFileStatus {
   exists: boolean;
   changed: boolean;

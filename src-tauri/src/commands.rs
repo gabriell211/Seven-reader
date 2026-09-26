@@ -1504,6 +1504,194 @@ pub async fn search_pdf_portfolio_items(
 }
 
 #[tauri::command]
+pub fn session_add_pdf_portfolio_clipboard_text(
+    state: State<'_, AppState>,
+    document_id: String,
+    text: String,
+    display_name: String,
+    folder_path: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    if text.is_empty() || text.chars().count() > 2_000_000 {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "O texto do clipboard deve conter entre 1 e 2 milhões de caracteres".into(),
+        )));
+    }
+    let temp_dir = state.cache_dir.join("portfolio-inputs");
+    fs::create_dir_all(&temp_dir)
+        .map_err(|error| ErrorPayload::from(SevenError::Io(error.to_string())))?;
+    let temp = temp_dir.join(format!("clipboard-{}.txt", uuid::Uuid::new_v4()));
+    fs::write(&temp, text.as_bytes())
+        .map_err(|error| ErrorPayload::from(SevenError::Io(error.to_string())))?;
+
+    let result = session::apply_revision(&state, &document_id, "portfolio-clipboard-text", {
+        let temp = temp.clone();
+        move |input, output| {
+            advanced::add_attachment_to_portfolio_folder(
+                input, output, &temp, &display_name, "Texto importado da área de transferência", &folder_path,
+            )
+        }
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from);
+    let _ = fs::remove_file(temp);
+    result
+}
+
+#[tauri::command]
+pub fn session_add_pdf_portfolio_clipboard_image(
+    state: State<'_, AppState>,
+    document_id: String,
+    rgba: Vec<u8>,
+    width: u32,
+    height: u32,
+    display_name: String,
+    folder_path: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    if width == 0 || height == 0 || width > 20_000 || height > 20_000 {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "Dimensões da imagem do clipboard são inválidas".into(),
+        )));
+    }
+    let expected = usize::try_from(width)
+        .ok()
+        .and_then(|w| usize::try_from(height).ok().and_then(|h| w.checked_mul(h)))
+        .and_then(|pixels| pixels.checked_mul(4))
+        .ok_or_else(|| ErrorPayload::from(SevenError::OperationRejected("Imagem excede limites seguros".into())))?;
+    if rgba.len() != expected {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "Buffer RGBA do clipboard está incompleto".into(),
+        )));
+    }
+
+    let temp_dir = state.cache_dir.join("portfolio-inputs");
+    fs::create_dir_all(&temp_dir)
+        .map_err(|error| ErrorPayload::from(SevenError::Io(error.to_string())))?;
+    let temp = temp_dir.join(format!("clipboard-{}.png", uuid::Uuid::new_v4()));
+    let image = image::RgbaImage::from_raw(width, height, rgba)
+        .ok_or_else(|| ErrorPayload::from(SevenError::OperationRejected("Não foi possível montar a imagem RGBA".into())))?;
+    image.save(&temp)
+        .map_err(|error| ErrorPayload::from(SevenError::Io(error.to_string())))?;
+
+    let result = session::apply_revision(&state, &document_id, "portfolio-clipboard-image", {
+        let temp = temp.clone();
+        move |input, output| {
+            advanced::add_attachment_to_portfolio_folder(
+                input, output, &temp, &display_name, "Imagem importada da área de transferência", &folder_path,
+            )
+        }
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from);
+    let _ = fs::remove_file(temp);
+    result
+}
+
+#[tauri::command]
+pub async fn session_add_pdf_portfolio_web(
+    state: State<'_, AppState>,
+    document_id: String,
+    url: String,
+    display_name: String,
+    folder_path: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    let trimmed = url.trim().to_owned();
+    if trimmed.len() > 4096
+        || trimmed.contains(['\r', '\n', '\0'])
+        || !(trimmed.starts_with("https://") || trimmed.starts_with("http://"))
+    {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "Use uma URL HTTP ou HTTPS válida".into(),
+        )));
+    }
+    let browser = capabilities::find_browser().ok_or_else(|| {
+        ErrorPayload::from(SevenError::CapabilityUnavailable(
+            "Chrome, Chromium ou Edge não detectado".into(),
+        ))
+    })?;
+    let temp_dir = state.cache_dir.join("portfolio-inputs");
+    fs::create_dir_all(&temp_dir)
+        .map_err(|error| ErrorPayload::from(SevenError::Io(error.to_string())))?;
+    let temp = temp_dir.join(format!("web-{}.pdf", uuid::Uuid::new_v4()));
+    let temp_for_process = temp.clone();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        let status = std::process::Command::new(browser)
+            .args([
+                "--headless=new",
+                "--disable-gpu",
+                "--disable-extensions",
+                "--incognito",
+                "--no-pdf-header-footer",
+                &format!("--print-to-pdf={}", temp_for_process.to_string_lossy()),
+                &trimmed,
+            ])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+        if !status.success() || !temp_for_process.is_file() {
+            return Err(SevenError::Operation(format!(
+                "Navegador não gerou o PDF da página · código {:?}",
+                status.code()
+            )));
+        }
+        pdf::validate_pdf_path(temp_for_process.to_string_lossy().as_ref())?;
+        Ok::<_, SevenError>(())
+    })
+    .await
+    .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
+    .map_err(ErrorPayload::from)?;
+
+    let result = session::apply_revision(&state, &document_id, "portfolio-web", {
+        let temp = temp.clone();
+        move |input, output| {
+            advanced::add_attachment_to_portfolio_folder(
+                input, output, &temp, &display_name, "Página web capturada como PDF", &folder_path,
+            )
+        }
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from);
+    let _ = fs::remove_file(temp);
+    result
+}
+
+#[tauri::command]
+pub async fn session_add_pdf_portfolio_scan(
+    state: State<'_, AppState>,
+    document_id: String,
+    dpi: u16,
+    display_name: String,
+    folder_path: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    let dpi = dpi.clamp(75, 1200);
+    let temp_dir = state.cache_dir.join("portfolio-inputs");
+    fs::create_dir_all(&temp_dir)
+        .map_err(|error| ErrorPayload::from(SevenError::Io(error.to_string())))?;
+    let temp = temp_dir.join(format!("scan-{}.pdf", uuid::Uuid::new_v4()));
+    let scan_target = temp.clone();
+
+    tauri::async_runtime::spawn_blocking(move || scan_pdf_blocking(&scan_target, dpi))
+        .await
+        .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
+        .map_err(ErrorPayload::from)?;
+
+    let result = session::apply_revision(&state, &document_id, "portfolio-scan", {
+        let temp = temp.clone();
+        move |input, output| {
+            advanced::add_attachment_to_portfolio_folder(
+                input, output, &temp, &display_name, "Documento capturado pelo scanner", &folder_path,
+            )
+        }
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from);
+    let _ = fs::remove_file(temp);
+    result
+}
+
+#[tauri::command]
 pub fn session_add_pdf_portfolio_item(
     state: State<'_, AppState>,
     document_id: String,

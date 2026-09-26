@@ -77,6 +77,7 @@ import type {
   PortfolioSearchHit,
   PageBoxUpdate,
   PageGeometryUpdate,
+  PdfEncryptionOptions,
   RedactionArea,
   RedactionReport,
   ReviewTransferReport,
@@ -1705,8 +1706,9 @@ export async function startEncryptPdf(
   output: string,
   userPassword: string,
   ownerPassword: string,
+  options?: PdfEncryptionOptions,
 ): Promise<JobStart> {
-  return invoke<JobStart>("start_encrypt_pdf", { input, output, userPassword, ownerPassword });
+  return invoke<JobStart>("start_encrypt_pdf", { input, output, userPassword, ownerPassword, options: options ?? null });
 }
 
 export async function startDecryptPdf(

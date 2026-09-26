@@ -3369,6 +3369,15 @@ pub async fn review_ocr_page(
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ScannerInfo {
+    pub id: String,
+    pub name: String,
+    pub backend: String,
+    pub is_default: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ScannedPage {
     pub cache_path: String,
     pub width: u32,

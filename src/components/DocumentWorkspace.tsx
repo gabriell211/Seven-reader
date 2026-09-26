@@ -180,6 +180,7 @@ export function DocumentWorkspace({
   const [mainMenu, setMainMenu] = useState<"file" | "edit" | "view" | "help" | null>(null);
   const [leftPanel, setLeftPanel] = useState<"thumbs" | "search" | "tasks" | null>("thumbs");
   const [search, setSearch] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
   const [advancedSearch, setAdvancedSearch] = useState(false);
   const [searchMatchCase, setSearchMatchCase] = useState(false);
   const [searchWholeWord, setSearchWholeWord] = useState(false);
@@ -191,6 +192,7 @@ export function DocumentWorkspace({
     comments: true,
     bookmarks: true,
     forms: true,
+    attachments: true,
     metadata: true,
   });
   const [toolSearch, setToolSearch] = useState("");
@@ -362,6 +364,41 @@ export function DocumentWorkspace({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [viewerTool, selectedText, selectionRect, page, document.id, rendered?.width, immersiveMode]);
+
+  const globalToolMatches = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase("pt-BR");
+    if (!query) return [];
+    return tools
+      .filter((tool) => [tool.label, tool.description, tool.group].some((value) =>
+        value.toLocaleLowerCase("pt-BR").includes(query),
+      ))
+      .slice(0, 6);
+  }, [search]);
+
+  const globalCommandMatches = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase("pt-BR");
+    if (!query) return [] as Array<"save" | "print" | "settings" | "properties">;
+    const candidates: Array<{ id: "save" | "print" | "settings" | "properties"; text: string }> = [
+      { id: "save", text: "salvar documento arquivo" },
+      { id: "print", text: "imprimir impressão print" },
+      { id: "settings", text: "preferências configurações settings" },
+      { id: "properties", text: "propriedades metadados documento" },
+    ];
+    return candidates.filter((item) => item.text.includes(query)).map((item) => item.id);
+  }, [search]);
+
+  const globalPageMatch = useMemo(() => {
+    const value = Number(search.trim().replace(/^p(?:ágina)?\s*/i, ""));
+    return Number.isInteger(value) && value >= 1 && value <= document.pageCount ? value - 1 : null;
+  }, [search, document.pageCount]);
+
+  const runGlobalCommand = (command: "save" | "print" | "settings" | "properties") => {
+    setSearchFocused(false);
+    if (command === "save") onSave();
+    else if (command === "print") onPrint();
+    else if (command === "settings") onSettings();
+    else onTool("properties");
+  };
 
   const filteredTools = useMemo(() => {
     const query = toolSearch.trim().toLocaleLowerCase("pt-BR");
@@ -950,7 +987,23 @@ export function DocumentWorkspace({
   };
 
   const submitSearch = () => {
-    onSearch(search);
+    const query = search.trim();
+    if (!query) return;
+    onSearch(query);
+    onAdvancedSearch({
+      query,
+      matchCase: false,
+      wholeWord: false,
+      regex: false,
+      includeText: true,
+      includeComments: true,
+      includeBookmarks: true,
+      includeForms: true,
+      includeAttachments: true,
+      includeMetadata: true,
+    });
+    setAdvancedSearch(true);
+    setSearchFocused(false);
     setLeftPanel("search");
   };
 
@@ -970,6 +1023,7 @@ export function DocumentWorkspace({
       includeComments: searchScopes.comments,
       includeBookmarks: searchScopes.bookmarks,
       includeForms: searchScopes.forms,
+      includeAttachments: searchScopes.attachments,
       includeMetadata: searchScopes.metadata,
     });
     setLeftPanel("search");
@@ -1014,16 +1068,49 @@ export function DocumentWorkspace({
           </button>
         </div>
         <div className="topbar-spacer" />
-        <label className="workspace-search">
-          <SevenIcon name="search" />
-          <input
-            ref={searchRef}
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            onKeyDown={(event) => event.key === "Enter" && submitSearch()}
-            placeholder="Pesquisar no documento"
-          />
-        </label>
+        <div className="workspace-search-shell">
+          <label className="workspace-search">
+            <SevenIcon name="search" />
+            <input
+              ref={searchRef}
+              value={search}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => window.setTimeout(() => setSearchFocused(false), 120)}
+              onChange={(event) => setSearch(event.target.value)}
+              onKeyDown={(event) => event.key === "Enter" && submitSearch()}
+              placeholder="Pesquisar texto, ferramentas, páginas e comandos"
+            />
+          </label>
+          {searchFocused && search.trim() && (
+            <div className="global-search-popover" onMouseDown={(event) => event.preventDefault()}>
+              <button className="global-search-all" onClick={submitSearch}>
+                <SevenIcon name="search" />
+                <span><strong>Pesquisar “{search.trim()}” em todo o documento</strong><small>Texto, comentários, marcadores, campos, anexos e metadados</small></span>
+              </button>
+              {globalPageMatch !== null && (
+                <button onClick={() => { setSearchFocused(false); onRender(globalPageMatch, zoom); }}>
+                  <SevenIcon name="pages" />
+                  <span><strong>Ir para página {globalPageMatch + 1}</strong><small>Navegação direta</small></span>
+                </button>
+              )}
+              {globalCommandMatches.map((command) => (
+                <button key={command} onClick={() => runGlobalCommand(command)}>
+                  <SevenIcon name={command === "save" ? "save" : command === "print" ? "print" : command === "settings" ? "settings" : "document"} />
+                  <span>
+                    <strong>{command === "save" ? "Salvar documento" : command === "print" ? "Imprimir" : command === "settings" ? "Preferências" : "Propriedades"}</strong>
+                    <small>Comando do aplicativo</small>
+                  </span>
+                </button>
+              ))}
+              {globalToolMatches.map((tool) => (
+                <button key={tool.id} disabled={!canRunTool(tool.id, capabilities)} onClick={() => { setSearchFocused(false); onTool(tool.id); }}>
+                  <SevenIcon name={tool.icon} />
+                  <span><strong>{tool.label}</strong><small>{tool.group} · {tool.description}</small></span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <button className="icon-button" aria-label="Configurações" onClick={onSettings}><SevenIcon name="settings" /></button>
       </header>
 
@@ -1195,6 +1282,7 @@ export function DocumentWorkspace({
                         ["comments", "Comentários"],
                         ["bookmarks", "Marcadores"],
                         ["forms", "Campos"],
+                        ["attachments", "Anexos textuais"],
                         ["metadata", "Metadados"],
                       ] as const).map(([key, label]) => (
                         <label key={key}>

@@ -1628,25 +1628,25 @@ Quando a biblioteca criptográfica permitir:
 
 ## Senhas
 
-- [ ] Senha de abertura
-- [ ] Senha de permissões
-- [ ] Restringir impressão
-- [ ] Restringir cópia
-- [ ] Restringir edição
-- [ ] Restringir comentário
-- [ ] Remover segurança com autorização
+- [x] Senha de abertura
+- [x] Senha de permissões
+- [x] Restringir impressão
+- [x] Restringir cópia
+- [x] Restringir edição
+- [x] Restringir comentário
+- [x] Remover segurança com autorização
 - [ ] Mostrar permissões atuais
 
 ## Criptografia
 
-- [ ] AES compatível com o padrão PDF
-- [ ] AES-256 quando aplicável
-- [ ] Criptografia por senha
+- [x] AES compatível com o padrão PDF
+- [x] AES-256 quando aplicável
+- [x] Criptografia por senha
 - [ ] Criptografia por certificado
 - [ ] Escolher destinatários
 - [ ] Permissões por destinatário
 - [ ] Alterar configuração
-- [ ] Remover criptografia mediante autorização
+- [x] Remover criptografia mediante autorização
 
 ## Políticas de segurança
 
@@ -1673,19 +1673,19 @@ Opcional:
 
 # Visualização protegida e sandbox
 
-- [ ] Modo protegido
-- [ ] Visualização protegida
+- [x] Modo protegido
+- [x] Visualização protegida
 - [ ] Abrir arquivo não confiável isolado
 - [ ] Bloquear escrita fora do sandbox
 - [ ] Bloquear execução de anexos
-- [ ] Bloquear ações de lançamento
-- [ ] Confirmar URLs externas
-- [ ] Restringir APIs JavaScript
-- [ ] Lista de locais confiáveis
-- [ ] Lista de hosts confiáveis
-- [ ] Trust once
-- [ ] Trust permanently com confirmação
-- [ ] Security warnings claros
+- [x] Bloquear ações de lançamento
+- [x] Confirmar URLs externas
+- [x] Restringir APIs JavaScript
+- [x] Lista de locais confiáveis
+- [x] Lista de hosts confiáveis
+- [x] Trust once
+- [x] Trust permanently com confirmação
+- [x] Security warnings claros
 
 ---
 

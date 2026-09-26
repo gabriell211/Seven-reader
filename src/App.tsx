@@ -4125,10 +4125,15 @@ export default function App() {
         <ConversionDialog
           capabilities={capabilities}
           currentPdf={document?.activePath}
+          watchFolders={watchFolders}
+          watchFolderEvents={watchFolderEvents}
           onClose={() => setConversionOpen(false)}
           onConvertToPdf={(input, outputDirectory) => void runConvertToPdf(input, outputDirectory)}
           onBatchConvertToPdf={(inputs, outputDirectory) => void runBatchConvertToPdf(inputs, outputDirectory)}
           onExport={(input, output, format, dpi) => void runExport(input, output, format, dpi)}
+          onUpsertWatchFolder={(config) => void upsertWatchFolder(config)}
+          onToggleWatchFolder={(id, enabled) => void toggleWatchFolder(id, enabled)}
+          onRemoveWatchFolder={(id) => void removeWatchFolder(id)}
         />
       )}
       {securityMode && document && (

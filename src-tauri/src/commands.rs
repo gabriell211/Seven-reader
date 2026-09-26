@@ -4826,6 +4826,63 @@ pub fn start_encrypt_pdf(
 }
 
 #[tauri::command]
+pub fn start_batch_encrypt_pdf(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    inputs: Vec<String>,
+    output_directory: String,
+    user_password: String,
+    owner_password: String,
+    options: Option<PdfEncryptionOptions>,
+) -> CommandResult<JobStart> {
+    let executable = jobs::require_executable(&["qpdf"], "qpdf").map_err(ErrorPayload::from)?;
+    let user_password =
+        jobs::validated_password(&user_password, "Senha de abertura").map_err(ErrorPayload::from)?;
+    let owner_password =
+        jobs::validated_password(&owner_password, "Senha de proprietário").map_err(ErrorPayload::from)?;
+    let options = options.unwrap_or_default();
+    options.validate().map_err(ErrorPayload::from)?;
+    if options.has_restrictions() && user_password == owner_password {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "Para aplicar permissões, use uma senha de proprietário diferente da senha de abertura".into(),
+        )));
+    }
+
+    let (output_directory, items) =
+        prepare_batch_pdf_outputs(inputs, output_directory, "protegido")?;
+    let total = items.len();
+    let mut steps = Vec::with_capacity(total);
+
+    for (index, (input, output, name)) in items.into_iter().enumerate() {
+        let mut args = vec![
+            "--encrypt".into(),
+            format!("--user-password={user_password}"),
+            format!("--owner-password={owner_password}"),
+            "--bits=256".into(),
+        ];
+        args.extend(options.qpdf_args());
+        args.extend([
+            "--".into(),
+            input.to_string_lossy().into_owned(),
+            output.to_string_lossy().into_owned(),
+        ]);
+        steps.push(jobs::ProcessStep {
+            program: executable.clone(),
+            args,
+            label: format!("Criptografando {} de {} · {name}", index + 1, total),
+        });
+    }
+
+    Ok(jobs::start_process_sequence_job(
+        app,
+        &state,
+        "batch-encrypt",
+        steps,
+        Some(output_directory),
+    ))
+}
+
+#[tauri::command]
 pub fn start_decrypt_pdf(
     app: AppHandle,
     state: State<'_, AppState>,

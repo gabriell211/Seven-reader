@@ -995,3 +995,21 @@ svg { width: 20px; height: 20px; }
 .insert-source-grid button.active { color:#5d38bf; border-color:#cfc2f6; background:#f3efff; }
 .insert-source-grid button:disabled { opacity:.35; cursor:default; }
 @media (max-width:800px) { .insert-source-grid { grid-template-columns:repeat(4,minmax(0,1fr)); } }
+
+.page-rotation-shell { position:relative; flex:none; max-width:100%; }
+.page-rotation-shell > .rendered-page { position:absolute; left:50%; top:50%; transform-origin:center center; }
+.immersive-reading .workspace-topbar { height:44px; }
+.immersive-reading .global-bar,
+.immersive-reading .side-rail,
+.immersive-reading .left-panel { display:none; }
+.immersive-reading .workspace-body { height:calc(100vh - 44px); }
+.immersive-reading .document-canvas { padding-top:28px; }
+.immersive-presentation .workspace-topbar,
+.immersive-presentation .global-bar,
+.immersive-presentation .side-rail,
+.immersive-presentation .left-panel,
+.immersive-presentation .quick-tools,
+.immersive-presentation .view-controls { display:none; }
+.immersive-presentation .workspace-body { height:100vh; }
+.immersive-presentation .document-stage { background:#111217; }
+.immersive-presentation .document-canvas { padding:18px; align-content:center; }

@@ -1545,13 +1545,128 @@ pub fn remove_portfolio_folder(
     Ok(removed_count)
 }
 
-pub fn add_attachment(
-    input: &Path,
-    output: &Path,
+fn ensure_embedded_files_root(document: &mut Document) -> Result<ObjectId, SevenError> {
+    let catalog_id = document
+        .trailer
+        .get(b"Root")
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_reference()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+
+    let existing_names = document
+        .get_object(catalog_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .get(b"Names")
+        .ok()
+        .cloned();
+
+    let names_id = match existing_names {
+        Some(Object::Reference(id)) => id,
+        Some(Object::Dictionary(dictionary)) => {
+            let id = document.add_object(dictionary);
+            document
+                .get_object_mut(catalog_id)
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .as_dict_mut()
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .set("Names", id);
+            id
+        }
+        Some(_) => return Err(SevenError::Operation("Catálogo /Names inválido".into())),
+        None => {
+            let id = document.add_object(Dictionary::new());
+            document
+                .get_object_mut(catalog_id)
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .as_dict_mut()
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .set("Names", id);
+            id
+        }
+    };
+
+    let existing_embedded = document
+        .get_object(names_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .get(b"EmbeddedFiles")
+        .ok()
+        .cloned();
+
+    let embedded_id = match existing_embedded {
+        Some(Object::Reference(id)) => id,
+        Some(Object::Dictionary(dictionary)) => {
+            let id = document.add_object(dictionary);
+            document
+                .get_object_mut(names_id)
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .as_dict_mut()
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .set("EmbeddedFiles", id);
+            id
+        }
+        Some(_) => return Err(SevenError::Operation("Name tree EmbeddedFiles inválida".into())),
+        None => {
+            let id = document.add_object(dictionary! { "Names" => Vec::<Object>::new() });
+            document
+                .get_object_mut(names_id)
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .as_dict_mut()
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .set("EmbeddedFiles", id);
+            id
+        }
+    };
+    Ok(embedded_id)
+}
+
+fn embedded_pairs(document: &Document, root_id: ObjectId) -> Vec<(String, ObjectId)> {
+    let mut output = Vec::new();
+    name_tree_pairs(
+        document,
+        &Object::Reference(root_id),
+        &mut output,
+        &mut HashSet::new(),
+    );
+    output
+}
+
+fn write_flat_embedded_pairs(
+    document: &mut Document,
+    root_id: ObjectId,
+    mut pairs: Vec<(String, ObjectId)>,
+) -> Result<(), SevenError> {
+    pairs.sort_by(|left, right| left.0.cmp(&right.0));
+    pairs.dedup_by(|left, right| left.0 == right.0);
+
+    let mut names = Vec::with_capacity(pairs.len() * 2);
+    for (key, id) in pairs {
+        names.push(Object::string_literal(key));
+        names.push(Object::Reference(id));
+    }
+
+    let root = document
+        .get_object_mut(root_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    root.remove(b"Kids");
+    root.remove(b"Limits");
+    root.set("Names", names);
+    Ok(())
+}
+
+fn insert_attachment_into_document(
+    document: &mut Document,
     file_path: &Path,
     display_name: &str,
     description: &str,
-) -> Result<(), SevenError> {
+    tree_key: &str,
+    collection_item: bool,
+) -> Result<ObjectId, SevenError> {
     if !file_path.is_file() {
         return Err(SevenError::NotFound(file_path.to_string_lossy().into_owned()));
     }
@@ -1559,19 +1674,36 @@ pub fn add_attachment(
     if data.len() > 1024 * 1024 * 1024 {
         return Err(SevenError::OperationRejected("Anexo excede 1 GiB".into()));
     }
+
     let name = if display_name.trim().is_empty() {
-        file_path.file_name().and_then(|v| v.to_str()).unwrap_or("attachment.bin").to_owned()
+        file_path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("attachment.bin")
+            .to_owned()
     } else {
         display_name.trim().to_owned()
     };
-    if attachment_is_dangerous(&name) || attachment_is_dangerous(file_path.to_string_lossy().as_ref()) {
+    if name.chars().count() > 500 || tree_key.chars().count() > 4096 {
+        return Err(SevenError::OperationRejected("Nome/caminho do componente excede o limite".into()));
+    }
+    if attachment_is_dangerous(&name)
+        || attachment_is_dangerous(file_path.to_string_lossy().as_ref())
+    {
         return Err(SevenError::OperationRejected(
             "Extensão de anexo bloqueada pela política de segurança".into(),
         ));
     }
-    let mime = attachment_mime_from_name(&name);
-    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
 
+    let root_id = ensure_embedded_files_root(document)?;
+    let mut pairs = embedded_pairs(document, root_id);
+    if pairs.iter().any(|(key, _)| key.eq_ignore_ascii_case(tree_key)) {
+        return Err(SevenError::OperationRejected(format!(
+            "Já existe um componente com a chave \"{tree_key}\""
+        )));
+    }
+
+    let mime = attachment_mime_from_name(&name);
     let embedded_stream = Stream::new(
         dictionary! {
             "Type" => "EmbeddedFile",
@@ -1584,68 +1716,48 @@ pub fn add_attachment(
         data,
     );
     let stream_id = document.add_object(embedded_stream);
-    let spec_id = document.add_object(dictionary! {
+    let mut spec = dictionary! {
         "Type" => "Filespec",
         "F" => Object::string_literal(&name),
         "UF" => Object::string_literal(&name),
         "Desc" => Object::string_literal(description),
         "EF" => dictionary! { "F" => stream_id, "UF" => stream_id },
-    });
-
-    let catalog_id = document.trailer.get(b"Root").map_err(|e| SevenError::Operation(e.to_string()))?.as_reference().map_err(|e| SevenError::Operation(e.to_string()))?;
-    let existing_names = document
-        .catalog()
-        .ok()
-        .and_then(|c| c.get(b"Names").ok())
-        .cloned();
-
-    let names_id = match existing_names {
-        Some(Object::Reference(id)) => id,
-        Some(Object::Dictionary(dictionary)) => {
-            let id = document.add_object(dictionary);
-            document.get_object_mut(catalog_id).map_err(|e| SevenError::Operation(e.to_string()))?.as_dict_mut().map_err(|e| SevenError::Operation(e.to_string()))?.set("Names", id);
-            id
-        }
-        _ => {
-            let id = document.add_object(Dictionary::new());
-            document.get_object_mut(catalog_id).map_err(|e| SevenError::Operation(e.to_string()))?.as_dict_mut().map_err(|e| SevenError::Operation(e.to_string()))?.set("Names", id);
-            id
-        }
     };
+    if collection_item {
+        spec.set("CI", dictionary! { "Type" => "CollectionItem" });
+    }
+    let spec_id = document.add_object(spec);
+    pairs.push((tree_key.to_owned(), spec_id));
+    write_flat_embedded_pairs(document, root_id, pairs)?;
+    Ok(spec_id)
+}
 
-    let current_embedded = document
-        .get_object(names_id).ok()
-        .and_then(|o| o.as_dict().ok())
-        .and_then(|d| d.get(b"EmbeddedFiles").ok())
-        .cloned();
-
-    let embedded_id = match current_embedded {
-        Some(Object::Reference(id)) => id,
-        Some(Object::Dictionary(dictionary)) => {
-            let id = document.add_object(dictionary);
-            document.get_object_mut(names_id).map_err(|e| SevenError::Operation(e.to_string()))?.as_dict_mut().map_err(|e| SevenError::Operation(e.to_string()))?.set("EmbeddedFiles", id);
-            id
-        }
-        _ => {
-            let id = document.add_object(dictionary! { "Names" => Vec::<Object>::new() });
-            document.get_object_mut(names_id).map_err(|e| SevenError::Operation(e.to_string()))?.as_dict_mut().map_err(|e| SevenError::Operation(e.to_string()))?.set("EmbeddedFiles", id);
-            id
-        }
+pub fn add_attachment(
+    input: &Path,
+    output: &Path,
+    file_path: &Path,
+    display_name: &str,
+    description: &str,
+) -> Result<(), SevenError> {
+    let mut document =
+        Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let name = if display_name.trim().is_empty() {
+        file_path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("attachment.bin")
+            .to_owned()
+    } else {
+        display_name.trim().to_owned()
     };
-
-    let tree = document.get_object_mut(embedded_id).map_err(|e| SevenError::Operation(e.to_string()))?.as_dict_mut().map_err(|e| SevenError::Operation(e.to_string()))?;
-    let names = match tree.get_mut(b"Names") {
-        Ok(Object::Array(values)) => values,
-        _ => {
-            tree.set("Names", Vec::<Object>::new());
-            match tree.get_mut(b"Names") {
-                Ok(Object::Array(values)) => values,
-                _ => return Err(SevenError::Operation("Falha ao criar name tree de anexos".into())),
-            }
-        }
-    };
-    names.push(Object::string_literal(&name));
-    names.push(Object::Reference(spec_id));
+    insert_attachment_into_document(
+        &mut document,
+        file_path,
+        &name,
+        description,
+        &name,
+        false,
+    )?;
     atomic_save(document, output)
 }
 
@@ -1657,34 +1769,45 @@ pub fn add_attachment_to_portfolio_folder(
     description: &str,
     folder_path: &str,
 ) -> Result<(), SevenError> {
-    let temp = output.with_extension(format!(
-        "seven-portfolio-{}.tmp.pdf",
-        uuid::Uuid::new_v4()
-    ));
-    add_attachment(input, &temp, file_path, display_name, description)?;
+    let mut document =
+        Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let collection_id = ensure_collection_id(&mut document, "details")?;
+    let root_id = ensure_portfolio_root_folder(&mut document, collection_id)?;
+    let normalized = if folder_path.trim().trim_matches('/').is_empty() {
+        "/".to_owned()
+    } else {
+        format!("/{}", folder_path.trim().trim_matches('/'))
+    };
+    if resolve_portfolio_folder_path(&document, root_id, &normalized).is_none() {
+        return Err(SevenError::OperationRejected(
+            "Pasta de portfólio não encontrada".into(),
+        ));
+    }
 
-    let added = attachment_list(
-        &Document::load(&temp).map_err(|error| SevenError::PdfOpen(error.to_string()))?
-    )
-    .into_iter()
-    .find(|item| {
-        item.collection_path == "/"
-            && item.name.eq_ignore_ascii_case(if display_name.trim().is_empty() {
-                file_path.file_name().and_then(|value| value.to_str()).unwrap_or("")
-            } else {
-                display_name.trim()
-            })
-    })
-    .ok_or_else(|| SevenError::Operation("Componente recém-adicionado não encontrado".into()))?;
+    let name = if display_name.trim().is_empty() {
+        file_path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("component.bin")
+            .to_owned()
+    } else {
+        display_name.trim().to_owned()
+    };
+    let tree_key = if normalized == "/" {
+        name.clone()
+    } else {
+        format!("{}/{}", normalized.trim_matches('/'), name)
+    };
 
-    let moved = move_attachment_to_portfolio_folder(
-        &temp,
-        output,
-        &added.object_id,
-        folder_path,
-    );
-    let _ = fs::remove_file(&temp);
-    moved
+    insert_attachment_into_document(
+        &mut document,
+        file_path,
+        &name,
+        description,
+        &tree_key,
+        true,
+    )?;
+    atomic_save(document, output)
 }
 
 pub fn update_attachment(

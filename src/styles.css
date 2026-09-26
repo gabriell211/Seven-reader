@@ -1357,3 +1357,17 @@ html[data-motion="reduced"] *,html[data-motion="reduced"] *::before,html[data-mo
   .compare-text-panes p + p { border-left:0; border-top:1px solid #e7e6eb; }
   .compare-difference-list { grid-template-columns:1fr; }
 }
+
+.actions-dialog--wide { width:min(980px,100%); }
+.pdf-action-row { grid-template-columns:34px minmax(0,1fr) auto; }
+.action-disabled { opacity:.5; }
+.page-action-editor { padding:13px; border:1px solid #e1e0e6; border-radius:12px; display:grid; gap:11px; background:#fafafd; }
+.page-action-list { max-height:330px; overflow:auto; display:grid; gap:6px; }
+.page-action-row { min-height:58px; padding:9px; border:1px solid #e2e1e7; border-radius:10px; display:grid; grid-template-columns:32px minmax(0,1fr) auto; gap:9px; align-items:center; background:white; }
+.page-action-row.blocked { border-color:#ecd8dc; background:#fffafb; }
+.page-action-row > span { width:30px; height:30px; border-radius:8px; display:grid; place-items:center; color:#6947cb; background:#f0ebff; }
+.page-action-row.blocked > span { color:#a7505e; background:#fff0f2; }
+.page-action-row > span svg { width:14px; }
+.page-action-row > div { min-width:0; display:grid; gap:2px; }
+.page-action-row strong { font-size:9.5px; }
+.page-action-row small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#8d8f98; font-size:8.2px; }

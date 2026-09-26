@@ -1147,6 +1147,399 @@ pub fn set_portfolio_view(
     atomic_save(document, output)
 }
 
+
+fn portfolio_root_folder_id(document: &Document) -> Option<ObjectId> {
+    collection_dictionary(document)?
+        .get(b"Folders")
+        .ok()?
+        .as_reference()
+        .ok()
+}
+
+fn portfolio_folder_path_for_id(document: &Document, root_id: ObjectId, target: ObjectId) -> Option<String> {
+    if target == root_id {
+        return Some("/".into());
+    }
+    fn walk(
+        document: &Document,
+        current: Option<ObjectId>,
+        target: ObjectId,
+        parent_path: &str,
+        visited: &mut HashSet<ObjectId>,
+    ) -> Option<String> {
+        let mut cursor = current;
+        while let Some(id) = cursor {
+            if !visited.insert(id) {
+                return None;
+            }
+            let folder = document.get_object(id).ok()?.as_dict().ok()?;
+            let name = folder.get(b"Name").ok().map(object_text).unwrap_or_default();
+            let path = if parent_path == "/" {
+                format!("/{name}")
+            } else {
+                format!("{}/{}", parent_path.trim_end_matches('/'), name)
+            };
+            if id == target {
+                return Some(path);
+            }
+            let child = folder.get(b"Child").ok().and_then(|value| value.as_reference().ok());
+            if let Some(found) = walk(document, child, target, &path, visited) {
+                return Some(found);
+            }
+            cursor = folder.get(b"Next").ok().and_then(|value| value.as_reference().ok());
+        }
+        None
+    }
+
+    let root = document.get_object(root_id).ok()?.as_dict().ok()?;
+    let first = root.get(b"Child").ok().and_then(|value| value.as_reference().ok());
+    walk(document, first, target, "/", &mut HashSet::from([root_id]))
+}
+
+fn update_embedded_file_keys(
+    document: &mut Document,
+    mut update: impl FnMut(&str) -> Option<String>,
+) -> Result<(), SevenError> {
+    let Some(root) = embedded_files_root_id(document) else { return Ok(()) };
+    let mut nodes = Vec::new();
+    collect_name_tree_node_ids(document, root, &mut nodes, &mut HashSet::new());
+    for node_id in nodes {
+        let pairs = document
+            .get_object(node_id)
+            .ok()
+            .and_then(|object| object.as_dict().ok())
+            .and_then(|dictionary| dictionary.get(b"Names").ok())
+            .and_then(|value| value.as_array().ok())
+            .cloned()
+            .unwrap_or_default();
+        if pairs.is_empty() {
+            continue;
+        }
+        let mut changed = false;
+        let mut next = pairs;
+        for index in (0..next.len()).step_by(2) {
+            if index >= next.len() {
+                break;
+            }
+            let key = object_text(&next[index]);
+            if let Some(replacement) = update(&key) {
+                next[index] = Object::string_literal(replacement);
+                changed = true;
+            }
+        }
+        if changed {
+            document
+                .get_object_mut(node_id)
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .as_dict_mut()
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .set("Names", next);
+        }
+    }
+    Ok(())
+}
+
+pub fn move_attachment_to_portfolio_folder(
+    input: &Path,
+    output: &Path,
+    object_id: &str,
+    folder_path: &str,
+) -> Result<(), SevenError> {
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let spec_id = parse_id(object_id)?;
+    let root_id = portfolio_root_folder_id(&document)
+        .ok_or_else(|| SevenError::OperationRejected("Portfólio não possui árvore de folders".into()))?;
+    let normalized = if folder_path.trim().is_empty() { "/" } else { folder_path.trim() };
+    if resolve_portfolio_folder_path(&document, root_id, normalized).is_none() {
+        return Err(SevenError::OperationRejected("Pasta de portfólio não encontrada".into()));
+    }
+    let (node_id, key_index) = find_attachment_name_entry(&document, spec_id)
+        .ok_or_else(|| SevenError::OperationRejected("Componente não encontrado".into()))?;
+    let file_name = document
+        .get_object(spec_id)
+        .ok()
+        .and_then(|object| object.as_dict().ok())
+        .and_then(|spec| spec.get(b"UF").or_else(|_| spec.get(b"F")).ok())
+        .map(object_text)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| SevenError::OperationRejected("Componente sem filename".into()))?;
+
+    let tree_key = if normalized == "/" {
+        file_name.clone()
+    } else {
+        format!("{}/{}", normalized.trim_matches('/'), file_name)
+    };
+
+    let duplicate = attachment_list(&document).into_iter().any(|item| {
+        item.object_id != object_id
+            && item.collection_path == normalized
+            && item.name.eq_ignore_ascii_case(&file_name)
+    });
+    if duplicate {
+        return Err(SevenError::OperationRejected(
+            "Já existe um componente com este nome na pasta de destino".into(),
+        ));
+    }
+
+    document
+        .get_object_mut(node_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .get_mut(b"Names")
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_array_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?[key_index] =
+        Object::string_literal(tree_key);
+
+    let spec = document
+        .get_object_mut(spec_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    if spec.get(b"CI").is_err() {
+        spec.set("CI", dictionary! { "Type" => "CollectionItem" });
+    }
+    atomic_save(document, output)
+}
+
+pub fn rename_portfolio_folder(
+    input: &Path,
+    output: &Path,
+    folder_id: &str,
+    new_name: &str,
+) -> Result<(), SevenError> {
+    let new_name = valid_folder_segment(new_name)?;
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let root_id = portfolio_root_folder_id(&document)
+        .ok_or_else(|| SevenError::OperationRejected("Portfólio não possui folders".into()))?;
+    let target = parse_id(folder_id)?;
+    if target == root_id {
+        return Err(SevenError::OperationRejected("A pasta raiz não pode ser renomeada".into()));
+    }
+    let old_path = portfolio_folder_path_for_id(&document, root_id, target)
+        .ok_or_else(|| SevenError::OperationRejected("Pasta não encontrada".into()))?;
+    let parent_id = document
+        .get_object(target)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .get(b"Parent")
+        .map_err(|_| SevenError::OperationRejected("Pasta sem parent".into()))?
+        .as_reference()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+
+    if folder_child_named(&document, parent_id, new_name).is_some_and(|id| id != target) {
+        return Err(SevenError::OperationRejected("Já existe uma pasta irmã com este nome".into()));
+    }
+
+    let parent_path = old_path.rsplit_once('/').map(|(parent, _)| {
+        if parent.is_empty() { "/".to_owned() } else { parent.to_owned() }
+    }).unwrap_or_else(|| "/".into());
+    let new_path = if parent_path == "/" {
+        format!("/{new_name}")
+    } else {
+        format!("{parent_path}/{new_name}")
+    };
+
+    document
+        .get_object_mut(target)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .set("Name", Object::string_literal(new_name));
+
+    let old_prefix = old_path.trim_matches('/').to_owned();
+    let new_prefix = new_path.trim_matches('/').to_owned();
+    update_embedded_file_keys(&mut document, |key| {
+        if key == old_prefix {
+            Some(new_prefix.clone())
+        } else if key.starts_with(&(old_prefix.clone() + "/")) {
+            Some(format!("{}{}", new_prefix, &key[old_prefix.len()..]))
+        } else {
+            None
+        }
+    })?;
+
+    atomic_save(document, output)
+}
+
+fn collect_folder_subtree(document: &Document, id: ObjectId, output: &mut HashSet<ObjectId>) {
+    if !output.insert(id) {
+        return;
+    }
+    let Ok(folder) = document.get_object(id).and_then(Object::as_dict) else { return };
+    let mut child = folder.get(b"Child").ok().and_then(|value| value.as_reference().ok());
+    let mut visited = HashSet::new();
+    while let Some(child_id) = child {
+        if !visited.insert(child_id) {
+            break;
+        }
+        collect_folder_subtree(document, child_id, output);
+        child = document
+            .get_object(child_id)
+            .ok()
+            .and_then(|object| object.as_dict().ok())
+            .and_then(|dictionary| dictionary.get(b"Next").ok())
+            .and_then(|value| value.as_reference().ok());
+    }
+}
+
+fn remove_folder_from_siblings(
+    document: &mut Document,
+    parent_id: ObjectId,
+    target: ObjectId,
+    target_next: Option<ObjectId>,
+) -> Result<(), SevenError> {
+    let first = document
+        .get_object(parent_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .get(b"Child")
+        .ok()
+        .and_then(|value| value.as_reference().ok());
+
+    if first == Some(target) {
+        let parent = document
+            .get_object_mut(parent_id)
+            .map_err(|error| SevenError::Operation(error.to_string()))?
+            .as_dict_mut()
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+        if let Some(next) = target_next {
+            parent.set("Child", next);
+        } else {
+            parent.remove(b"Child");
+        }
+        return Ok(());
+    }
+
+    let mut current = first;
+    let mut visited = HashSet::new();
+    while let Some(id) = current {
+        if !visited.insert(id) {
+            break;
+        }
+        let next = document
+            .get_object(id)
+            .ok()
+            .and_then(|object| object.as_dict().ok())
+            .and_then(|dictionary| dictionary.get(b"Next").ok())
+            .and_then(|value| value.as_reference().ok());
+        if next == Some(target) {
+            let sibling = document
+                .get_object_mut(id)
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .as_dict_mut()
+                .map_err(|error| SevenError::Operation(error.to_string()))?;
+            if let Some(target_next) = target_next {
+                sibling.set("Next", target_next);
+            } else {
+                sibling.remove(b"Next");
+            }
+            return Ok(());
+        }
+        current = next;
+    }
+    Err(SevenError::OperationRejected("Pasta não encontrada entre os filhos do parent".into()))
+}
+
+pub fn remove_portfolio_folder(
+    input: &Path,
+    output: &Path,
+    folder_id: &str,
+) -> Result<usize, SevenError> {
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let root_id = portfolio_root_folder_id(&document)
+        .ok_or_else(|| SevenError::OperationRejected("Portfólio não possui folders".into()))?;
+    let target = parse_id(folder_id)?;
+    if target == root_id {
+        return Err(SevenError::OperationRejected("A pasta raiz não pode ser removida".into()));
+    }
+    let path = portfolio_folder_path_for_id(&document, root_id, target)
+        .ok_or_else(|| SevenError::OperationRejected("Pasta não encontrada".into()))?;
+    let folder = document
+        .get_object(target)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    let parent_id = folder
+        .get(b"Parent")
+        .map_err(|_| SevenError::OperationRejected("Pasta sem parent".into()))?
+        .as_reference()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    let target_next = folder.get(b"Next").ok().and_then(|value| value.as_reference().ok());
+
+    let prefix = path.trim_matches('/').to_owned() + "/";
+    let mut removed_specs = Vec::<ObjectId>::new();
+    let mut removed_streams = HashSet::<ObjectId>::new();
+    if let Some(name_root) = embedded_files_root_id(&document) {
+        let mut nodes = Vec::new();
+        collect_name_tree_node_ids(&document, name_root, &mut nodes, &mut HashSet::new());
+        for node_id in nodes {
+            let pairs = document
+                .get_object(node_id)
+                .ok()
+                .and_then(|object| object.as_dict().ok())
+                .and_then(|dictionary| dictionary.get(b"Names").ok())
+                .and_then(|value| value.as_array().ok())
+                .cloned()
+                .unwrap_or_default();
+            let mut next = Vec::with_capacity(pairs.len());
+            for pair in pairs.chunks(2) {
+                if pair.len() != 2 {
+                    continue;
+                }
+                let key = object_text(&pair[0]);
+                if key.starts_with(&prefix) {
+                    if let Ok(spec_id) = pair[1].as_reference() {
+                        removed_specs.push(spec_id);
+                        if let Some(ef) = document
+                            .get_object(spec_id)
+                            .ok()
+                            .and_then(|object| object.as_dict().ok())
+                            .and_then(|spec| spec.get(b"EF").ok())
+                            .and_then(|value| value.as_dict().ok())
+                        {
+                            for key in [b"F".as_slice(), b"UF".as_slice()] {
+                                if let Some(id) = ef.get(key).ok().and_then(|value| value.as_reference().ok()) {
+                                    removed_streams.insert(id);
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    next.extend_from_slice(pair);
+                }
+            }
+            document
+                .get_object_mut(node_id)
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .as_dict_mut()
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .set("Names", next);
+        }
+    }
+
+    remove_folder_from_siblings(&mut document, parent_id, target, target_next)?;
+
+    let mut folder_ids = HashSet::new();
+    collect_folder_subtree(&document, target, &mut folder_ids);
+    for id in folder_ids {
+        document.objects.remove(&id);
+    }
+    for id in removed_specs.iter().copied() {
+        document.objects.remove(&id);
+    }
+    for id in removed_streams {
+        document.objects.remove(&id);
+    }
+
+    let removed_count = removed_specs.len();
+    atomic_save(document, output)?;
+    Ok(removed_count)
+}
+
 pub fn add_attachment(
     input: &Path,
     output: &Path,
@@ -1291,7 +1684,12 @@ pub fn update_attachment(
     if let Ok(node) = document.get_object_mut(node_id).and_then(Object::as_dict_mut) {
         if let Ok(Object::Array(names)) = node.get_mut(b"Names") {
             if key_index < names.len() {
-                names[key_index] = Object::string_literal(name);
+                let current_key = object_text(&names[key_index]);
+                let new_key = current_key
+                    .rsplit_once('/')
+                    .map(|(folder, _)| format!("{folder}/{name}"))
+                    .unwrap_or_else(|| name.to_owned());
+                names[key_index] = Object::string_literal(new_key);
             }
         }
     }

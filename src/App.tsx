@@ -4039,6 +4039,7 @@ export default function App() {
           onRemoveAttachment={(objectId)=>void runRemoveAttachment(objectId)}
           onExtractAttachment={(objectId,destination)=>void runExtractAttachment(objectId,destination)}
           onPreviewPortfolioItem={(objectId)=>void runPortfolioPreview(objectId)}
+          onClearPortfolioPreview={()=>setPortfolioPreview(null)}
           onSearchPortfolioItems={(query)=>void runPortfolioSearch(query)}
           onOpenPortfolioItemExternal={(objectId)=>void runPortfolioOpenExternal(objectId)}
           onOpenPortfolioPdf={(preview)=>void runOpenPortfolioPdf(preview)}

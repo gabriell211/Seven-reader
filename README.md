@@ -1526,13 +1526,13 @@ JavaScript nunca deve ser executado sem política de segurança.
 
 ## Assinatura eletrônica local
 
-- [ ] Digitar
+- [x] Digitar
 - [ ] Desenhar
 - [ ] Usar imagem
 - [ ] Salvar localmente
 - [ ] Remover assinatura salva
-- [ ] Redimensionar
-- [ ] Reposicionar
+- [x] Redimensionar
+- [x] Reposicionar
 
 ---
 
@@ -1561,8 +1561,8 @@ O núcleo local do Seven Reader não deve depender deste módulo.
 
 ## Digital IDs
 
-- [ ] PKCS#12
-- [ ] PFX
+- [x] PKCS#12
+- [x] PFX
 - [ ] Certificado do Windows
 - [ ] Smart card
 - [ ] Hardware token
@@ -1576,14 +1576,14 @@ O núcleo local do Seven Reader não deve depender deste módulo.
 
 ## Assinar
 
-- [ ] Approval signature
-- [ ] Certify
-- [ ] Assinatura visível
-- [ ] Assinatura invisível
-- [ ] Motivo
-- [ ] Local
-- [ ] Aparência personalizada
-- [ ] Timestamp server
+- [x] Approval signature
+- [x] Certify
+- [x] Assinatura visível
+- [x] Assinatura invisível
+- [x] Motivo
+- [x] Local
+- [x] Aparência personalizada
+- [x] Timestamp server
 - [ ] Bloquear documento após assinatura
 - [ ] Permitir somente preenchimento
 - [ ] Permitir comentários
@@ -1591,17 +1591,17 @@ O núcleo local do Seven Reader não deve depender deste módulo.
 
 ## Validar
 
-- [ ] Validar uma assinatura
-- [ ] Validar todas
-- [ ] Cadeia de confiança
-- [ ] Certificado do signatário
-- [ ] Timestamp
-- [ ] Integridade
-- [ ] Alterações posteriores
-- [ ] Documento certificado
-- [ ] Certificado expirado
-- [ ] Trust settings
-- [ ] Revocation checking quando disponível
+- [x] Validar uma assinatura
+- [x] Validar todas
+- [x] Cadeia de confiança
+- [x] Certificado do signatário
+- [x] Timestamp
+- [x] Integridade
+- [x] Alterações posteriores
+- [x] Documento certificado
+- [x] Certificado expirado
+- [x] Trust settings
+- [x] Revocation checking quando disponível
 - [ ] OCSP
 - [ ] CRL
 
@@ -1609,11 +1609,11 @@ O núcleo local do Seven Reader não deve depender deste módulo.
 
 Quando a biblioteca criptográfica permitir:
 
-- [ ] CMS
+- [x] CMS
 - [ ] PKCS#7
-- [ ] PAdES
+- [x] PAdES
 - [ ] CAdES
-- [ ] ETSI compatibility
+- [x] ETSI compatibility
 - [ ] XML signatures para XFA somente se XFA for suportado
 
 ## Versões assinadas

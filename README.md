@@ -2613,8 +2613,8 @@ Toda operação pesada deve gerar um `job_id`.
 - [x] Converter
 - [x] OCR
 - [x] Compactar
-- [ ] Aplicar senha
-- [ ] Criptografar
+- [x] Aplicar senha
+- [x] Criptografar
 - [x] Remover metadados
 - [x] Sanitizar
 - [x] Marca d'água

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { open, save } from "@tauri-apps/plugin-dialog";
+import { confirm, open, save } from "@tauri-apps/plugin-dialog";
 import type { AdvancedPdfReport, BookmarkInfo, BookmarkUpdate, LayerPropertiesUpdate } from "../types";
 import { SevenIcon } from "./SevenIcon";
 
@@ -25,6 +25,10 @@ interface AdvancedPdfDialogProps {
   onRemoveAttachment: (objectId: string) => void;
   onExtractAttachment: (objectId: string, destination: string) => void;
   onLayerVisibility: (objectId: string, visible: boolean) => void;
+  onImportLayer: (imagePath: string, name: string, x: number, y: number, width: number, height: number, visible: boolean, locked: boolean) => void;
+  onReorderLayer: (objectId: string, direction: "up" | "down") => void;
+  onMergeLayers: (sourceId: string, targetId: string) => void;
+  onFlattenLayers: () => void;
   onUpdateLayer: (update: LayerPropertiesUpdate) => void;
   onApplyLayerOverrides: (context: "view" | "print" | "export") => void;
   onResetLayerVisibility: () => void;
@@ -57,6 +61,10 @@ export function AdvancedPdfDialog({
   onRemoveAttachment,
   onExtractAttachment,
   onLayerVisibility,
+  onImportLayer,
+  onReorderLayer,
+  onMergeLayers,
+  onFlattenLayers,
   onUpdateLayer,
   onApplyLayerOverrides,
   onResetLayerVisibility,
@@ -76,6 +84,16 @@ export function AdvancedPdfDialog({
   const [attachmentPath, setAttachmentPath] = useState("");
   const [attachmentEdits, setAttachmentEdits] = useState<Record<string,{name:string;description:string}>>({});
   const [layerEdits, setLayerEdits] = useState<Record<string,LayerPropertiesUpdate>>({});
+  const [layerImagePath, setLayerImagePath] = useState("");
+  const [layerName, setLayerName] = useState("Nova camada");
+  const [layerX, setLayerX] = useState(36);
+  const [layerY, setLayerY] = useState(36);
+  const [layerWidth, setLayerWidth] = useState(240);
+  const [layerHeight, setLayerHeight] = useState(180);
+  const [layerVisible, setLayerVisible] = useState(true);
+  const [layerLocked, setLayerLocked] = useState(false);
+  const [mergeSourceId, setMergeSourceId] = useState("");
+  const [mergeTargetId, setMergeTargetId] = useState("");
 
   useEffect(() => { onReload(); }, [onReload]);
 
@@ -137,6 +155,43 @@ export function AdvancedPdfDialog({
       setAttachmentPath(path);
       setAttachmentName(path.split(/[\\/]/).pop() || "anexo");
     }
+  };
+
+  const chooseLayerImage = async () => {
+    const path = await open({
+      title: "Selecionar imagem para importar como camada",
+      multiple: false,
+      directory: false,
+      filters: [{ name: "Imagens", extensions: ["png", "jpg", "jpeg", "tif", "tiff", "bmp", "webp"] }],
+    });
+    if (typeof path === "string") {
+      setLayerImagePath(path);
+      if (layerName === "Nova camada") {
+        setLayerName(path.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "") || "Nova camada");
+      }
+    }
+  };
+
+  const importLayer = () => {
+    if (!layerImagePath || !layerName.trim()) return;
+    onImportLayer(
+      layerImagePath,
+      layerName.trim(),
+      layerX,
+      layerY,
+      layerWidth,
+      layerHeight,
+      layerVisible,
+      layerLocked,
+    );
+  };
+
+  const flattenLayers = async () => {
+    const accepted = await confirm(
+      "Achatar layers aplica a visibilidade atual ao conteúdo e remove a estrutura OCG nesta revisão. A operação ainda poderá ser desfeita enquanto a sessão estiver aberta.",
+      { title: "Achatar camadas", kind: "warning" },
+    );
+    if (accepted) onFlattenLayers();
   };
 
   const addBookmark = () => {
@@ -278,6 +333,47 @@ export function AdvancedPdfDialog({
 
           {!loading && report && tab==="layers" && <>
             <div className="organizer-note"><SevenIcon name="layers"/><span>Alterar visibilidade grava o estado inicial ON/OFF da OCG na sessão atual; conteúdo da layer é preservado e a ação pode ser desfeita.</span></div>
+
+            <section className="layer-import-box">
+              <div className="section-mini-title">Importar imagem como OCG</div>
+              <button className="secondary-light-button choose-wide" onClick={()=>void chooseLayerImage()}><SevenIcon name="open"/>{layerImagePath||"Selecionar imagem"}</button>
+              <div className="two-column-fields">
+                <label className="workflow-field"><span>Nome da layer</span><input value={layerName} onChange={(e)=>setLayerName(e.target.value)}/></label>
+                <div className="two-column-fields">
+                  <label className="toggle-row"><input type="checkbox" checked={layerVisible} onChange={(e)=>setLayerVisible(e.target.checked)}/><span><strong>Visível</strong></span></label>
+                  <label className="toggle-row"><input type="checkbox" checked={layerLocked} onChange={(e)=>setLayerLocked(e.target.checked)}/><span><strong>Bloqueada</strong></span></label>
+                </div>
+              </div>
+              <div className="four-column-fields">
+                <label className="workflow-field"><span>X</span><input type="number" value={layerX} onChange={(e)=>setLayerX(Number(e.target.value))}/></label>
+                <label className="workflow-field"><span>Y</span><input type="number" value={layerY} onChange={(e)=>setLayerY(Number(e.target.value))}/></label>
+                <label className="workflow-field"><span>Largura</span><input type="number" min={1} value={layerWidth} onChange={(e)=>setLayerWidth(Math.max(1,Number(e.target.value)||1))}/></label>
+                <label className="workflow-field"><span>Altura</span><input type="number" min={1} value={layerHeight} onChange={(e)=>setLayerHeight(Math.max(1,Number(e.target.value)||1))}/></label>
+              </div>
+              <button className="primary-button workflow-submit" disabled={!layerImagePath||!layerName.trim()} onClick={importLayer}><SevenIcon name="layers"/> Importar na página {pageIndex+1}</button>
+            </section>
+
+            {report.layers.length>1 && (
+              <section className="layer-merge-box">
+                <div><strong>Mesclar layers</strong><small>Todo conteúdo que referencia a origem passa a usar a OCG de destino.</small></div>
+                <select value={mergeSourceId} onChange={(e)=>setMergeSourceId(e.target.value)}>
+                  <option value="">Origem…</option>
+                  {report.layers.map((layer)=><option key={layer.objectId} value={layer.objectId}>{layer.name}</option>)}
+                </select>
+                <span>→</span>
+                <select value={mergeTargetId} onChange={(e)=>setMergeTargetId(e.target.value)}>
+                  <option value="">Destino…</option>
+                  {report.layers.filter((layer)=>layer.objectId!==mergeSourceId).map((layer)=><option key={layer.objectId} value={layer.objectId}>{layer.name}</option>)}
+                </select>
+                <button className="secondary-light-button" disabled={!mergeSourceId||!mergeTargetId||mergeSourceId===mergeTargetId} onClick={()=>onMergeLayers(mergeSourceId,mergeTargetId)}>Mesclar</button>
+              </section>
+            )}
+
+            {report.layers.length>0 && (
+              <div className="layer-destructive-actions">
+                <button className="danger-quiet" onClick={()=>void flattenLayers()}>Achatar layers respeitando visibilidade atual</button>
+              </div>
+            )}
             <div className="layer-context-toolbar">
               <button onClick={()=>onApplyLayerOverrides("view")}>Aplicar View</button>
               <button onClick={()=>onApplyLayerOverrides("print")}>Aplicar Print</button>
@@ -309,6 +405,8 @@ export function AdvancedPdfDialog({
                       <small>{layer.intent.length?`Intent: ${layer.intent.join(", ")}`:"Intent não declarado"} · nível {layer.depth+1}</small>
                     </div>
                     <div className="layer-row-actions">
+                      <button title="Mover layer para cima" onClick={()=>onReorderLayer(layer.objectId,"up")}>↑</button>
+                      <button title="Mover layer para baixo" onClick={()=>onReorderLayer(layer.objectId,"down")}>↓</button>
                       <label className="layer-lock"><input type="checkbox" checked={edit.locked} onChange={(e)=>patchLayer("locked",e.target.checked)}/> Bloqueada</label>
                       <button className={layer.visible?"layer-toggle active":"layer-toggle"} onClick={()=>onLayerVisibility(layer.objectId,!layer.visible)}>{layer.visible?"Visível":"Oculta"}</button>
                       <button onClick={()=>onUpdateLayer(edit)}>Salvar propriedades</button>

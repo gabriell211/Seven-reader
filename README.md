@@ -1333,7 +1333,7 @@ Além do comportamento de suspeitas:
 
 Criar a partir de:
 
-- [ ] PDF existente
+- [x] PDF existente
 - [ ] Documento convertido
 - [ ] Página em branco
 - [ ] Scanner
@@ -1347,90 +1347,90 @@ Criar a partir de:
 
 ## Tipos de campo
 
-- [ ] Text Field
+- [x] Text Field
 - [ ] Image Field
-- [ ] Checkbox
-- [ ] Radio
-- [ ] Dropdown
-- [ ] List Box
-- [ ] Button
-- [ ] Digital Signature
+- [x] Checkbox
+- [x] Radio
+- [x] Dropdown
+- [x] List Box
+- [x] Button
+- [x] Digital Signature
 - [ ] Barcode
 - [ ] Date
 - [ ] Campo numérico
 
 ## Edição de campos
 
-- [ ] Criar
-- [ ] Duplicar
+- [x] Criar
+- [x] Duplicar
 - [ ] Copiar
-- [ ] Criar múltiplas cópias em linhas e colunas
-- [ ] Duplicar campo em todas as páginas
-- [ ] Duplicar campo em intervalo de páginas
-- [ ] Mover
-- [ ] Redimensionar
+- [x] Criar múltiplas cópias em linhas e colunas
+- [x] Duplicar campo em todas as páginas
+- [x] Duplicar campo em intervalo de páginas
+- [x] Mover
+- [x] Redimensionar
 - [ ] Seleção múltipla
 - [ ] Alinhar
 - [ ] Distribuir
 - [ ] Centralizar
 - [ ] Guides
-- [ ] Tab order
-- [ ] Required
-- [ ] Read only
-- [ ] Tooltip
-- [ ] Nome interno
-- [ ] Aparência
+- [x] Tab order
+- [x] Required
+- [x] Read only
+- [x] Tooltip
+- [x] Nome interno
+- [x] Aparência
 - [ ] Fonte
-- [ ] Cor
-- [ ] Border
-- [ ] Visibility
-- [ ] Visible
-- [ ] Hidden
-- [ ] Visible but doesn't print
-- [ ] Hidden but printable
-- [ ] Orientation
+- [x] Cor
+- [x] Border
+- [x] Visibility
+- [x] Visible
+- [x] Hidden
+- [x] Visible but doesn't print
+- [x] Hidden but printable
+- [x] Orientation
 - [ ] Lock properties
 - [ ] Usar propriedades atuais como padrão para novos campos
-- [ ] Posicionamento numérico preciso
-- [ ] Width
-- [ ] Height
-- [ ] Border color
-- [ ] Fill color
-- [ ] Line thickness
-- [ ] Line style
-- [ ] Font size
-- [ ] Text color
+- [x] Posicionamento numérico preciso
+- [x] Width
+- [x] Height
+- [x] Border color
+- [x] Fill color
+- [x] Line thickness
+- [x] Line style
+- [x] Font size
+- [x] Text color
 
 ## Gatilhos e ações de campo
 
 Gatilhos suportados:
 
-- [ ] Mouse Up
-- [ ] Mouse Down
-- [ ] Mouse Enter
-- [ ] Mouse Exit
-- [ ] On Focus
-- [ ] On Blur
+- [x] Mouse Up
+- [x] Mouse Down
+- [x] Mouse Enter
+- [x] Mouse Exit
+- [x] On Focus
+- [x] On Blur
 
 Ações suportadas, sempre submetidas à política de segurança:
 
 - [ ] Execute menu item
-- [ ] Go to page view
+- [x] Go to page view
 - [ ] Go to 3D/Multimedia view
 - [ ] Import form data
-- [ ] Open file
-- [ ] Open web link
+- [x] Open file
+- [x] Open web link
 - [ ] Play sound
 - [ ] Play media
 - [ ] Read article
-- [ ] Reset form
+- [x] Reset form
 - [ ] Run JavaScript em sandbox
 - [ ] Set layer visibility
-- [ ] Show/hide field
-- [ ] Submit form
+- [x] Show/hide field
+- [x] Submit form
 - [ ] Ordenar múltiplas ações
 - [ ] Editar ação
-- [ ] Excluir ação
+- [x] Excluir ação
 
 ## Formatação e validação
 
@@ -1441,8 +1441,8 @@ Ações suportadas, sempre submetidas à política de segurança:
 - [ ] Hora
 - [ ] Máscara especial
 - [ ] Validação
-- [ ] Limite de caracteres
-- [ ] Multiline
+- [x] Limite de caracteres
+- [x] Multiline
 - [ ] Comb
 
 ## Cálculos
@@ -1462,7 +1462,7 @@ Ações suportadas, sempre submetidas à política de segurança:
 JavaScript nunca deve ser executado sem política de segurança.
 
 - [ ] Document JavaScript
-- [ ] Field actions
+- [x] Field actions
 - [ ] Calculation script
 - [ ] Validation script
 - [ ] Keystroke script
@@ -1483,12 +1483,12 @@ JavaScript nunca deve ser executado sem política de segurança.
 
 ## Dados
 
-- [ ] Importar
-- [ ] Exportar
-- [ ] FDF
-- [ ] XFDF
-- [ ] Reset
-- [ ] Clear form
+- [x] Importar
+- [x] Exportar
+- [x] FDF
+- [x] XFDF
+- [x] Reset
+- [x] Clear form
 - [ ] Autofill local opcional
 
 ## Preferências de formulários
@@ -1503,11 +1503,11 @@ JavaScript nunca deve ser executado sem política de segurança.
 
 ## Compatibilidade
 
-- [ ] AcroForm
-- [ ] FDF
-- [ ] XFDF
+- [x] AcroForm
+- [x] FDF
+- [x] XFDF
 - [ ] XFA somente quando tecnicamente viável
-- [ ] Preservação ao salvar
+- [x] Preservação ao salvar
 
 ---
 

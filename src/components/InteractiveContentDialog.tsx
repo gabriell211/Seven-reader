@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import type {
   GeospatialCoordinate,
@@ -43,6 +43,8 @@ export function InteractiveContentDialog({
   const [geoPage, setGeoPage] = useState(pageIndex + 1);
   const [x, setX] = useState(0.5);
   const [y, setY] = useState(0.5);
+
+  useEffect(() => { onReload(); }, [onReload, mode]);
 
   const filteredAssets = useMemo(
     () => assets.filter((asset) => mode === "3d" ? asset.kind === "3d" : asset.kind !== "3d"),

@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type { Capabilities, OcrLanguageDetection, OcrOptions, OcrWord, ScannedPage } from "../types";
+import type { Capabilities, OcrLanguageDetection, OcrOptions, OcrReviewResult, ScannedPage } from "../types";
 import { nativeAssetUrl } from "../lib/native";
 import { SevenIcon } from "./SevenIcon";
 
@@ -9,13 +9,14 @@ interface OcrDialogProps {
   documentPath?: string;
   documentId?: string;
   pageIndex: number;
-  suspects: OcrWord[];
+  reviewResult: OcrReviewResult | null;
   loadingReview: boolean;
   onClose: () => void;
   onRunOcr: (output: string, options: OcrOptions) => void;
   onRunBatchOcr: (inputs: string[], outputDirectory: string, options: OcrOptions) => void;
   onReview: (language: string, threshold: number) => void;
   onDetectLanguage: (candidates: string[]) => Promise<OcrLanguageDetection>;
+  onCorrectWord: (recognized: string, replacement: string, occurrence: number) => Promise<void> | void;
   onScanPage: (dpi: number, colorMode: "color" | "gray" | "lineart") => Promise<ScannedPage>;
   onDeleteScanPages: (inputs: string[]) => Promise<void> | void;
   onFinalizeScan: (inputs: string[], output: string, dpi: number, options?: OcrOptions) => Promise<void> | void;
@@ -26,13 +27,14 @@ export function OcrDialog({
   documentPath,
   documentId,
   pageIndex,
-  suspects,
+  reviewResult,
   loadingReview,
   onClose,
   onRunOcr,
   onRunBatchOcr,
   onReview,
   onDetectLanguage,
+  onCorrectWord,
   onScanPage,
   onDeleteScanPages,
   onFinalizeScan,
@@ -62,6 +64,64 @@ export function OcrDialog({
   const [scanOcrAfter, setScanOcrAfter] = useState(true);
   const [detectingLanguage, setDetectingLanguage] = useState(false);
   const [languageDetection, setLanguageDetection] = useState<OcrLanguageDetection | null>(null);
+  const [reviewIndex, setReviewIndex] = useState(0);
+  const [reviewReplacement, setReviewReplacement] = useState("");
+  const [reviewStatuses, setReviewStatuses] = useState<Record<string, "accepted" | "ignored" | "corrected">>({});
+  const [reviewError, setReviewError] = useState("");
+
+  const reviewWords = reviewResult?.words ?? [];
+  const activeReviewWord = reviewWords[Math.min(reviewIndex, Math.max(0, reviewWords.length - 1))];
+  const reviewKey = activeReviewWord ? `${activeReviewWord.text}::${activeReviewWord.occurrence}` : "";
+
+  useEffect(() => {
+    setReviewIndex(0);
+    setReviewStatuses({});
+    setReviewError("");
+  }, [reviewResult?.previewPath]);
+
+  useEffect(() => {
+    setReviewReplacement(activeReviewWord?.text ?? "");
+    setReviewError("");
+  }, [activeReviewWord?.text, activeReviewWord?.occurrence]);
+
+  const advanceReview = () => {
+    setReviewIndex((current) => Math.min(reviewWords.length - 1, current + 1));
+  };
+
+  const acceptReviewWord = async () => {
+    if (!activeReviewWord) return;
+    try {
+      setReviewError("");
+      if (reviewReplacement !== activeReviewWord.text) {
+        await onCorrectWord(
+          activeReviewWord.text,
+          reviewReplacement,
+          activeReviewWord.occurrence,
+        );
+        setReviewStatuses((current) => ({ ...current, [reviewKey]: "corrected" }));
+      } else {
+        setReviewStatuses((current) => ({ ...current, [reviewKey]: "accepted" }));
+      }
+      advanceReview();
+    } catch {
+      setReviewError("A palavra não pôde ser corrigida com segurança nesta camada OCR.");
+    }
+  };
+
+  const ignoreReviewWord = () => {
+    if (!activeReviewWord) return;
+    setReviewStatuses((current) => ({ ...current, [reviewKey]: "ignored" }));
+    advanceReview();
+  };
+
+  const reviewCounts = useMemo(() => {
+    const values = Object.values(reviewStatuses);
+    return {
+      accepted: values.filter((value) => value === "accepted").length,
+      ignored: values.filter((value) => value === "ignored").length,
+      corrected: values.filter((value) => value === "corrected").length,
+    };
+  }, [reviewStatuses]);
 
   const buildOptions = (sidecar?: string): OcrOptions => ({
     language,
@@ -273,11 +333,73 @@ export function OcrDialog({
           )}
           {tab === "review" && (
             <>
-              <div className="two-column-fields"><label className="workflow-field"><span>Idioma</span><input value={language} onChange={(event) => setLanguage(event.target.value)} /></label><label className="workflow-field"><span>Confiança mínima</span><div className="range-row"><input type="range" min={10} max={99} value={threshold} onChange={(event) => setThreshold(Number(event.target.value))} /><strong>{threshold}%</strong></div></label></div>
-              <button className="secondary-light-button choose-wide" disabled={!capabilities?.tesseract.available || !documentId} onClick={() => onReview(language, threshold)}><SevenIcon name="search" /> Analisar página {pageIndex + 1}</button>
-              {loadingReview && <div className="report-loading"><span className="loader-ring" /> Analisando confiança…</div>}
-              {!loadingReview && suspects.length > 0 && <div className="suspect-list">{suspects.map((word, index) => <div className="suspect-row" key={`${word.text}-${word.left}-${index}`}><strong>{word.text}</strong><span>{word.confidence.toFixed(1)}%</span><small>x {word.left} · y {word.top} · {word.width}×{word.height}</small></div>)}</div>}
-              {!loadingReview && suspects.length === 0 && <div className="empty-panel">Nenhuma palavra abaixo do limiar carregada. Execute a análise.</div>}
+              <div className="two-column-fields">
+                <label className="workflow-field"><span>Idioma</span><input value={language} onChange={(event) => setLanguage(event.target.value)} /></label>
+                <label className="workflow-field"><span>Confiança mínima</span><div className="range-row"><input type="range" min={10} max={99} value={threshold} onChange={(event) => setThreshold(Number(event.target.value))} /><strong>{threshold}%</strong></div></label>
+              </div>
+              <button className="secondary-light-button choose-wide" disabled={!capabilities?.tesseract.available || !documentId || loadingReview} onClick={() => onReview(language, threshold)}><SevenIcon name="search" /> Analisar página {pageIndex + 1}</button>
+
+              {loadingReview && <div className="report-loading"><span className="loader-ring" /> Analisando confiança e posições…</div>}
+
+              {!loadingReview && reviewResult && (
+                <>
+                  <div className="ocr-review-stats">
+                    <div><span>Palavras</span><strong>{reviewResult.totalWords}</strong></div>
+                    <div><span>Suspeitas</span><strong>{reviewResult.suspectWords}</strong></div>
+                    <div><span>Confiança média</span><strong>{reviewResult.averageConfidence.toFixed(1)}%</strong></div>
+                    <div><span>Corrigidas</span><strong>{reviewCounts.corrected}</strong></div>
+                  </div>
+
+                  {reviewWords.length > 0 ? (
+                    <div className="ocr-review-layout">
+                      <div className="ocr-review-preview">
+                        <div className="ocr-review-page" style={{ aspectRatio: `${reviewResult.previewWidth} / ${reviewResult.previewHeight}` }}>
+                          <img src={nativeAssetUrl(reviewResult.previewPath)} alt={`Página ${pageIndex + 1} para revisão OCR`} />
+                          {reviewWords.map((word, index) => (
+                            <button
+                              key={`${word.text}-${word.occurrence}-${index}`}
+                              className={index === reviewIndex ? "ocr-word-box active" : `ocr-word-box ${reviewStatuses[`${word.text}::${word.occurrence}`] ?? ""}`}
+                              style={{
+                                left: `${word.normalizedX * 100}%`,
+                                top: `${word.normalizedY * 100}%`,
+                                width: `${word.normalizedWidth * 100}%`,
+                                height: `${word.normalizedHeight * 100}%`,
+                              }}
+                              title={`${word.text} · ${word.confidence.toFixed(1)}%`}
+                              onClick={() => setReviewIndex(index)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+
+                      <aside className="ocr-review-editor">
+                        {activeReviewWord && (
+                          <>
+                            <div className="review-position"><span>Suspeita {reviewIndex + 1} de {reviewWords.length}</span><strong>{activeReviewWord.confidence.toFixed(1)}%</strong></div>
+                            <label className="workflow-field"><span>Reconhecido como</span><input value={activeReviewWord.text} readOnly /></label>
+                            <label className="workflow-field"><span>Correção</span><input autoFocus value={reviewReplacement} onChange={(event) => setReviewReplacement(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void acceptReviewWord()} /></label>
+                            <small className="review-bounds">Bounding box: x {activeReviewWord.left} · y {activeReviewWord.top} · {activeReviewWord.width}×{activeReviewWord.height}px</small>
+                            {reviewError && <div className="dependency-note">{reviewError}</div>}
+                            <div className="review-navigation">
+                              <button className="secondary-light-button" disabled={reviewIndex === 0} onClick={() => setReviewIndex((current) => Math.max(0, current - 1))}>Anterior</button>
+                              <button className="secondary-light-button" onClick={ignoreReviewWord}>Ignorar</button>
+                              <button className="primary-button" disabled={!reviewReplacement.trim()} onClick={() => void acceptReviewWord()}>{reviewReplacement === activeReviewWord.text ? "Aceitar" : "Corrigir e avançar"}</button>
+                              <button className="secondary-light-button" disabled={reviewIndex >= reviewWords.length - 1} onClick={advanceReview}>Próxima</button>
+                            </div>
+                            {reviewKey && reviewStatuses[reviewKey] && <div className="review-status">Estado: {reviewStatuses[reviewKey]}</div>}
+                          </>
+                        )}
+                      </aside>
+                    </div>
+                  ) : (
+                    <div className="empty-panel">Nenhuma palavra ficou abaixo do threshold nesta página.</div>
+                  )}
+
+                  <button className="secondary-light-button workflow-submit" onClick={() => setTab("ocr")}>Encerrar revisão</button>
+                </>
+              )}
+
+              {!loadingReview && !reviewResult && <div className="empty-panel">Execute a análise para iniciar a revisão palavra por palavra.</div>}
             </>
           )}
           {tab === "scan" && (

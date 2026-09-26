@@ -60,9 +60,15 @@ export function PrintDialog({
   const [pageSet, setPageSet] = useState<PrintOptions["pageSet"]>("all");
   const [reverse, setReverse] = useState(false);
   const [duplex, setDuplex] = useState<PrintOptions["duplex"]>("printer");
+  const [manualPass, setManualPass] = useState<PrintOptions["manualPass"]>("none");
+  const [nUp, setNUp] = useState<PrintOptions["nUp"]>(1);
+  const [nUpLayout, setNUpLayout] = useState<PrintOptions["nUpLayout"]>("lrtb");
   const [orientation, setOrientation] = useState<PrintOptions["orientation"]>("auto");
   const [paperSize, setPaperSize] = useState<PrintOptions["paperSize"]>("printer");
   const [scaling, setScaling] = useState<PrintOptions["scaling"]>("fit");
+  const [colorMode, setColorMode] = useState<PrintOptions["colorMode"]>("auto");
+  const [printAsImage, setPrintAsImage] = useState(false);
+  const [rasterDpi, setRasterDpi] = useState(300);
   const [printAnnotations, setPrintAnnotations] = useState(true);
   const [printForms, setPrintForms] = useState(true);
 
@@ -102,9 +108,15 @@ export function PrintDialog({
       pageSet,
       reverse,
       duplex,
+      manualPass,
+      nUp,
+      nUpLayout,
       orientation,
       paperSize,
       scaling,
+      colorMode,
+      printAsImage,
+      rasterDpi,
       printAnnotations,
       printForms,
     });
@@ -190,7 +202,19 @@ export function PrintDialog({
               <div className="three-column-fields">
                 <label className="workflow-field"><span>Orientação</span><select value={orientation} onChange={(event) => setOrientation(event.target.value as PrintOptions["orientation"])}><option value="auto">Automática</option><option value="portrait">Retrato</option><option value="landscape">Paisagem</option></select></label>
                 <label className="workflow-field"><span>Papel</span><select value={paperSize} onChange={(event) => setPaperSize(event.target.value as PrintOptions["paperSize"])}><option value="printer">Padrão da impressora</option><option value="a4">A4</option><option value="letter">Carta / Letter</option><option value="legal">Legal</option></select></label>
-                <label className="workflow-field"><span>Frente e verso</span><select value={duplex} onChange={(event) => setDuplex(event.target.value as PrintOptions["duplex"])}><option value="printer">Padrão da impressora</option><option value="simplex">Somente frente</option><option value="long">Duplex · borda longa</option><option value="short">Duplex · borda curta</option></select></label>
+                <label className="workflow-field"><span>Frente e verso</span><select value={duplex} disabled={manualPass !== "none"} onChange={(event) => setDuplex(event.target.value as PrintOptions["duplex"])}><option value="printer">Padrão da impressora</option><option value="simplex">Somente frente</option><option value="long">Duplex · borda longa</option><option value="short">Duplex · borda curta</option></select></label>
+              </div>
+              <div className="two-column-fields">
+                <label className="workflow-field"><span>Duplex manual</span><select value={manualPass} onChange={(event) => setManualPass(event.target.value as PrintOptions["manualPass"])}><option value="none">Desativado</option><option value="front">1ª passagem · páginas ímpares</option><option value="back">2ª passagem · páginas pares reversas</option></select><small>Faça a primeira passagem, recoloque o papel conforme sua impressora e execute a segunda.</small></label>
+                <label className="workflow-field"><span>Cor</span><select value={colorMode} onChange={(event) => setColorMode(event.target.value as PrintOptions["colorMode"])}><option value="auto">Automático / driver</option><option value="color">Colorido</option><option value="grayscale">Escala de cinza</option></select></label>
+              </div>
+            </section>
+
+            <section className="print-section">
+              <div className="section-mini-title">Páginas por folha</div>
+              <div className="two-column-fields">
+                <label className="workflow-field"><span>N-up</span><select value={nUp} onChange={(event) => setNUp(Number(event.target.value) as PrintOptions["nUp"])}><option value={1}>1 por folha</option><option value={2}>2 por folha</option><option value={4}>4 por folha</option><option value={6}>6 por folha</option><option value={9}>9 por folha</option><option value={16}>16 por folha</option></select></label>
+                <label className="workflow-field"><span>Ordem</span><select value={nUpLayout} disabled={nUp === 1} onChange={(event) => setNUpLayout(event.target.value as PrintOptions["nUpLayout"])}><option value="lrtb">→ depois ↓</option><option value="lrbt">→ depois ↑</option><option value="rltb">← depois ↓</option><option value="rlbt">← depois ↑</option><option value="tblr">↓ depois →</option><option value="tbrl">↓ depois ←</option><option value="btlr">↑ depois →</option><option value="btrl">↑ depois ←</option></select></label>
               </div>
             </section>
 
@@ -199,6 +223,10 @@ export function PrintDialog({
               <div className="two-column-fields">
                 <label className="toggle-row"><input type="checkbox" checked={printAnnotations} onChange={(event) => setPrintAnnotations(event.target.checked)} /><span><strong>Comentários e anotações</strong><small>Inclui anotações visíveis quando suportado.</small></span></label>
                 <label className="toggle-row"><input type="checkbox" checked={printForms} onChange={(event) => setPrintForms(event.target.checked)} /><span><strong>Campos de formulário</strong><small>Inclui widgets/AcroForm renderizados.</small></span></label>
+              </div>
+              <div className="two-column-fields">
+                <label className="toggle-row"><input type="checkbox" checked={printAsImage} onChange={(event) => setPrintAsImage(event.target.checked)} /><span><strong>Print as Image</strong><small>Rasteriza cada página em PDF-image antes do driver.</small></span></label>
+                <label className="workflow-field"><span>Resolução da imagem</span><input type="number" min={72} max={1200} disabled={!printAsImage} value={rasterDpi} onChange={(event) => setRasterDpi(Math.max(72, Math.min(1200, Number(event.target.value) || 300)))} /><small>DPI</small></label>
               </div>
             </section>
 

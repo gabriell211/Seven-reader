@@ -4144,7 +4144,7 @@ export default function App() {
           onReview={(language, threshold) => void reviewCurrentOcrPage(language, threshold)}
           onDetectLanguage={(candidates) => detectCurrentOcrLanguage(candidates)}
           onCorrectWord={(recognized, replacement, occurrence) => correctOcrWord(recognized, replacement, occurrence)}
-          onScanPage={(dpi, colorMode) => captureScanPage(dpi, colorMode)}
+          onScanPage={(dpi, colorMode, scannerId) => captureScanPage(dpi, colorMode, scannerId)}
           onDeleteScanPages={(inputs) => discardScanPages(inputs)}
           onFinalizeScan={(inputs, output, dpi, options) => finishScanSession(inputs, output, dpi, options)}
         />

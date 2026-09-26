@@ -52,6 +52,7 @@ pub struct JobStatus {
 pub struct JobRuntime {
     pub status: JobStatus,
     pub cancel: Arc<AtomicBool>,
+    pub paused: Arc<AtomicBool>,
 }
 
 pub struct AppState {

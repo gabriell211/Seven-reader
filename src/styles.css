@@ -1430,3 +1430,13 @@ html[data-motion="reduced"] *,html[data-motion="reduced"] *::before,html[data-mo
 .search-highlight-layer { position:absolute; inset:0; pointer-events:none; z-index:4; }
 .search-highlight { position:absolute; border-radius:2px; background:rgba(255,226,72,.48); box-shadow:inset 0 0 0 1px rgba(208,165,0,.26); mix-blend-mode:multiply; }
 .search-highlight.current { background:rgba(255,153,40,.62); box-shadow:0 0 0 2px rgba(225,110,24,.28),inset 0 0 0 1px rgba(178,83,13,.44); }
+
+.job-chip-actions { display:flex; gap:4px; align-items:center; }
+.job-chip-actions button { min-height:28px; padding:0 7px; border:1px solid #dedbe8; border-radius:7px; color:#666873; background:white; cursor:pointer; font-size:8.5px; }
+.job-chip-actions button:hover { color:#5530bc; border-color:#cfc3f3; background:#f3efff; }
+.panel-task-actions { display:grid; justify-items:end; gap:4px; }
+.panel-task-actions > span { display:flex; gap:3px; }
+.panel-task-actions button { width:25px; height:25px; padding:0; border:1px solid #e0dfe5; border-radius:6px; display:grid; place-items:center; color:#74767f; background:white; cursor:pointer; }
+.panel-task-actions button:hover { color:#5530bc; background:#f1edff; }
+.panel-task-actions button svg { width:11px; }
+.task-state--paused { background:#d19b36; box-shadow:0 0 0 3px rgba(209,155,54,.12); }

@@ -225,9 +225,14 @@ export interface DocumentMetadata {
   keywords: string;
   creator: string;
   producer: string;
+  creationDate: string;
+  modificationDate: string;
   pdfVersion: string;
   encrypted: boolean;
   pageCount: number;
+  fileSize: number;
+  language: string;
+  hasXmp: boolean;
 }
 
 export interface MetadataUpdate {

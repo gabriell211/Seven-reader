@@ -17,6 +17,7 @@ mod optimizer;
 mod page_transfer;
 mod pdf;
 mod print_production;
+mod printing;
 mod redaction;
 mod search;
 mod session;
@@ -233,6 +234,8 @@ pub fn run() {
             commands::sign_document,
             commands::validate_signatures,
             commands::list_pdf_files_in_folder,
+            commands::list_printers,
+            commands::start_print_document_advanced,
             commands::start_print_document,
             commands::reveal_in_file_manager,
             commands::get_job_status,

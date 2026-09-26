@@ -979,3 +979,10 @@ svg { width: 20px; height: 20px; }
 .visual-order-footer > span { color:#898b94; font-size:8.5px; line-height:1.4; }
 .visual-load-more { justify-self:center; }
 @media (max-width:700px) { .visual-page-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+
+.insert-source-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:6px; }
+.insert-source-grid button { min-height:58px; padding:7px 5px; border:1px solid #dfdee4; border-radius:9px; display:grid; place-items:center; gap:4px; color:#6d6f78; background:white; cursor:pointer; font-size:8px; font-weight:700; }
+.insert-source-grid button svg { width:16px; }
+.insert-source-grid button.active { color:#5d38bf; border-color:#cfc2f6; background:#f3efff; }
+.insert-source-grid button:disabled { opacity:.35; cursor:default; }
+@media (max-width:800px) { .insert-source-grid { grid-template-columns:repeat(4,minmax(0,1fr)); } }

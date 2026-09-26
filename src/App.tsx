@@ -119,6 +119,12 @@ import {
   sessionMovePdfBookmark,
   sessionSetPdfBookmarkOpen,
   sessionAddPdfAttachment,
+  sessionConfigurePdfPortfolio,
+  sessionSetPdfPortfolioView,
+  sessionCreatePdfPortfolioFolder,
+  sessionMovePdfPortfolioItem,
+  sessionRenamePdfPortfolioFolder,
+  sessionRemovePdfPortfolioFolder,
   sessionUpdatePdfAttachment,
   sessionRemovePdfAttachment,
   sessionApplyPdfLayerOverrides,
@@ -354,7 +360,7 @@ export default function App() {
   const [redactionOpen, setRedactionOpen] = useState(false);
   const [redactionMatches, setRedactionMatches] = useState<RedactionArea[]>([]);
   const [redactionLoading, setRedactionLoading] = useState(false);
-  const [advancedTab, setAdvancedTab] = useState<"overview"|"bookmarks"|"attachments"|"layers"|null>(null);
+  const [advancedTab, setAdvancedTab] = useState<"overview"|"bookmarks"|"attachments"|"layers"|"portfolio"|null>(null);
   const [advancedReport, setAdvancedReport] = useState<AdvancedPdfReport|null>(null);
   const [advancedLoading, setAdvancedLoading] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
@@ -1368,7 +1374,13 @@ export default function App() {
           return;
         }
         setAdvancedReport(null);
-        setAdvancedTab(tool === "bookmarks" ? "bookmarks" : tool === "attachments" ? "attachments" : tool === "layers" ? "layers" : "overview");
+        setAdvancedTab(
+        tool === "bookmarks" ? "bookmarks"
+          : tool === "attachments" ? "attachments"
+            : tool === "layers" ? "layers"
+              : tool === "portfolio" ? "portfolio"
+                : "overview",
+      );
         return;
       }
 
@@ -1827,6 +1839,78 @@ export default function App() {
       const summary = await sessionUpdatePdfLayerProperties(document.id, update);
       await acceptDocumentRevision(summary, "Propriedades da camada atualizadas.");
       await refreshAdvancedFrom(summary);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runConfigurePortfolio = async (view: "details" | "tile" | "hidden") => {
+    if (!document) return;
+    try {
+      const summary = await sessionConfigurePdfPortfolio(document.id, view);
+      await acceptDocumentRevision(summary, "Portfólio PDF 2.0 configurado.");
+      await reloadAdvanced(summary.activePath);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runSetPortfolioView = async (view: "details" | "tile" | "hidden") => {
+    if (!document) return;
+    try {
+      const summary = await sessionSetPdfPortfolioView(document.id, view);
+      await acceptDocumentRevision(summary, "Visualização inicial do portfólio atualizada.");
+      await reloadAdvanced(summary.activePath);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runCreatePortfolioFolder = async (path: string, description: string) => {
+    if (!document) return;
+    try {
+      const result = await sessionCreatePdfPortfolioFolder(document.id, path, description);
+      await acceptDocumentRevision(
+        result.document,
+        result.changed ? `${result.changed} pasta(s) criada(s) no portfólio.` : "Pasta do portfólio atualizada.",
+      );
+      await reloadAdvanced(result.document.activePath);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runMovePortfolioItem = async (objectId: string, folderPath: string) => {
+    if (!document) return;
+    try {
+      const summary = await sessionMovePdfPortfolioItem(document.id, objectId, folderPath);
+      await acceptDocumentRevision(summary, "Componente movido dentro do portfólio.");
+      await reloadAdvanced(summary.activePath);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runRenamePortfolioFolder = async (folderId: string, newName: string) => {
+    if (!document) return;
+    try {
+      const summary = await sessionRenamePdfPortfolioFolder(document.id, folderId, newName);
+      await acceptDocumentRevision(summary, "Pasta do portfólio renomeada.");
+      await reloadAdvanced(summary.activePath);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runRemovePortfolioFolder = async (folderId: string) => {
+    if (!document) return;
+    try {
+      const result = await sessionRemovePdfPortfolioFolder(document.id, folderId);
+      await acceptDocumentRevision(
+        result.document,
+        `Pasta removida · ${result.changed} componente(s) incorporado(s) excluído(s).`,
+      );
+      await reloadAdvanced(result.document.activePath);
     } catch (error) {
       setNotice(errorMessage(error));
     }

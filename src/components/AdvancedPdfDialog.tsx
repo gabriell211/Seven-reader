@@ -513,6 +513,8 @@ export function AdvancedPdfDialog({
                     </div>
                     <div className="attachment-row-actions">
                       <button onClick={()=>onUpdateAttachment(attachment.objectId,edit.name,edit.description)}>Salvar</button>
+                      <button disabled={attachment.name.toLowerCase().match(/\.(exe|com|bat|cmd|ps1|vbs|js|jse|msi|scr|dll|jar|app|sh)$/)!==null} onClick={()=>onPreviewPortfolioItem(attachment.objectId)}>Preview</button>
+                      <button disabled={attachment.name.toLowerCase().match(/\.(exe|com|bat|cmd|ps1|vbs|js|jse|msi|scr|dll|jar|app|sh)$/)!==null} onClick={()=>void openPortfolioExternal(attachment.objectId,attachment.name)}>Abrir</button>
                       <button onClick={async()=>{const dest=await save({title:"Extrair anexo",defaultPath:edit.name||attachment.name});if(dest)onExtractAttachment(attachment.objectId,dest)}}>Extrair</button>
                       <button className="danger-quiet" onClick={()=>onRemoveAttachment(attachment.objectId)}>Remover</button>
                     </div>
@@ -521,6 +523,18 @@ export function AdvancedPdfDialog({
               })}
               {report.attachments.length===0&&<div className="empty-panel">Nenhum EmbeddedFile encontrado.</div>}
             </div>
+            {portfolioPreview && (
+              <section className="portfolio-preview attachment-preview">
+                <header>
+                  <div><strong>{portfolioPreview.name}</strong><small>{portfolioPreview.mime} · {fileSize(portfolioPreview.size)}</small></div>
+                  <button className="icon-button" onClick={onClearPortfolioPreview}><SevenIcon name="close"/></button>
+                </header>
+                {portfolioPreview.kind==="image"&&<img src={nativeAssetUrl(portfolioPreview.cachePath)} alt={portfolioPreview.name}/>}
+                {portfolioPreview.kind==="text"&&<pre>{portfolioPreview.text||"Arquivo de texto vazio."}</pre>}
+                {portfolioPreview.kind==="pdf"&&<button className="primary-button" onClick={()=>onOpenPortfolioPdf(portfolioPreview)}><SevenIcon name="open"/> Abrir PDF no Seven Reader</button>}
+                {portfolioPreview.kind==="file"&&<div className="organizer-note"><SevenIcon name="shield"/><span>Preview interno indisponível. O Seven não executa este arquivo automaticamente.</span></div>}
+              </section>
+            )}
           </>}
 
           {!loading && report && tab==="portfolio" && <>

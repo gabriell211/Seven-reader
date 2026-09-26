@@ -221,6 +221,7 @@ pub fn run() {
             commands::list_annotations,
             commands::add_annotation,
             commands::add_ink_annotation,
+            commands::add_signature_image,
             commands::delete_annotation,
             commands::list_form_fields,
             commands::fill_form_fields,

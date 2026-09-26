@@ -592,6 +592,65 @@ pub fn session_delete_annotation(
     .map_err(ErrorPayload::from)
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionMeasurementResult {
+    pub document: pdf::DocumentSummary,
+    pub value: f64,
+}
+
+#[tauri::command]
+pub fn session_add_measurement(
+    state: State<'_, AppState>,
+    document_id: String,
+    measurement: measurement::MeasurementInput,
+) -> CommandResult<SessionMeasurementResult> {
+    session::apply_revision(&state, &document_id, "measurement", move |input, output| {
+        measurement::add_measurement(input, output, measurement)
+    })
+    .map(|(document, value)| SessionMeasurementResult { document, value })
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn list_measurements(
+    state: State<'_, AppState>,
+    document_id: String,
+) -> CommandResult<Vec<measurement::MeasurementInfo>> {
+    let document = state
+        .documents
+        .lock()
+        .get(&document_id)
+        .cloned()
+        .ok_or_else(|| ErrorPayload::from(SevenError::DocumentNotOpen))?;
+    measurement::list_measurements(document.active_path()).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn export_measurements(
+    state: State<'_, AppState>,
+    document_id: String,
+    destination: String,
+) -> CommandResult<usize> {
+    let document = state
+        .documents
+        .lock()
+        .get(&document_id)
+        .cloned()
+        .ok_or_else(|| ErrorPayload::from(SevenError::DocumentNotOpen))?;
+    let destination = std::path::PathBuf::from(destination);
+    if destination.extension().and_then(|value| value.to_str()).unwrap_or_default().to_ascii_lowercase() != "csv" {
+        return Err(ErrorPayload::from(SevenError::UnsupportedFormat(
+            destination.extension().and_then(|value| value.to_str()).unwrap_or_default().into(),
+        )));
+    }
+    if let Some(parent) = destination.parent() {
+        fs::canonicalize(parent)
+            .map_err(|error| ErrorPayload::from(SevenError::InvalidPath(error.to_string())))?;
+    }
+    measurement::export_measurements(document.active_path(), &destination).map_err(ErrorPayload::from)
+}
+
 #[tauri::command]
 pub fn session_add_stamp(
     state: State<'_, AppState>,

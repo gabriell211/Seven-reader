@@ -1145,9 +1145,9 @@ Opcional para desktop profissional:
 
 - [ ] Detectar scanners
 - [ ] Scanner padrão
-- [ ] WIA no Windows quando aplicável
+- [x] WIA no Windows quando aplicável
 - [ ] TWAIN quando aplicável
-- [ ] SANE no Linux quando aplicável
+- [x] SANE no Linux quando aplicável
 - [ ] Flatbed
 - [ ] ADF
 - [ ] Frente
@@ -1155,10 +1155,10 @@ Opcional para desktop profissional:
 
 ## Configurações
 
-- [ ] Cor
-- [ ] Grayscale
-- [ ] Preto e branco
-- [ ] DPI
+- [x] Cor
+- [x] Grayscale
+- [x] Preto e branco
+- [x] DPI
 - [ ] Tamanho da página
 - [ ] Qualidade
 - [ ] Otimizar imagem
@@ -1169,16 +1169,16 @@ Opcional para desktop profissional:
 
 ## Saída
 
-- [ ] Criar novo PDF
+- [x] Criar novo PDF
 - [ ] Anexar a PDF
 - [ ] Salvar múltiplos PDFs
-- [ ] OCR após scan
+- [x] OCR após scan
 - [ ] Adicionar metadados
 - [ ] Criar PDF/A-1b
-- [ ] Scan mais páginas
+- [x] Scan mais páginas
 - [ ] Scan verso
-- [ ] Finalizar
-- [ ] Reordenar antes de salvar
+- [x] Finalizar
+- [x] Reordenar antes de salvar
 
 ---
 
@@ -1186,24 +1186,24 @@ Opcional para desktop profissional:
 
 ## Reconhecimento
 
-- [ ] Página atual
-- [ ] Intervalo
-- [ ] Documento inteiro
-- [ ] Vários documentos
-- [ ] Vários idiomas
-- [ ] Detecção automática de idioma opcional
-- [ ] Detecção de orientação
-- [ ] Auto rotate
-- [ ] Deskew
-- [ ] Despeckle
+- [x] Página atual
+- [x] Intervalo
+- [x] Documento inteiro
+- [x] Vários documentos
+- [x] Vários idiomas
+- [x] Detecção automática de idioma opcional
+- [x] Detecção de orientação
+- [x] Auto rotate
+- [x] Deskew
+- [x] Despeckle
 - [ ] Ajuste de contraste
-- [ ] Melhoria de scan
-- [ ] Imagem original preservada
-- [ ] Camada pesquisável
-- [ ] Texto selecionável
+- [x] Melhoria de scan
+- [x] Imagem original preservada
+- [x] Camada pesquisável
+- [x] Texto selecionável
 - [ ] Texto editável
-- [ ] Pasta de saída para lote
-- [ ] Padrão de nome
+- [x] Pasta de saída para lote
+- [x] Padrão de nome
 
 ## OCR automático ao editar scan
 
@@ -1219,28 +1219,28 @@ Ao entrar em modo de edição em um PDF somente imagem:
 
 Fluxo de revisão:
 
-- [ ] Ativar "Revisar texto reconhecido"
-- [ ] Marcar palavras suspeitas
-- [ ] Mostrar bounding box
-- [ ] Mostrar imagem original
-- [ ] Mostrar "Reconhecido como"
-- [ ] Editar reconhecimento
-- [ ] Aceitar
-- [ ] Ir automaticamente à próxima suspeita
-- [ ] Voltar à anterior
-- [ ] Ignorar
-- [ ] Encerrar revisão
+- [x] Ativar "Revisar texto reconhecido"
+- [x] Marcar palavras suspeitas
+- [x] Mostrar bounding box
+- [x] Mostrar imagem original
+- [x] Mostrar "Reconhecido como"
+- [x] Editar reconhecimento
+- [x] Aceitar
+- [x] Ir automaticamente à próxima suspeita
+- [x] Voltar à anterior
+- [x] Ignorar
+- [x] Encerrar revisão
 
 ## Melhoria própria: confidence review
 
 Além do comportamento de suspeitas:
 
-- [ ] Confidence score por palavra
-- [ ] Threshold configurável
-- [ ] Ordenar do menor confidence para o maior
-- [ ] Filtrar por confidence
-- [ ] Revisar apenas abaixo do threshold
-- [ ] Estatísticas por página
+- [x] Confidence score por palavra
+- [x] Threshold configurável
+- [x] Ordenar do menor confidence para o maior
+- [x] Filtrar por confidence
+- [x] Revisar apenas abaixo do threshold
+- [x] Estatísticas por página
 - [ ] Estatísticas do documento
 
 ---

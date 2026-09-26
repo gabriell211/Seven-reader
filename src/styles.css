@@ -1854,3 +1854,25 @@ html[data-motion="reduced"] *,html[data-motion="reduced"] *::before,html[data-mo
 .guided-options-box { padding:10px; border:1px solid #dfdde7; border-radius:10px; display:grid; gap:8px; background:#faf9fd; }
 .guided-options-box .toggle-row { min-height:34px; }
 .guided-options-box .organizer-note { margin:0; }
+
+/* Mixed-file combine workspace */
+.combine-dialog { width:min(980px,calc(100vw - 32px)); max-height:min(900px,calc(100vh - 28px)); }
+.combine-summary-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+.combine-summary-grid span { min-height:58px; padding:9px; border:1px solid #e3e0e8; border-radius:10px; display:grid; place-items:center; gap:2px; background:#faf9fd; color:#858791; font-size:8px; text-align:center; }
+.combine-summary-grid b { color:#28262f; font-size:16px; }
+.combine-toolbar { display:flex; flex-wrap:wrap; gap:8px; }
+.combine-list { max-height:470px; overflow:auto; display:grid; gap:7px; padding-right:2px; }
+.combine-row { padding:9px; border:1px solid #e2dfe8; border-radius:11px; display:grid; grid-template-columns:28px 42px minmax(0,1fr) auto; gap:9px; align-items:center; background:#fff; }
+.combine-order { width:24px; height:24px; border-radius:50%; display:grid; place-items:center; background:#eee9ff; color:#5f47a8; font-size:8px; font-weight:800; }
+.combine-file-meta { min-width:0; display:grid; gap:2px; }
+.combine-file-meta strong,.combine-file-meta span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.combine-file-meta strong { font-size:9.5px; }
+.combine-file-meta small,.combine-file-meta span { color:#898b94; font-size:7.8px; }
+.combine-row-actions { display:grid; grid-template-columns:repeat(5,30px); gap:4px; }
+.combine-row-actions button { width:30px; height:30px; border:1px solid #dedce5; border-radius:7px; background:#fff; cursor:pointer; font-size:10px; }
+.combine-row-actions button:disabled { opacity:.35; cursor:not-allowed; }
+.combine-empty { min-height:210px; border:1px dashed #cbc5dc; border-radius:13px; display:grid; place-items:center; align-content:center; gap:7px; background:#faf8ff; color:#6b5f88; cursor:pointer; }
+.combine-empty>svg { width:34px; height:34px; }
+.combine-empty strong { font-size:11px; color:#40384f; }
+.combine-empty span { max-width:460px; font-size:8.5px; text-align:center; color:#87828f; }
+@media(max-width:760px){.combine-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.combine-row{grid-template-columns:26px 38px minmax(0,1fr)}.combine-row-actions{grid-column:1/-1;justify-content:end}.combine-toolbar{display:grid}.combine-toolbar>button{width:100%}}

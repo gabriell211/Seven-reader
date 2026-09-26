@@ -146,6 +146,40 @@ export interface CatalogHit {
   occurrences: number;
 }
 
+export type ConversionPdfStandard = "pdf" | "pdfa-1b" | "pdfa-2b" | "pdfa-3b" | "pdfx-3";
+export type ConversionColorStrategy = "preserve" | "rgb" | "cmyk" | "gray";
+export type ConversionRenderingIntent = "perceptual" | "relative" | "saturation" | "absolute";
+
+export interface ConversionOptions {
+  postProcess: boolean;
+  compatibility: "1.3" | "1.4" | "1.5" | "1.6" | "1.7" | "2.0";
+  colorDpi: number;
+  grayscaleDpi: number;
+  monochromeDpi: number;
+  downsample: "bicubic" | "average" | "subsample";
+  colorCompression: "jpeg" | "flate";
+  grayscaleCompression: "jpeg" | "flate";
+  jpegQuality: number;
+  embedFonts: boolean;
+  subsetFonts: boolean;
+  rgbProfile?: string;
+  cmykProfile?: string;
+  grayProfile?: string;
+  outputProfile?: string;
+  colorStrategy: ConversionColorStrategy;
+  renderingIntent: ConversionRenderingIntent;
+  preserveOverprint: boolean;
+  preserveMetadata: boolean;
+  pdfStandard: ConversionPdfStandard;
+}
+
+export interface ConversionPreset {
+  id: string;
+  name: string;
+  builtIn: boolean;
+  options: ConversionOptions;
+}
+
 export interface WatchFolderConfig {
   id: string;
   name: string;
@@ -153,7 +187,9 @@ export interface WatchFolderConfig {
   outputDirectory: string;
   recursive: boolean;
   enabled: boolean;
-  preset: "standard" | "compact" | "print";
+  preset: string;
+  presetName?: string;
+  conversionOptions?: ConversionOptions;
   extensions: string[];
 }
 

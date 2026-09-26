@@ -376,7 +376,7 @@ pub fn accessibility_report(path: &Path) -> Result<AccessibilityReport, SevenErr
             if tag_type == Some(b"Figure") {
                 figure_count += 1;
                 let alt = dictionary.get(b"Alt").ok().and_then(object_text);
-                if alt.as_ref().is_none_or(|value| value.trim().is_empty()) {
+                if alt.as_ref().map_or(true, |value| value.trim().is_empty()) {
                     figures_missing_alt += 1;
                 }
             }

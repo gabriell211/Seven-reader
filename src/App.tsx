@@ -29,6 +29,7 @@ import { SharedReviewDialog } from "./components/SharedReviewDialog";
 import { OptimizeDialog } from "./components/OptimizeDialog";
 import { InteractiveContentDialog, type InteractiveMode } from "./components/InteractiveContentDialog";
 import { PrintDialog } from "./components/PrintDialog";
+import { ArticlesDialog } from "./components/ArticlesDialog";
 import { applyAccessibilityPreferences, applyAppearance, isTrustedPath, loadSettings, saveSettings, type SevenSettings } from "./lib/settings";
 import {
   buildCatalog,
@@ -61,6 +62,14 @@ import {
   getExternalFileStatus,
   reloadDocumentFromSource,
   getOptimizationAudit,
+  listPdfArticles,
+  sessionAddPdfArticleBox,
+  sessionUpdatePdfArticle,
+  sessionUpdatePdfArticleBox,
+  sessionMovePdfArticleBox,
+  sessionDeletePdfArticleBox,
+  sessionDeletePdfArticle,
+  sessionMergePdfArticles,
   listInteractiveAssets,
   listPrinters,
   printDocumentAdvanced,
@@ -216,6 +225,10 @@ import type {
   StructureTagInfo,
   StructureTagUpdate,
   AdvancedPdfReport,
+  ArticleInfo,
+  ArticleMetadataUpdate,
+  NewArticleBox,
+  ArticleBoxUpdate,
   InteractiveAssetInfo,
   GeospatialViewportInfo,
   GeospatialCoordinate,
@@ -431,6 +444,11 @@ export default function App() {
   const [redactionMatches, setRedactionMatches] = useState<RedactionArea[]>([]);
   const [redactionLoading, setRedactionLoading] = useState(false);
   const [advancedTab, setAdvancedTab] = useState<"overview"|"bookmarks"|"attachments"|"layers"|"portfolio"|null>(null);
+  const [articlesOpen, setArticlesOpen] = useState(false);
+  const [articles, setArticles] = useState<ArticleInfo[]>([]);
+  const [articlesLoading, setArticlesLoading] = useState(false);
+  const [articleFocusRect, setArticleFocusRect] = useState<NormalizedRect | null>(null);
+  const [articleStartView, setArticleStartView] = useState<{ page: number; zoom: number } | null>(null);
   const [interactiveMode, setInteractiveMode] = useState<InteractiveMode | null>(null);
   const [interactiveAssets, setInteractiveAssets] = useState<InteractiveAssetInfo[]>([]);
   const [geospatialViewports, setGeospatialViewports] = useState<GeospatialViewportInfo[]>([]);
@@ -1522,7 +1540,19 @@ export default function App() {
         return;
       }
 
-      if (["bookmarks","attachments","layers","portfolio","articles"].includes(tool)) {
+      if (tool === "articles") {
+        if (!document) {
+          setNotice("Abra um PDF para gerenciar Articles.");
+          return;
+        }
+        setArticles([]);
+        setArticleStartView({ page, zoom });
+        setArticleFocusRect(printSelection);
+        setArticlesOpen(true);
+        return;
+      }
+
+      if (["bookmarks","attachments","layers","portfolio"].includes(tool)) {
         if (!document) {
           setNotice("Abra um PDF para inspecionar sua estrutura.");
           return;
@@ -1534,8 +1564,7 @@ export default function App() {
           tool === "bookmarks" ? "bookmarks"
             : tool === "attachments" ? "attachments"
               : tool === "layers" ? "layers"
-                : tool === "portfolio" ? "portfolio"
-                  : "overview",
+                : "portfolio",
         );
         return;
       }
@@ -1922,6 +1951,109 @@ export default function App() {
     }
     setProtectedView(false);
     setNotice("Pasta adicionada aos locais confiáveis.");
+  };
+
+  const reloadArticles = async (documentId = document?.id) => {
+    if (!documentId) return;
+    try {
+      setArticlesLoading(true);
+      setArticles(await listPdfArticles(documentId));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    } finally {
+      setArticlesLoading(false);
+    }
+  };
+
+  const acceptArticleRevision = async (summary: DocumentSummary, noticeText: string) => {
+    await acceptDocumentRevision(summary, noticeText);
+    await reloadArticles(summary.id);
+  };
+
+  const runAddArticleBox = async (request: NewArticleBox) => {
+    if (!document) return;
+    try {
+      const summary = await sessionAddPdfArticleBox(document.id, request);
+      await acceptArticleRevision(summary, "Article Box criada e encadeada.");
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runUpdateArticle = async (update: ArticleMetadataUpdate) => {
+    if (!document) return;
+    try {
+      const summary = await sessionUpdatePdfArticle(document.id, update);
+      await acceptArticleRevision(summary, "Metadados do artigo atualizados.");
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runUpdateArticleBox = async (update: ArticleBoxUpdate) => {
+    if (!document) return;
+    try {
+      const summary = await sessionUpdatePdfArticleBox(document.id, update);
+      await acceptArticleRevision(summary, "Article Box movida/redimensionada.");
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runMoveArticleBox = async (
+    objectId: string,
+    direction: "up" | "down" | "first" | "last",
+  ) => {
+    if (!document) return;
+    try {
+      const summary = await sessionMovePdfArticleBox(document.id, objectId, direction);
+      await acceptArticleRevision(summary, "Sequência do artigo atualizada.");
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runDeleteArticleBox = async (objectId: string) => {
+    if (!document) return;
+    try {
+      const summary = await sessionDeletePdfArticleBox(document.id, objectId);
+      await acceptArticleRevision(summary, "Article Box removida.");
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runDeleteArticle = async (objectId: string) => {
+    if (!document) return;
+    try {
+      const summary = await sessionDeletePdfArticle(document.id, objectId);
+      await acceptArticleRevision(summary, "Article thread removido.");
+      setArticleFocusRect(null);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runMergeArticles = async (targetId: string, sourceId: string) => {
+    if (!document) return;
+    try {
+      const summary = await sessionMergePdfArticles(document.id, targetId, sourceId);
+      await acceptArticleRevision(summary, "Articles combinados em um único thread.");
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const navigateArticleBox = async (pageIndex: number, rect?: NormalizedRect) => {
+    setArticleFocusRect(rect ?? null);
+    await render(pageIndex, zoom);
+  };
+
+  const finishArticleReading = async () => {
+    setArticleFocusRect(null);
+    if (articleStartView) {
+      await render(articleStartView.page, articleStartView.zoom);
+    }
   };
 
   const reloadInteractiveContent = async () => {
@@ -3633,6 +3765,7 @@ export default function App() {
           onCancel={cancelClosePrompt}
         />
       )}
+      {articlesOpen && document && <ArticlesDialog pageIndex={page} initialSelection={printSelection ?? undefined} articles={articles} loading={articlesLoading} onClose={() => { setArticlesOpen(false); setArticleFocusRect(null); }} onReload={() => void reloadArticles()} onNavigate={(pageIndex, rect) => void navigateArticleBox(pageIndex, rect)} onFinishReading={() => void finishArticleReading()} onAddBox={(request) => void runAddArticleBox(request)} onUpdateArticle={(update) => void runUpdateArticle(update)} onUpdateBox={(update) => void runUpdateArticleBox(update)} onMoveBox={(objectId, direction) => void runMoveArticleBox(objectId, direction)} onDeleteBox={(objectId) => void runDeleteArticleBox(objectId)} onDeleteArticle={(objectId) => void runDeleteArticle(objectId)} onMerge={(targetId, sourceId) => void runMergeArticles(targetId, sourceId)} />}
       {printOpen && document && <PrintDialog fileName={document.name} currentPage={page} pageCount={document.pageCount} selection={printSelection ?? undefined} printers={printers} loading={printersLoading} advancedAvailable={Boolean(capabilities?.ghostscript?.available)} qpdfAvailable={Boolean(capabilities?.qpdf?.available)} onClose={() => setPrintOpen(false)} onReload={() => void reloadPrinters()} onPrint={(options) => void runPrintAdvanced(options)} onSystemPrint={() => void runSystemPrint()} />}
       {interactiveMode && document && <InteractiveContentDialog mode={interactiveMode} pageIndex={page} assets={interactiveAssets} viewports={geospatialViewports} coordinate={geospatialCoordinate} loading={interactiveLoading} onClose={() => setInteractiveMode(null)} onReload={() => void reloadInteractiveContent()} onExtract={(objectId, destination) => void runExtractInteractiveAsset(objectId, destination)} onResolve={(pageIndex, normalizedX, normalizedY) => void runResolveGeospatial(pageIndex, normalizedX, normalizedY)} />}
       {optimizeOpen && document && <OptimizeDialog documentPath={document.activePath} audit={optimizationAudit} loading={optimizationAuditLoading} onClose={() => setOptimizeOpen(false)} onAudit={() => void reloadOptimizationAudit()} onRun={(output, options) => void runOptimizeAdvanced(output, options)} />}
@@ -3955,6 +4088,7 @@ export default function App() {
           onRedo={() => void redoCurrent()}
           onPrint={(selection) => openPrintDialog(selection)}
           onSelectionChange={setPrintSelection}
+          focusSelection={articleFocusRect}
           onRender={(nextPage, nextZoom) => void render(nextPage, nextZoom)}
           onVisiblePage={(nextPage) => void updateVisiblePage(nextPage)}
           onViewModeChange={(mode) => void changeViewMode(mode)}

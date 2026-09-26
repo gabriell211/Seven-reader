@@ -186,6 +186,7 @@ export interface SanitizeOptions {
   removeAnnotations: boolean;
   removeForms: boolean;
   removeMultimedia: boolean;
+  cleanupStructure: boolean;
 }
 
 export interface SanitizeReport {

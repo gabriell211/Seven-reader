@@ -76,8 +76,6 @@ pub fn commit_revision(
     document.redo_stack.clear();
     document.working_path = Some(output);
     document.file_size = metadata.len();
-    document.source_file_size = metadata.len();
-    document.source_modified_ns = pdf::modified_ns(&metadata);
     document.revision = document.revision.saturating_add(1);
     Ok(pdf::summary(document))
 }
@@ -229,6 +227,8 @@ pub fn save(
     document.undo_stack.clear();
     document.redo_stack.clear();
     document.file_size = metadata.len();
+    document.source_file_size = metadata.len();
+    document.source_modified_ns = pdf::modified_ns(&metadata);
     document.revision = document.revision.saturating_add(1);
     Ok(pdf::summary(document))
 }

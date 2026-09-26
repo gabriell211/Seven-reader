@@ -16,6 +16,7 @@ import type {
   ExternalFileStatus,
   RenderResult,
   SearchHit,
+  SearchOccurrence,
   ToolId,
   ViewMode,
 } from "../types";
@@ -47,6 +48,8 @@ interface WorkspaceProps {
   measurements: MeasurementInfo[];
   measurementActivation: number;
   searchHits: SearchHit[];
+  searchOccurrences: SearchOccurrence[];
+  searchOccurrenceIndex: number;
   advancedSearchHits: AdvancedSearchHit[];
   page: number;
   zoom: number;
@@ -83,6 +86,7 @@ interface WorkspaceProps {
   onVisiblePage: (page: number) => void;
   onViewModeChange: (mode: ViewMode) => void;
   onSearch: (query: string) => void;
+  onSelectSearchOccurrence: (index: number) => void;
   onInk: (ink: InkAnnotationInput) => void;
   onMarkup: (kind: "highlight" | "underline" | "strikeout", rect: NormalizedRect) => void;
   onMeasurement: (measurement: MeasurementInput) => void;
@@ -130,6 +134,8 @@ export function DocumentWorkspace({
   measurements,
   measurementActivation,
   searchHits,
+  searchOccurrences,
+  searchOccurrenceIndex,
   advancedSearchHits,
   page,
   zoom,
@@ -160,6 +166,7 @@ export function DocumentWorkspace({
   onVisiblePage,
   onViewModeChange,
   onSearch,
+  onSelectSearchOccurrence,
   onInk,
   onMarkup,
   onMeasurement,
@@ -364,6 +371,13 @@ export function DocumentWorkspace({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [viewerTool, selectedText, selectionRect, page, document.id, rendered?.width, immersiveMode]);
+
+  const currentPageSearchHighlights = useMemo(
+    () => searchOccurrences
+      .map((occurrence, index) => ({ occurrence, index }))
+      .filter(({ occurrence }) => occurrence.pageIndex === page),
+    [searchOccurrences, page],
+  );
 
   const globalToolMatches = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("pt-BR");
@@ -1264,6 +1278,22 @@ export function DocumentWorkspace({
                   <button className={advancedSearch ? "active" : ""} onClick={() => setAdvancedSearch(true)}>Avançada</button>
                 </div>
 
+                {!advancedSearch && (
+                  <div className="search-occurrence-nav">
+                    <button
+                      disabled={!searchOccurrences.length}
+                      onClick={() => onSelectSearchOccurrence(searchOccurrenceIndex <= 0 ? searchOccurrences.length - 1 : searchOccurrenceIndex - 1)}
+                      aria-label="Ocorrência anterior"
+                    ><SevenIcon name="chevronLeft" /></button>
+                    <strong>{searchOccurrences.length ? `${searchOccurrenceIndex + 1} de ${searchOccurrences.length}` : "0 resultados"}</strong>
+                    <button
+                      disabled={!searchOccurrences.length}
+                      onClick={() => onSelectSearchOccurrence(searchOccurrenceIndex + 1 >= searchOccurrences.length ? 0 : searchOccurrenceIndex + 1)}
+                      aria-label="Próxima ocorrência"
+                    ><SevenIcon name="chevronRight" /></button>
+                  </div>
+                )}
+
                 {advancedSearch && (
                   <div className="advanced-search-options">
                     <div className="search-option-grid">
@@ -1304,7 +1334,11 @@ export function DocumentWorkspace({
                 <div className="search-results">
                   {!advancedSearch && !searchHits.length && <div className="empty-panel">Pesquise um termo para ver ocorrências.</div>}
                   {!advancedSearch && searchHits.map((hit) => (
-                    <button key={hit.pageIndex} className="search-hit" onClick={() => onRender(hit.pageIndex, zoom)}>
+                    <button key={hit.pageIndex} className="search-hit" onClick={() => {
+                      const index = searchOccurrences.findIndex((occurrence) => occurrence.pageIndex === hit.pageIndex);
+                      if (index >= 0) onSelectSearchOccurrence(index);
+                      else onRender(hit.pageIndex, zoom);
+                    }}>
                       <strong>Página {hit.pageIndex + 1}</strong>
                       <span>{hit.excerpt || "Texto encontrado nesta página."}</span>
                       <small>{hit.occurrences} ocorrência(s)</small>

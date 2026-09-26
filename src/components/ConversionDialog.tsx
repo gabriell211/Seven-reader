@@ -85,6 +85,10 @@ export function ConversionDialog({
   const [watchRecursive, setWatchRecursive] = useState(false);
   const [watchEnabled, setWatchEnabled] = useState(true);
   const [watchPreset, setWatchPreset] = useState("standard");
+  const [watchMaxRetries, setWatchMaxRetries] = useState(3);
+  const [watchRetryBackoffSeconds, setWatchRetryBackoffSeconds] = useState(5);
+  const [watchQuarantineEnabled, setWatchQuarantineEnabled] = useState(true);
+  const [watchQuarantineDirectory, setWatchQuarantineDirectory] = useState("");
   const [watchExtensions, setWatchExtensions] = useState<string[]>(defaultExtensions);
 
   const presets = useMemo(
@@ -321,6 +325,11 @@ export function ConversionDialog({
     if (typeof selected === "string") setWatchOutput(selected);
   };
 
+  const chooseWatchQuarantine = async () => {
+    const selected = await open({ title: "Pasta de quarentena", directory: true, multiple: false });
+    if (typeof selected === "string") setWatchQuarantineDirectory(selected);
+  };
+
   const resetWatchForm = () => {
     setWatchId("");
     setWatchName("");
@@ -329,6 +338,10 @@ export function ConversionDialog({
     setWatchRecursive(false);
     setWatchEnabled(true);
     setWatchPreset("standard");
+    setWatchMaxRetries(3);
+    setWatchRetryBackoffSeconds(5);
+    setWatchQuarantineEnabled(true);
+    setWatchQuarantineDirectory("");
     setWatchExtensions(defaultExtensions);
   };
 
@@ -340,6 +353,10 @@ export function ConversionDialog({
     setWatchRecursive(config.recursive);
     setWatchEnabled(config.enabled);
     setWatchPreset(config.preset);
+    setWatchMaxRetries(config.maxRetries ?? 3);
+    setWatchRetryBackoffSeconds(config.retryBackoffSeconds ?? 5);
+    setWatchQuarantineEnabled(config.quarantineEnabled ?? true);
+    setWatchQuarantineDirectory(config.quarantineDirectory ?? "");
     setWatchExtensions(config.extensions);
   };
 
@@ -359,6 +376,12 @@ export function ConversionDialog({
       preset: preset.id,
       presetName: preset.name,
       conversionOptions: { ...preset.options },
+      maxRetries: Math.max(0, Math.min(10, watchMaxRetries)),
+      retryBackoffSeconds: Math.max(1, Math.min(3600, watchRetryBackoffSeconds)),
+      quarantineEnabled: watchQuarantineEnabled,
+      quarantineDirectory: watchQuarantineEnabled && watchQuarantineDirectory.trim()
+        ? watchQuarantineDirectory.trim()
+        : undefined,
       extensions: watchExtensions,
     });
     resetWatchForm();
@@ -724,6 +747,46 @@ export function ConversionDialog({
                   <label className="toggle-row"><input type="checkbox" checked={watchEnabled} onChange={(event) => setWatchEnabled(event.target.checked)} /><span><strong>Ativo</strong><small>Começa a monitorar após salvar.</small></span></label>
                 </div>
 
+                <section className="watch-recovery-settings">
+                  <div className="section-mini-title">Recuperação de falhas</div>
+                  <div className="three-column-fields">
+                    <label className="workflow-field">
+                      <span>Retries</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={10}
+                        value={watchMaxRetries}
+                        onChange={(event) => setWatchMaxRetries(Math.max(0, Math.min(10, Number(event.target.value) || 0)))}
+                      />
+                      <small>Tentativas adicionais após a primeira falha.</small>
+                    </label>
+                    <label className="workflow-field">
+                      <span>Backoff inicial</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={3600}
+                        value={watchRetryBackoffSeconds}
+                        onChange={(event) => setWatchRetryBackoffSeconds(Math.max(1, Math.min(3600, Number(event.target.value) || 1)))}
+                      />
+                      <small>Segundos; dobra a cada retry até 1 hora.</small>
+                    </label>
+                    <label className="toggle-row">
+                      <input type="checkbox" checked={watchQuarantineEnabled} onChange={(event) => setWatchQuarantineEnabled(event.target.checked)} />
+                      <span><strong>Quarentena</strong><small>Move arquivos definitivamente falhos para uma pasta isolada.</small></span>
+                    </label>
+                  </div>
+                  {watchQuarantineEnabled && (
+                    <div className="watch-quarantine-row">
+                      <button className="secondary-light-button choose-wide" onClick={() => void chooseWatchQuarantine()}>
+                        <SevenIcon name="folder" /> {watchQuarantineDirectory || "Automática: Seven-Reader-Quarantine dentro da saída"}
+                      </button>
+                      {watchQuarantineDirectory && <button className="danger-quiet" onClick={() => setWatchQuarantineDirectory("")}>Usar automática</button>}
+                    </div>
+                  )}
+                </section>
+
                 <div className="watch-extension-grid">
                   {defaultExtensions.map((extension) => (
                     <label key={extension} className={watchExtensions.includes(extension) ? "active" : ""}>
@@ -774,6 +837,8 @@ export function ConversionDialog({
                       </header>
                       <div className="watch-folder-meta">
                         <span>{config.recursive ? "Com subpastas" : "Somente pasta raiz"}</span>
+                        <span>Retry {config.maxRetries ?? 3} · backoff {config.retryBackoffSeconds ?? 5}s</span>
+                        <span>{(config.quarantineEnabled ?? true) ? "Quarentena ativa" : "Sem quarentena"}</span>
                         <span>{config.extensions.map((value) => "." + value).join(", ")}</span>
                       </div>
                       {events.length > 0 && (

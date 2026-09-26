@@ -327,7 +327,10 @@ export default function App() {
   const native = isNativeDesktop();
   const currentWindowLabel = native ? getCurrentWebviewWindow().label : "browser";
   const windowSessionKey = `${SESSION_KEY}:${currentWindowLabel}`;
-  const launchPathRef = useRef(new URLSearchParams(window.location.search).get("open"));
+  const launchParamsRef = useRef(new URLSearchParams(window.location.search));
+  const launchPathRef = useRef(launchParamsRef.current.get("open"));
+  const launchPageRef = useRef(Math.max(0, Number(launchParamsRef.current.get("page")) || 0));
+  const launchZoomRef = useRef(Math.max(25, Math.min(400, Number(launchParamsRef.current.get("zoom")) || 100)));
   const [splash, setSplash] = useState(true);
   const [leavingSplash, setLeavingSplash] = useState(false);
   const [capabilities, setCapabilities] = useState<Capabilities | null>(native ? emptyCapabilities : null);
@@ -815,7 +818,7 @@ export default function App() {
     const launchPath = launchPathRef.current;
     if (launchPath) {
       sessionRestoredRef.current = true;
-      void openPath(launchPath);
+      void openPath(launchPath, { page: launchPageRef.current, zoom: launchZoomRef.current });
       return;
     }
     if (!settings.reopenLastDocument) return;
@@ -824,16 +827,17 @@ export default function App() {
   }, [native, splash, settings.reopenLastDocument, currentWindowLabel]);
 
   const openTabInNewWindow = async (documentId: string, move: boolean) => {
-    if (!native || currentWindowLabel !== "main") {
-      setNotice("A criação de novas janelas fica restrita à janela principal por segurança.");
-      return;
-    }
+    if (!native) return;
     const tab = openTabs.find((item) => item.id === documentId);
     if (!tab) return;
 
     const label = `document-${crypto.randomUUID().replace(/-/g, "")}`;
+    const view = tabViews[tab.id] ?? {
+      page: document?.id === tab.id ? page : 0,
+      zoom: document?.id === tab.id ? zoom : settings.defaultZoom,
+    };
     const child = new WebviewWindow(label, {
-      url: `/?open=${encodeURIComponent(tab.path)}`,
+      url: `/?open=${encodeURIComponent(tab.path)}&page=${view.page}&zoom=${view.zoom}`,
       title: `Seven Reader — ${tab.name}`,
       width: 1280,
       height: 860,
@@ -3668,7 +3672,7 @@ export default function App() {
           onCloseOtherTabs={(documentId) => void closeOtherTabs(documentId)}
           onReopenClosed={() => void reopenClosedTab()}
           onReorderTabs={reorderTabs}
-          canCreateWindow={currentWindowLabel === "main"}
+          canCreateWindow={native}
           onOpenInNewWindow={(documentId) => void openTabInNewWindow(documentId, false)}
           onMoveToNewWindow={(documentId) => void openTabInNewWindow(documentId, true)}
           onOpenSideBySide={(documentId) => void openSideBySide(documentId)}

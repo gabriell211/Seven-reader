@@ -1483,3 +1483,25 @@ html[data-motion="reduced"] *,html[data-motion="reduced"] *::before,html[data-mo
 .review-navigation .primary-button { grid-column:1 / -1; }
 .review-status { padding:7px 8px; border-radius:7px; color:#65676f; background:#f4f4f7; font-size:8.5px; text-transform:capitalize; }
 @media (max-width:820px) { .ocr-review-layout { grid-template-columns:1fr; } .ocr-review-stats { grid-template-columns:repeat(2,1fr); } .ocr-language-row { grid-template-columns:1fr; } }
+
+.interactive-content-dialog { width:min(900px,100%); }
+.interactive-asset-list,.geo-viewport-list { display:grid; gap:7px; max-height:390px; overflow:auto; }
+.interactive-asset-row { min-height:72px; padding:10px; border:1px solid #e2e1e7; border-radius:11px; display:grid; grid-template-columns:36px minmax(0,1fr) auto; gap:10px; align-items:center; background:white; }
+.interactive-asset-row > span { width:34px; height:34px; border-radius:9px; display:grid; place-items:center; color:#6847c8; background:#f0ebff; }
+.interactive-asset-row > span svg { width:16px; }
+.interactive-asset-row > div { min-width:0; display:grid; gap:2px; }
+.interactive-asset-row strong { font-size:10.5px; }
+.interactive-asset-row small { color:#898b94; font-size:8.5px; }
+.interactive-asset-row code { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#9a9ba3; font-size:7.8px; }
+.geo-viewport-list article { padding:11px 12px; border:1px solid #e1e0e6; border-radius:10px; display:grid; gap:4px; background:white; }
+.geo-viewport-list strong { font-size:10.5px; }
+.geo-viewport-list small { color:#81838d; font-size:8.7px; }
+.geo-viewport-list code { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#9698a0; font-size:8px; }
+.geo-viewport-list details { margin-top:3px; }
+.geo-viewport-list summary { cursor:pointer; color:#6745c8; font-size:8.5px; font-weight:700; }
+.geo-viewport-list pre { max-height:120px; overflow:auto; white-space:pre-wrap; color:#676973; font-size:7.5px; }
+.geo-resolver { padding:13px; border:1px solid #ddd9ec; border-radius:11px; display:grid; gap:11px; background:#faf8ff; }
+.geo-coordinate-result { padding:12px; border:1px solid #cec3f1; border-radius:10px; display:grid; gap:3px; background:white; }
+.geo-coordinate-result span { color:#858790; font-size:8.2px; text-transform:uppercase; letter-spacing:.05em; }
+.geo-coordinate-result strong { font:700 16px ui-monospace,SFMono-Regular,Consolas,monospace; color:#4f31ac; }
+.geo-coordinate-result small { color:#8c8e96; font-size:8.3px; }

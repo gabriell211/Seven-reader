@@ -117,6 +117,10 @@ export function ConversionDialog({
     officeAvailable
     && (!selectedNeedsGhostscript || imageAvailable)
     && (!selectedNeedsOutputIntent || Boolean(selectedPreset.options.outputProfile));
+  const editingPresetReady = Boolean(
+    editingPreset?.name.trim()
+    && (editingPreset.options.pdfStandard === "pdf" || editingPreset.options.outputProfile),
+  );
 
   const persistCustomPresets = (items: ConversionPreset[]) => {
     const normalized = items.map((preset) => ({ ...normalizeConversionPreset(preset), builtIn: false }));
@@ -340,7 +344,9 @@ export function ConversionDialog({
   const saveWatch = () => {
     if (!watchName.trim() || !watchInput || !watchOutput) return;
     const preset = watchPresetChoices.find((item) => item.id === watchPreset) ?? BUILT_IN_CONVERSION_PRESETS[0];
-    if (preset.options.postProcess && !imageAvailable) return;
+    const needsGhostscript = preset.options.postProcess || preset.options.pdfStandard !== "pdf";
+    if (needsGhostscript && !imageAvailable) return;
+    if (preset.options.pdfStandard !== "pdf" && !preset.options.outputProfile) return;
     onUpsertWatchFolder({
       id: watchId,
       name: watchName.trim(),
@@ -428,7 +434,7 @@ export function ConversionDialog({
                   <span>Preset</span>
                   <select value={selectedPresetId} onChange={(event) => setSelectedPresetId(event.target.value)}>
                     {presets.map((preset) => {
-                      const unavailable = preset.options.postProcess && !imageAvailable;
+                      const unavailable = (preset.options.postProcess || preset.options.pdfStandard !== "pdf") && !imageAvailable;
                       return <option key={preset.id} value={preset.id} disabled={unavailable}>{preset.name}{preset.builtIn ? " · nativo" : ""}</option>;
                     })}
                   </select>
@@ -527,7 +533,7 @@ export function ConversionDialog({
                       </div>
                       <div className="conversion-editor-actions">
                         <button className="secondary-light-button" onClick={() => setEditingPreset(null)}>Cancelar</button>
-                        <button className="primary-button" disabled={!editingPreset.name.trim()} onClick={saveEditingPreset}><SevenIcon name="save" /> Salvar preset</button>
+                        <button className="primary-button" disabled={!editingPresetReady} onClick={saveEditingPreset}><SevenIcon name="save" /> Salvar preset</button>
                       </div>
                     </header>
 
@@ -706,7 +712,7 @@ export function ConversionDialog({
                     <span>Preset</span>
                     <select value={watchPreset} onChange={(event) => setWatchPreset(event.target.value)}>
                       {watchPresetChoices.map((preset) => (
-                        <option key={preset.id} value={preset.id} disabled={preset.options.postProcess && !imageAvailable}>
+                        <option key={preset.id} value={preset.id} disabled={(preset.options.postProcess || preset.options.pdfStandard !== "pdf") && !imageAvailable}>
                           {preset.name}{preset.builtIn ? " · nativo" : ""}
                         </option>
                       ))}
@@ -735,7 +741,12 @@ export function ConversionDialog({
                       || !watchInput
                       || !watchOutput
                       || !watchExtensions.length
-                      || Boolean(watchPresetChoices.find((preset) => preset.id === watchPreset)?.options.postProcess && !imageAvailable)
+                      || Boolean(watchPresetChoices.find((preset) => {
+                        if (preset.id !== watchPreset) return false;
+                        const needsGhostscript = preset.options.postProcess || preset.options.pdfStandard !== "pdf";
+                        const missingOutputIntent = preset.options.pdfStandard !== "pdf" && !preset.options.outputProfile;
+                        return (needsGhostscript && !imageAvailable) || missingOutputIntent;
+                      }))
                     }
                     onClick={saveWatch}
                   >

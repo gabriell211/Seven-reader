@@ -27,6 +27,7 @@ pub struct Capabilities {
     pub tesseract: Capability,
     pub unpaper: Capability,
     pub web_pdf: Capability,
+    pub verapdf: Capability,
 }
 
 fn command_version(candidates: &[&str], args: &[&str]) -> Capability {
@@ -143,6 +144,7 @@ pub fn detect(state: &AppState) -> Capabilities {
     let openssl = command_version(&["openssl"], &["version"]);
     let tesseract = command_version(&["tesseract"], &["--version"]);
     let unpaper = command_version(&["unpaper"], &["--version"]);
+    let verapdf = command_version(&["verapdf", "verapdf.bat"], &["--version"]);
     let web_pdf = match find_browser() {
         Some(path) => Capability {
             available: true,
@@ -176,5 +178,6 @@ pub fn detect(state: &AppState) -> Capabilities {
         tesseract,
         unpaper,
         web_pdf,
+        verapdf,
     }
 }

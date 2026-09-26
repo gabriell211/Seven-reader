@@ -2024,22 +2024,22 @@ Módulo profissional.
 
 ## Configuração
 
-- [ ] Arquivo antigo
-- [ ] Arquivo novo
-- [ ] Trocar lados
-- [ ] Intervalo de páginas
-- [ ] Comparar somente texto
+- [x] Arquivo antigo
+- [x] Arquivo novo
+- [x] Trocar lados
+- [x] Intervalo de páginas
+- [x] Comparar somente texto
 
 ## Tipo de documento
 
-- [ ] Auto detect
-- [ ] Relatório
-- [ ] Planilha
-- [ ] Layout de revista
-- [ ] Apresentação
-- [ ] Scan
-- [ ] Desenho
-- [ ] Ilustração
+- [x] Auto detect
+- [x] Relatório
+- [x] Planilha
+- [x] Layout de revista
+- [x] Apresentação
+- [x] Scan
+- [x] Desenho
+- [x] Ilustração
 
 ## Estratégia
 
@@ -2050,25 +2050,25 @@ Módulo profissional.
 
 ## Resultados
 
-- [ ] Documento de relatório
-- [ ] Resumo total
-- [ ] Texto adicionado
-- [ ] Texto removido
-- [ ] Texto alterado
-- [ ] Formatting
-- [ ] Imagens
+- [x] Documento de relatório
+- [x] Resumo total
+- [x] Texto adicionado
+- [x] Texto removido
+- [x] Texto alterado
+- [x] Formatting
+- [x] Imagens
 - [ ] Background
-- [ ] Annotations
-- [ ] Página movida
-- [ ] Próxima diferença
-- [ ] Diferença anterior
-- [ ] Side by side
-- [ ] Single page
-- [ ] Filter
-- [ ] Show/hide categories
-- [ ] Status por diferença
+- [x] Annotations
+- [x] Página movida
+- [x] Próxima diferença
+- [x] Diferença anterior
+- [x] Side by side
+- [x] Single page
+- [x] Filter
+- [x] Show/hide categories
+- [x] Status por diferença
 - [ ] Comments list
-- [ ] Salvar relatório
+- [x] Salvar relatório
 
 ---
 
@@ -2216,24 +2216,24 @@ Módulo de colaboração sem IA. Pode utilizar backend configurável e deve perm
 
 # Propriedades e metadados
 
-- [ ] Título
-- [ ] Autor
-- [ ] Assunto
-- [ ] Keywords
-- [ ] Criador
-- [ ] Produtor
-- [ ] Data de criação
-- [ ] Data de modificação
-- [ ] Versão PDF
-- [ ] Páginas
-- [ ] Tamanho
-- [ ] Segurança
-- [ ] Fontes
+- [x] Título
+- [x] Autor
+- [x] Assunto
+- [x] Keywords
+- [x] Criador
+- [x] Produtor
+- [x] Data de criação
+- [x] Data de modificação
+- [x] Versão PDF
+- [x] Páginas
+- [x] Tamanho
+- [x] Segurança
+- [x] Fontes
 - [ ] Initial view
 - [ ] Page layout
 - [ ] Page mode
-- [ ] Language
-- [ ] XMP
+- [x] Language
+- [x] XMP
 - [ ] Custom metadata
 - [ ] Metadata import/export quando aplicável
 

@@ -4108,11 +4108,17 @@ pub fn start_batch_validate_pdfa(
         .map_err(ErrorPayload::from)?;
     let output_directory = jobs::validated_directory(&output_directory).map_err(ErrorPayload::from)?;
     let mut items = Vec::with_capacity(inputs.len());
+    let mut reserved = std::collections::HashSet::new();
     for input in inputs {
         let canonical = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
         let stem = canonical.file_stem().and_then(|value| value.to_str()).unwrap_or("documento").to_owned();
         let name = canonical.file_name().and_then(|value| value.to_str()).unwrap_or("documento.pdf").to_owned();
-        let report = output_directory.join(format!("{stem}-pdfa-relatorio.json"));
+        let mut report = output_directory.join(format!("{stem}-pdfa-relatorio.json"));
+        let mut index = 2usize;
+        while report.exists() || !reserved.insert(report.to_string_lossy().to_ascii_lowercase()) {
+            report = output_directory.join(format!("{stem}-pdfa-relatorio-{index}.json"));
+            index += 1;
+        }
         items.push((canonical, report, name));
     }
     let labels = items.iter().enumerate()
@@ -4157,11 +4163,17 @@ pub fn start_batch_preflight_pdf(
     }
     let output_directory = jobs::validated_directory(&output_directory).map_err(ErrorPayload::from)?;
     let mut items = Vec::with_capacity(inputs.len());
+    let mut reserved = std::collections::HashSet::new();
     for input in inputs {
         let canonical = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
         let stem = canonical.file_stem().and_then(|value| value.to_str()).unwrap_or("documento").to_owned();
         let name = canonical.file_name().and_then(|value| value.to_str()).unwrap_or("documento.pdf").to_owned();
-        let report = output_directory.join(format!("{stem}-preflight.json"));
+        let mut report = output_directory.join(format!("{stem}-preflight.json"));
+        let mut index = 2usize;
+        while report.exists() || !reserved.insert(report.to_string_lossy().to_ascii_lowercase()) {
+            report = output_directory.join(format!("{stem}-preflight-{index}.json"));
+            index += 1;
+        }
         items.push((canonical, report, name));
     }
     let labels = items.iter().enumerate()

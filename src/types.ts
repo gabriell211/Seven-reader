@@ -247,6 +247,22 @@ export interface AnnotationInput {
   height: number;
 }
 
+export interface StampInput {
+  pageIndex: number;
+  name: string;
+  category: string;
+  text: string;
+  author: string;
+  imagePath?: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  fillColor: [number, number, number];
+  borderColor: [number, number, number];
+  textColor: [number, number, number];
+}
+
 export interface InkAnnotationInput {
   pageIndex: number;
   author: string;

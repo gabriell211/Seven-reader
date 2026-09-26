@@ -86,6 +86,7 @@ interface WorkspaceProps {
   onRedo: () => void;
   onPrint: (selection?: NormalizedRect) => void;
   onSelectionChange: (selection: NormalizedRect | null) => void;
+  focusSelection?: NormalizedRect | null;
   onRender: (page: number, zoom: number) => void;
   onVisiblePage: (page: number) => void;
   onViewModeChange: (mode: ViewMode) => void;
@@ -170,6 +171,7 @@ export function DocumentWorkspace({
   onRedo,
   onPrint,
   onSelectionChange,
+  focusSelection,
   onRender,
   onVisiblePage,
   onViewModeChange,
@@ -345,6 +347,13 @@ export function DocumentWorkspace({
   useEffect(() => {
     onSelectionChange(selectionRect);
   }, [selectionRect]);
+  useEffect(() => {
+    if (!focusSelection) return;
+    setViewerTool("select");
+    setSelectionRect(focusSelection);
+    setSelectedText("");
+  }, [focusSelection?.x, focusSelection?.y, focusSelection?.width, focusSelection?.height]);
+
 
   useEffect(() => {
     if (!tabMenu) return;

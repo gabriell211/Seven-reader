@@ -10,7 +10,7 @@ interface CombineDialogProps {
   webAvailable: boolean;
   onListFolder: (path: string) => Promise<string[]>;
   onClose: () => void;
-  onCombine: (inputs: string[], output: string) => Promise<void>;
+  onCombine: (inputs: string[], pageRanges: string[], output: string) => Promise<void>;
 }
 
 function isWebSource(value: string): boolean {
@@ -48,6 +48,7 @@ export function CombineDialog({
   const [busy, setBusy] = useState(false);
   const [webUrl, setWebUrl] = useState("");
   const [folderLoading, setFolderLoading] = useState(false);
+  const [pageRanges, setPageRanges] = useState<Record<string, string>>({});
 
   const acceptedExtensions = useMemo(() => [
     "pdf",
@@ -66,6 +67,13 @@ export function CombineDialog({
         if (seen.has(key)) continue;
         seen.add(key);
         next.push(path);
+      }
+      return next;
+    });
+    setPageRanges((current) => {
+      const next = { ...current };
+      for (const path of paths) {
+        if (!(path in next) && acceptedExtensions.includes(extension(path))) next[path] = "1-z";
       }
       return next;
     });
@@ -119,6 +127,7 @@ export function CombineDialog({
       }
       return [...current, value];
     });
+    setPageRanges((current) => ({ ...current, [value]: current[value] ?? "1-z" }));
     setWebUrl("");
   };
 
@@ -153,7 +162,7 @@ export function CombineDialog({
     if (!output) return;
     setBusy(true);
     try {
-      await onCombine(inputs, output);
+      await onCombine(inputs, inputs.map((path) => pageRanges[path]?.trim() || "1-z"), output);
     } finally {
       setBusy(false);
     }
@@ -189,7 +198,7 @@ export function CombineDialog({
             <button className="primary-button" onClick={() => void chooseFiles()}><SevenIcon name="open" /> Adicionar arquivos</button>
             <button className="secondary-light-button" disabled={folderLoading} onClick={() => void addFolder()}><SevenIcon name="folder" /> {folderLoading ? "Lendo pasta…" : "Adicionar pasta"}</button>
             <button className="secondary-light-button" disabled={!openDocuments.length} onClick={addOpenDocuments}><SevenIcon name="pages" /> Adicionar PDFs abertos</button>
-            <button className="secondary-light-button" disabled={!inputs.length} onClick={() => setInputs([])}>Limpar lista</button>
+            <button className="secondary-light-button" disabled={!inputs.length} onClick={() => { setInputs([]); setPageRanges({}); }}>Limpar lista</button>
           </div>
 
           <section className="combine-web-source">
@@ -225,13 +234,30 @@ export function CombineDialog({
                     <strong>{fileName(path)}</strong>
                     <small>{kind === "pdf" ? "PDF direto" : kind === "image" ? "Imagem → PDF local" : "Documento → PDF via LibreOffice"}</small>
                     <span title={path}>{path}</span>
+                    <label className="combine-page-range">
+                      <span>Páginas</span>
+                      <input
+                        value={pageRanges[path] ?? "1-z"}
+                        onChange={(event) => setPageRanges((current) => ({ ...current, [path]: event.target.value }))}
+                        placeholder="1-z"
+                        aria-label={`Páginas de ${fileName(path)}`}
+                      />
+                    </label>
                   </div>
                   <div className="combine-row-actions">
                     <button disabled={index === 0} title="Primeiro" onClick={() => moveEdge(index, "first")}>⇤</button>
                     <button disabled={index === 0} title="Subir" onClick={() => move(index, -1)}>↑</button>
                     <button disabled={index === inputs.length - 1} title="Descer" onClick={() => move(index, 1)}>↓</button>
                     <button disabled={index === inputs.length - 1} title="Último" onClick={() => moveEdge(index, "last")}>⇥</button>
-                    <button className="danger-quiet" title="Remover" onClick={() => setInputs((current) => current.filter((_, itemIndex) => itemIndex !== index))}><SevenIcon name="close" /></button>
+                    <button className="danger-quiet" title="Remover" onClick={() => {
+                      const removed = path;
+                      setInputs((current) => current.filter((_, itemIndex) => itemIndex !== index));
+                      setPageRanges((current) => {
+                        const next = { ...current };
+                        delete next[removed];
+                        return next;
+                      });
+                    }}><SevenIcon name="close" /></button>
                   </div>
                 </article>
               );

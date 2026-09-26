@@ -1,3 +1,4 @@
+mod accessibility;
 mod advanced;
 mod annotations;
 mod capabilities;
@@ -197,6 +198,12 @@ pub fn run() {
             commands::get_document_metadata,
             commands::update_document_metadata,
             commands::sanitize_document,
+            commands::list_accessibility_tags,
+            commands::session_update_accessibility_properties,
+            commands::session_update_structure_tag,
+            commands::session_delete_structure_tag,
+            commands::session_move_structure_tag,
+            commands::session_auto_tag_basic,
             commands::get_accessibility_report,
             commands::compare_documents,
             commands::start_encrypt_pdf,

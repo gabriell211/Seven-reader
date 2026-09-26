@@ -1099,3 +1099,13 @@ svg { width: 20px; height: 20px; }
 .page-transfer-bar > button.move-pages-button { color:#8a4b57; border-color:#e5c5cc; background:#fff1f3; }
 .page-transfer-bar > button:disabled { opacity:.4; cursor:default; }
 @media (max-width:1050px) { .page-transfer-bar { grid-template-columns:1fr 1fr 80px; } .page-transfer-bar > button { grid-row:2; } }
+
+.layer-import-box,.layer-merge-box { padding:13px; border:1px solid #dfdde8; border-radius:11px; display:grid; gap:10px; background:#faf9ff; }
+.layer-merge-box { grid-template-columns:minmax(150px,1fr) minmax(120px,1fr) auto minmax(120px,1fr) auto; align-items:center; }
+.layer-merge-box > div { display:grid; gap:2px; }
+.layer-merge-box strong { font-size:10px; }
+.layer-merge-box small { color:#8d8f98; font-size:8px; line-height:1.35; }
+.layer-merge-box select { min-width:0; height:36px; padding:0 8px; border:1px solid #d9d8df; border-radius:8px; background:white; font-size:9px; }
+.layer-destructive-actions { display:flex; justify-content:flex-end; }
+.layer-row-actions > button:first-child,.layer-row-actions > button:nth-child(2) { min-width:30px; }
+@media (max-width:760px) { .layer-merge-box { grid-template-columns:1fr; } .layer-merge-box > span { display:none; } }

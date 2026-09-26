@@ -78,6 +78,7 @@ import {
   resolveGeospatialCoordinate,
   getDocumentMetadata,
   getPrintPreflight,
+  validatePdfIso,
   inspectAdvancedPdf,
   isNativeDesktop,
   listPdfFilesInFolder,
@@ -230,6 +231,7 @@ import type {
   NewArticleBox,
   ArticleBoxUpdate,
   InteractiveAssetInfo,
+  IsoValidationReport,
   GeospatialViewportInfo,
   GeospatialCoordinate,
   AdvancedSearchHit,
@@ -471,6 +473,8 @@ export default function App() {
   const [printProductionOpen, setPrintProductionOpen] = useState(false);
   const [printPreflight, setPrintPreflight] = useState<PrintPreflightReport | null>(null);
   const [printPreflightLoading, setPrintPreflightLoading] = useState(false);
+  const [isoValidation, setIsoValidation] = useState<IsoValidationReport | null>(null);
+  const [isoValidationLoading, setIsoValidationLoading] = useState(false);
   const [settings, setSettings] = useState<SevenSettings>(loadSettings);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [protectedView, setProtectedView] = useState(false);
@@ -1818,6 +1822,19 @@ export default function App() {
       setNotice(errorMessage(error));
     } finally {
       setPrintPreflightLoading(false);
+    }
+  };
+
+  const runIsoValidation = async (flavour: string, customProfile?: string) => {
+    if (!document) return;
+    try {
+      setIsoValidationLoading(true);
+      setIsoValidation(await validatePdfIso(document.activePath, flavour, customProfile));
+    } catch (error) {
+      setIsoValidation(null);
+      setNotice(errorMessage(error));
+    } finally {
+      setIsoValidationLoading(false);
     }
   };
 
@@ -3778,9 +3795,13 @@ export default function App() {
         <PrintProductionDialog
           report={printPreflight}
           loading={printPreflightLoading}
+          isoReport={isoValidation}
+          isoLoading={isoValidationLoading}
+          veraPdfAvailable={Boolean(capabilities?.verapdf?.available)}
           pageCount={document.pageCount}
           onClose={() => setPrintProductionOpen(false)}
           onReload={() => void reloadPrintPreflight()}
+          onValidateIso={(flavour, customProfile) => void runIsoValidation(flavour, customProfile)}
           onSetBoxes={(update) => void runSetPageBoxes(update)}
         />
       )}

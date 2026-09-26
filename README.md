@@ -1826,65 +1826,65 @@ Um retângulo visual sobre o conteúdo **não** é redação.
 
 # Marcadores
 
-- [ ] Criar
-- [ ] Renomear
-- [ ] Excluir
-- [ ] Reordenar
-- [ ] Hierarquia
-- [ ] Expandir/recolher
-- [ ] Expandir todos
-- [ ] Recolher todos
-- [ ] Destino
-- [ ] Aparência
-- [ ] Ação
-- [ ] Gerar a partir de estrutura
+- [x] Criar
+- [x] Renomear
+- [x] Excluir
+- [x] Reordenar
+- [x] Hierarquia
+- [x] Expandir/recolher
+- [x] Expandir todos
+- [x] Recolher todos
+- [x] Destino
+- [x] Aparência
+- [x] Ação
+- [x] Gerar a partir de estrutura
 - [ ] Preservar em combinação/conversão
 
 ---
 
 # Anexos
 
-- [ ] Listar
-- [ ] Preview seguro
-- [ ] Abrir com confirmação
-- [ ] Salvar
-- [ ] Adicionar
-- [ ] Remover
-- [ ] Renomear
-- [ ] Descrição
-- [ ] MIME
-- [ ] Hash
-- [ ] Bloquear extensões perigosas
-- [ ] Nunca executar automaticamente
+- [x] Listar
+- [x] Preview seguro
+- [x] Abrir com confirmação
+- [x] Salvar
+- [x] Adicionar
+- [x] Remover
+- [x] Renomear
+- [x] Descrição
+- [x] MIME
+- [x] Hash
+- [x] Bloquear extensões perigosas
+- [x] Nunca executar automaticamente
 
 ---
 
 # Camadas PDF
 
-- [ ] Visualizar OCGs
-- [ ] Mostrar/ocultar
-- [ ] Grupos aninhados
-- [ ] Layer bloqueada/informativa
-- [ ] Listar layers de todas as páginas
+- [x] Visualizar OCGs
+- [x] Mostrar/ocultar
+- [x] Grupos aninhados
+- [x] Layer bloqueada/informativa
+- [x] Listar layers de todas as páginas
 - [ ] Listar apenas layers das páginas visíveis
-- [ ] Reset to Initial Visibility
-- [ ] Apply Print Overrides
-- [ ] Apply Export Overrides
-- [ ] Apply Layer Overrides
-- [ ] Estado inicial
-- [ ] Default State
-- [ ] Intent: View
-- [ ] Intent: Reference
-- [ ] Visibility: sempre/nunca/conforme estado
-- [ ] Print: sempre/nunca/conforme estado
-- [ ] Export: sempre/nunca/conforme estado
-- [ ] Importar arquivo como camada
-- [ ] Reordenar camada
-- [ ] Renomear camada
-- [ ] Editar propriedades
+- [x] Reset to Initial Visibility
+- [x] Apply Print Overrides
+- [x] Apply Export Overrides
+- [x] Apply Layer Overrides
+- [x] Estado inicial
+- [x] Default State
+- [x] Intent: View
+- [x] Intent: Reference
+- [x] Visibility: sempre/nunca/conforme estado
+- [x] Print: sempre/nunca/conforme estado
+- [x] Export: sempre/nunca/conforme estado
+- [x] Importar arquivo como camada
+- [x] Reordenar camada
+- [x] Renomear camada
+- [x] Editar propriedades
 - [ ] Adicionar navegação de camada
-- [ ] Merge layers
-- [ ] Flatten layers
+- [x] Merge layers
+- [x] Flatten layers
 - [ ] Imprimir respeitando visibility
 - [ ] Preservar em save
 - [ ] Preservar em conversão quando possível
@@ -1895,27 +1895,27 @@ Um retângulo visual sobre o conteúdo **não** é redação.
 
 Um Portfólio PDF mantém arquivos independentes dentro de uma unidade integrada.
 
-- [ ] Criar portfólio
-- [ ] Abrir portfólio
-- [ ] Adicionar arquivo
-- [ ] Adicionar pasta
-- [ ] Adicionar scanner
-- [ ] Adicionar página web
-- [ ] Adicionar clipboard
-- [ ] Remover componente
-- [ ] Renomear componente
-- [ ] Editar descrição
-- [ ] Preview de componente
-- [ ] Extrair componente
-- [ ] Pesquisar dentro dos componentes compatíveis
-- [ ] Ordenar lista
-- [ ] Exibição em lista
-- [ ] Navegar por pastas internas
-- [ ] Abrir componente no aplicativo compatível
-- [ ] Preview de PDF/imagem/texto compatível
-- [ ] Editar filename do componente
-- [ ] Editar description
-- [ ] Manter arquivos componentes independentes
+- [x] Criar portfólio
+- [x] Abrir portfólio
+- [x] Adicionar arquivo
+- [x] Adicionar pasta
+- [x] Adicionar scanner
+- [x] Adicionar página web
+- [x] Adicionar clipboard
+- [x] Remover componente
+- [x] Renomear componente
+- [x] Editar descrição
+- [x] Preview de componente
+- [x] Extrair componente
+- [x] Pesquisar dentro dos componentes compatíveis
+- [x] Ordenar lista
+- [x] Exibição em lista
+- [x] Navegar por pastas internas
+- [x] Abrir componente no aplicativo compatível
+- [x] Preview de PDF/imagem/texto compatível
+- [x] Editar filename do componente
+- [x] Editar description
+- [x] Manter arquivos componentes independentes
 - [ ] Assinaturas/certificação do portfólio
 - [ ] Painel de assinaturas do portfólio
 
@@ -2006,17 +2006,17 @@ Módulo profissional.
 
 # Medição
 
-- [ ] Distância
-- [ ] Perímetro
-- [ ] Área
-- [ ] Calibrar escala
-- [ ] Escala por página
-- [ ] Unidades
-- [ ] Snap
-- [ ] Labels
-- [ ] Comentários de medição
-- [ ] Propriedades
-- [ ] Exportar medições
+- [x] Distância
+- [x] Perímetro
+- [x] Área
+- [x] Calibrar escala
+- [x] Escala por página
+- [x] Unidades
+- [x] Snap
+- [x] Labels
+- [x] Comentários de medição
+- [x] Propriedades
+- [x] Exportar medições
 
 ---
 

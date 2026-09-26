@@ -2885,6 +2885,9 @@ pub fn start_ocr_advanced(
     options: ocr::OcrOptions,
 ) -> CommandResult<JobStart> {
     let executable = jobs::require_executable(&["ocrmypdf"], "OCRmyPDF").map_err(ErrorPayload::from)?;
+    if options.clean || options.clean_final {
+        jobs::require_executable(&["unpaper"], "unpaper").map_err(ErrorPayload::from)?;
+    }
     let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
     let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
     let args = options
@@ -2917,6 +2920,9 @@ pub fn start_batch_ocr(
         )));
     }
     options.validated().map_err(ErrorPayload::from)?;
+    if options.clean || options.clean_final {
+        jobs::require_executable(&["unpaper"], "unpaper").map_err(ErrorPayload::from)?;
+    }
 
     let executable = jobs::require_executable(&["ocrmypdf"], "OCRmyPDF").map_err(ErrorPayload::from)?;
     let output_directory = jobs::validated_directory(&output_directory).map_err(ErrorPayload::from)?;

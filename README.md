@@ -1334,9 +1334,9 @@ Além do comportamento de suspeitas:
 Criar a partir de:
 
 - [x] PDF existente
-- [ ] Documento convertido
-- [ ] Página em branco
-- [ ] Scanner
+- [x] Documento convertido
+- [x] Página em branco
+- [x] Scanner
 
 ## Detecção automática
 
@@ -1434,7 +1434,7 @@ Ações suportadas, sempre submetidas à política de segurança:
 
 ## Formatação e validação
 
-- [ ] Texto
+- [x] Texto
 - [ ] Número
 - [ ] Percentual
 - [ ] Data
@@ -1466,7 +1466,7 @@ JavaScript nunca deve ser executado sem política de segurança.
 - [ ] Calculation script
 - [ ] Validation script
 - [ ] Keystroke script
-- [ ] Sandbox/restrições
+- [x] Sandbox/restrições
 
 ## Barcodes
 
@@ -1516,13 +1516,13 @@ JavaScript nunca deve ser executado sem política de segurança.
 ## Preenchimento simples
 
 - [ ] Detectar áreas de preenchimento
-- [ ] Inserir texto
+- [x] Inserir texto
 - [ ] Checkmark
 - [ ] X
 - [ ] Dot
 - [ ] Data
 - [ ] Iniciais
-- [ ] Assinatura
+- [x] Assinatura
 
 ## Assinatura eletrônica local
 
@@ -1584,7 +1584,7 @@ O núcleo local do Seven Reader não deve depender deste módulo.
 - [x] Local
 - [x] Aparência personalizada
 - [x] Timestamp server
-- [ ] Bloquear documento após assinatura
+- [x] Bloquear documento após assinatura
 - [ ] Permitir somente preenchimento
 - [ ] Permitir comentários
 - [ ] Múltiplas assinaturas
@@ -1610,7 +1610,7 @@ O núcleo local do Seven Reader não deve depender deste módulo.
 Quando a biblioteca criptográfica permitir:
 
 - [x] CMS
-- [ ] PKCS#7
+- [x] PKCS#7
 - [x] PAdES
 - [ ] CAdES
 - [x] ETSI compatibility

@@ -887,7 +887,7 @@ Opções:
 - [ ] Reordenar páginas
 - [ ] Remover página
 - [x] Remover arquivo
-- [x] Preview
+- [ ] Preview
 - [x] Combinar
 - [x] Salvar como novo arquivo
 

@@ -437,7 +437,7 @@ pub fn accessibility_report(path: &Path) -> Result<AccessibilityReport, SevenErr
         let has_text = Content::decode(&data)
             .ok()
             .is_some_and(|content| content.operations.iter().any(|operation| {
-                matches!(operation.operator.as_str(), "Tj" | "TJ" | "'" | """)
+                matches!(operation.operator.as_str(), "Tj" | "TJ" | "'" | "\"")
             }));
         if !has_text {
             image_only_pages.push(page_index);

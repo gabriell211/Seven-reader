@@ -122,6 +122,10 @@ import {
   materializePdfPortfolioItem,
   openPdfPortfolioItemExternal,
   searchPdfPortfolioItems,
+  sessionAddPdfPortfolioClipboardText,
+  sessionAddPdfPortfolioClipboardImage,
+  sessionAddPdfPortfolioWeb,
+  sessionAddPdfPortfolioScan,
   sessionAddPdfPortfolioItem,
   sessionConfigurePdfPortfolio,
   sessionSetPdfPortfolioView,
@@ -1892,6 +1896,55 @@ export default function App() {
   const runOpenPortfolioPdf = async (preview: PortfolioPreview) => {
     if (preview.kind !== "pdf") return;
     await openPath(preview.cachePath);
+  };
+
+  const acceptPortfolioRevision = async (summary: DocumentSummary, notice: string) => {
+    await acceptDocumentRevision(summary, notice);
+    await reloadAdvanced(summary.activePath);
+  };
+
+  const runAddPortfolioClipboardText = async (text: string, name: string, folderPath: string) => {
+    if (!document) return;
+    try {
+      const summary = await sessionAddPdfPortfolioClipboardText(document.id, text, name, folderPath);
+      await acceptPortfolioRevision(summary, `Texto do clipboard adicionado como "${name}".`);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runAddPortfolioClipboardImage = async (
+    rgba: number[], width: number, height: number, name: string, folderPath: string,
+  ) => {
+    if (!document) return;
+    try {
+      const summary = await sessionAddPdfPortfolioClipboardImage(
+        document.id, rgba, width, height, name, folderPath,
+      );
+      await acceptPortfolioRevision(summary, `Imagem do clipboard adicionada como "${name}".`);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runAddPortfolioWeb = async (url: string, name: string, folderPath: string) => {
+    if (!document) return;
+    try {
+      const summary = await sessionAddPdfPortfolioWeb(document.id, url, name, folderPath);
+      await acceptPortfolioRevision(summary, `Página web incorporada como "${name}".`);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runAddPortfolioScan = async (dpi: number, name: string, folderPath: string) => {
+    if (!document) return;
+    try {
+      const summary = await sessionAddPdfPortfolioScan(document.id, dpi, name, folderPath);
+      await acceptPortfolioRevision(summary, `Digitalização incorporada como "${name}".`);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
   };
 
   const runAddPortfolioItem = async (

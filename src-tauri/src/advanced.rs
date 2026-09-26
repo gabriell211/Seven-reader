@@ -55,6 +55,15 @@ pub struct AttachmentInfo {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct PortfolioDirectoryImportReport {
+    pub added_files: usize,
+    pub created_folders: usize,
+    pub skipped_files: usize,
+    pub total_bytes: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PortfolioFolderInfo {
     pub object_id: String,
     pub id: i64,
@@ -1073,11 +1082,12 @@ pub fn configure_portfolio(
     atomic_save(document, output)
 }
 
-pub fn create_portfolio_folder(
-    input: &Path,
-    output: &Path,
+fn ensure_folder_path_in_document(
+    document: &mut Document,
+    root_id: ObjectId,
     path: &str,
     description: &str,
+    next_id: &mut i64,
 ) -> Result<usize, SevenError> {
     let segments = path
         .trim()
@@ -1087,18 +1097,13 @@ pub fn create_portfolio_folder(
         .map(valid_folder_segment)
         .collect::<Result<Vec<_>, _>>()?;
     if segments.is_empty() {
-        return Err(SevenError::OperationRejected("Informe uma pasta abaixo da raiz".into()));
+        return Ok(0);
     }
 
-    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
-    let collection_id = ensure_collection_id(&mut document, "details")?;
-    let root_id = ensure_portfolio_root_folder(&mut document, collection_id)?;
-    let mut next_id = max_portfolio_folder_id(&document, root_id) + 1;
     let mut parent = root_id;
     let mut created = 0usize;
-
     for (index, segment) in segments.iter().enumerate() {
-        if let Some(existing) = folder_child_named(&document, parent, segment) {
+        if let Some(existing) = folder_child_named(document, parent, segment) {
             parent = existing;
             if index + 1 == segments.len() && !description.trim().is_empty() {
                 document
@@ -1113,7 +1118,7 @@ pub fn create_portfolio_folder(
 
         let mut folder = dictionary! {
             "Type" => "Folder",
-            "ID" => next_id,
+            "ID" => *next_id,
             "Name" => Object::string_literal(*segment),
             "Parent" => parent,
         };
@@ -1121,14 +1126,173 @@ pub fn create_portfolio_folder(
             folder.set("Desc", Object::string_literal(description.trim()));
         }
         let id = document.add_object(folder);
-        append_folder_child(&mut document, parent, id)?;
+        append_folder_child(document, parent, id)?;
         parent = id;
-        next_id += 1;
+        *next_id += 1;
         created += 1;
+    }
+    Ok(created)
+}
+
+fn safe_import_folder_segment(value: &str) -> String {
+    let mut output = value
+        .chars()
+        .map(|ch| if matches!(ch, '/' | '\\' | ':' | '?' | '*' | '"' | '<' | '>' | '|') { '_' } else { ch })
+        .collect::<String>();
+    while output.ends_with('.') || output.ends_with(' ') {
+        output.pop();
+    }
+    if output.trim().is_empty() {
+        "Pasta".into()
+    } else {
+        output.chars().take(255).collect()
+    }
+}
+
+pub fn create_portfolio_folder(
+    input: &Path,
+    output: &Path,
+    path: &str,
+    description: &str,
+) -> Result<usize, SevenError> {
+    if path.trim().trim_matches('/').is_empty() {
+        return Err(SevenError::OperationRejected("Informe uma pasta abaixo da raiz".into()));
+    }
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let collection_id = ensure_collection_id(&mut document, "details")?;
+    let root_id = ensure_portfolio_root_folder(&mut document, collection_id)?;
+    let mut next_id = max_portfolio_folder_id(&document, root_id) + 1;
+    let created = ensure_folder_path_in_document(
+        &mut document,
+        root_id,
+        path,
+        description,
+        &mut next_id,
+    )?;
+    atomic_save(document, output)?;
+    Ok(created)
+}
+
+pub fn import_directory_to_portfolio(
+    input: &Path,
+    output: &Path,
+    directory: &Path,
+    target_path: &str,
+) -> Result<PortfolioDirectoryImportReport, SevenError> {
+    if !directory.is_dir() {
+        return Err(SevenError::NotFound(directory.to_string_lossy().into_owned()));
+    }
+    let directory = fs::canonicalize(directory)
+        .map_err(|error| SevenError::InvalidPath(error.to_string()))?;
+
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let collection_id = ensure_collection_id(&mut document, "details")?;
+    let root_id = ensure_portfolio_root_folder(&mut document, collection_id)?;
+    let normalized_target = if target_path.trim().trim_matches('/').is_empty() {
+        "/".to_owned()
+    } else {
+        format!("/{}", target_path.trim().trim_matches('/'))
+    };
+    if resolve_portfolio_folder_path(&document, root_id, &normalized_target).is_none() {
+        return Err(SevenError::OperationRejected("Pasta de destino do portfólio não encontrada".into()));
+    }
+
+    let base_name = safe_import_folder_segment(
+        directory.file_name().and_then(|value| value.to_str()).unwrap_or("Pasta")
+    );
+    let imported_root = if normalized_target == "/" {
+        format!("/{base_name}")
+    } else {
+        format!("{}/{}", normalized_target.trim_end_matches('/'), base_name)
+    };
+
+    let mut next_id = max_portfolio_folder_id(&document, root_id) + 1;
+    let mut report = PortfolioDirectoryImportReport {
+        added_files: 0,
+        created_folders: ensure_folder_path_in_document(
+            &mut document, root_id, &imported_root, "", &mut next_id,
+        )?,
+        skipped_files: 0,
+        total_bytes: 0,
+    };
+
+    let mut stack = vec![(directory.clone(), imported_root.clone(), 0usize)];
+    while let Some((disk_dir, portfolio_path, depth)) = stack.pop() {
+        if depth > 32 {
+            return Err(SevenError::OperationRejected(
+                "A pasta excede 32 níveis de profundidade".into(),
+            ));
+        }
+        let entries = fs::read_dir(&disk_dir)
+            .map_err(|error| SevenError::Io(error.to_string()))?;
+        for entry in entries {
+            let entry = entry.map_err(|error| SevenError::Io(error.to_string()))?;
+            let file_type = entry.file_type().map_err(|error| SevenError::Io(error.to_string()))?;
+            if file_type.is_symlink() {
+                report.skipped_files += 1;
+                continue;
+            }
+            let path = entry.path();
+            if file_type.is_dir() {
+                let segment = safe_import_folder_segment(
+                    entry.file_name().to_string_lossy().as_ref()
+                );
+                let child_path = format!("{}/{}", portfolio_path.trim_end_matches('/'), segment);
+                report.created_folders += ensure_folder_path_in_document(
+                    &mut document, root_id, &child_path, "", &mut next_id,
+                )?;
+                stack.push((path, child_path, depth + 1));
+                continue;
+            }
+            if !file_type.is_file() {
+                report.skipped_files += 1;
+                continue;
+            }
+            if report.added_files >= 1000 {
+                return Err(SevenError::OperationRejected(
+                    "Uma importação de pasta pode conter no máximo 1.000 arquivos".into(),
+                ));
+            }
+
+            let file_name = entry.file_name().to_string_lossy().into_owned();
+            if attachment_is_dangerous(&file_name) {
+                report.skipped_files += 1;
+                continue;
+            }
+            let metadata = entry.metadata().map_err(|error| SevenError::Io(error.to_string()))?;
+            let next_total = report.total_bytes.saturating_add(metadata.len());
+            if next_total > 2 * 1024 * 1024 * 1024 {
+                return Err(SevenError::OperationRejected(
+                    "A importação de pasta excede 2 GiB de dados".into(),
+                ));
+            }
+            let tree_key = format!(
+                "{}/{}",
+                portfolio_path.trim_matches('/'),
+                file_name
+            );
+            match insert_attachment_into_document(
+                &mut document,
+                &path,
+                &file_name,
+                "",
+                &tree_key,
+                true,
+            ) {
+                Ok(_) => {
+                    report.added_files += 1;
+                    report.total_bytes = next_total;
+                }
+                Err(SevenError::OperationRejected(_)) => {
+                    report.skipped_files += 1;
+                }
+                Err(error) => return Err(error),
+            }
+        }
     }
 
     atomic_save(document, output)?;
-    Ok(created)
+    Ok(report)
 }
 
 pub fn set_portfolio_view(

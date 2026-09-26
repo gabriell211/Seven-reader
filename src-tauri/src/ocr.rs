@@ -102,11 +102,8 @@ impl OcrOptions {
             args.push("--pages".into());
             args.push(range.trim().into());
         }
-        args.push(match self.mode.as_str() {
-            "redo" => "--redo-ocr".into(),
-            "force" => "--force-ocr".into(),
-            _ => "--skip-text".into(),
-        });
+        args.push("--mode".into());
+        args.push(self.mode.clone());
         if let Some(sidecar) = &self.sidecar {
             if !sidecar.trim().is_empty() {
                 args.push("--sidecar".into());

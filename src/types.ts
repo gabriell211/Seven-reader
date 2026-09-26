@@ -11,7 +11,8 @@ export type CapabilityKey =
   | "openssl"
   | "tesseract"
   | "unpaper"
-  | "web_pdf";
+  | "web_pdf"
+  | "verapdf";
 
 export interface Capability {
   available: boolean;

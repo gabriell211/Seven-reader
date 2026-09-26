@@ -25,6 +25,7 @@ export function SecurityDialog({ mode, currentPdf, onClose, onEncrypt, onDecrypt
     removeAnnotations: false,
     removeForms: false,
     removeMultimedia: false,
+    cleanupStructure: false,
   });
 
   const chooseOutput = async (suffix: string) => save({
@@ -79,6 +80,7 @@ export function SecurityDialog({ mode, currentPdf, onClose, onEncrypt, onDecrypt
                   ["removeAnnotations", "Comentários e anotações", "Remove anotações não-widget das páginas."],
                   ["removeForms", "Formulários AcroForm", "Remove widgets e o dicionário AcroForm."],
                   ["removeMultimedia", "Rich Media, 3D e multimídia", "Remove RichMedia, 3D, Movie, Sound, Screen e Renditions."],
+                  ["cleanupStructure", "Clean Up estrutural", "Remove thumbnails, links quebrados e marcadores inválidos antes da regravação."],
                 ] as const).map(([key, title, detail]) => (
                   <label className="check-row" key={key}>
                     <input type="checkbox" checked={options[key]} onChange={(event) => setOptions((current) => ({ ...current, [key]: event.target.checked }))} />

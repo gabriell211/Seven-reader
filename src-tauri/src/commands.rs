@@ -22,6 +22,30 @@ use crate::{
 use serde::Serialize;
 use std::{fs, process::Command, sync::atomic::Ordering};
 use tauri::{AppHandle, State};
+use tauri_plugin_opener::OpenerExt;
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PortfolioPreview {
+    pub object_id: String,
+    pub name: String,
+    pub mime: String,
+    pub kind: String,
+    pub cache_path: String,
+    pub text: Option<String>,
+    pub size: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PortfolioSearchHit {
+    pub object_id: String,
+    pub name: String,
+    pub mime: String,
+    pub collection_path: String,
+    pub excerpt: String,
+    pub occurrences: usize,
+}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1243,6 +1267,240 @@ pub struct SessionFlattenLayersResult {
 pub struct SessionPortfolioFolderResult {
     pub document: pdf::DocumentSummary,
     pub changed: usize,
+}
+
+fn portfolio_preview_kind(name: &str, mime: &str) -> &'static str {
+    let extension = std::path::Path::new(name)
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if extension == "pdf" || mime == "application/pdf" {
+        "pdf"
+    } else if matches!(extension.as_str(), "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp" | "tif" | "tiff")
+        || mime.starts_with("image/")
+    {
+        "image"
+    } else if matches!(extension.as_str(), "txt" | "csv" | "json" | "xml" | "html" | "htm" | "md")
+        || mime.starts_with("text/")
+        || matches!(mime, "application/json" | "application/xml")
+    {
+        "text"
+    } else {
+        "file"
+    }
+}
+
+fn safe_portfolio_cache_name(name: &str) -> String {
+    let file_name = std::path::Path::new(name)
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("component.bin");
+    let sanitized = file_name
+        .chars()
+        .map(|ch| if ch.is_ascii_alphanumeric() || matches!(ch, '.' | '-' | '_' | ' ') { ch } else { '_' })
+        .collect::<String>();
+    if sanitized.trim().is_empty() { "component.bin".into() } else { sanitized }
+}
+
+fn materialize_portfolio_payload(
+    document_path: &std::path::Path,
+    cache_root: &std::path::Path,
+    document_id: &str,
+    object_id: &str,
+) -> Result<PortfolioPreview, SevenError> {
+    let (info, data) = advanced::read_attachment_payload(document_path, object_id)?;
+    if advanced::attachment_is_dangerous(&info.name) {
+        return Err(SevenError::OperationRejected(
+            "Este tipo de componente é bloqueado para preview e abertura".into(),
+        ));
+    }
+    if data.len() > 512 * 1024 * 1024 {
+        return Err(SevenError::OperationRejected(
+            "Componente excede o limite de 512 MiB para materialização".into(),
+        ));
+    }
+
+    let folder = cache_root.join("portfolio").join(document_id);
+    fs::create_dir_all(&folder).map_err(|error| SevenError::Io(error.to_string()))?;
+    let cache_path = folder.join(format!(
+        "{}-{}",
+        object_id.replace(':', "-"),
+        safe_portfolio_cache_name(&info.name),
+    ));
+    fs::write(&cache_path, &data).map_err(|error| SevenError::Io(error.to_string()))?;
+    let kind = portfolio_preview_kind(&info.name, &info.mime).to_owned();
+    let text = if kind == "text" {
+        let preview = &data[..data.len().min(2 * 1024 * 1024)];
+        Some(String::from_utf8_lossy(preview).chars().take(200_000).collect())
+    } else {
+        None
+    };
+
+    Ok(PortfolioPreview {
+        object_id: object_id.to_owned(),
+        name: info.name,
+        mime: info.mime,
+        kind,
+        cache_path: cache_path.to_string_lossy().into_owned(),
+        text,
+        size: data.len(),
+    })
+}
+
+#[tauri::command]
+pub async fn materialize_pdf_portfolio_item(
+    state: State<'_, AppState>,
+    document_id: String,
+    object_id: String,
+) -> CommandResult<PortfolioPreview> {
+    let document = state
+        .documents
+        .lock()
+        .get(&document_id)
+        .cloned()
+        .ok_or_else(|| ErrorPayload::from(SevenError::DocumentNotOpen))?;
+    let cache_root = state.cache_dir.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        materialize_portfolio_payload(
+            document.active_path(),
+            &cache_root,
+            &document_id,
+            &object_id,
+        )
+    })
+    .await
+    .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub async fn open_pdf_portfolio_item_external(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    document_id: String,
+    object_id: String,
+) -> CommandResult<()> {
+    let document = state
+        .documents
+        .lock()
+        .get(&document_id)
+        .cloned()
+        .ok_or_else(|| ErrorPayload::from(SevenError::DocumentNotOpen))?;
+    let cache_root = state.cache_dir.clone();
+    let preview = tauri::async_runtime::spawn_blocking(move || {
+        materialize_portfolio_payload(
+            document.active_path(),
+            &cache_root,
+            &document_id,
+            &object_id,
+        )
+    })
+    .await
+    .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
+    .map_err(ErrorPayload::from)?;
+
+    app.opener()
+        .open_path(&preview.cache_path, None::<&str>)
+        .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn search_pdf_portfolio_items(
+    state: State<'_, AppState>,
+    document_id: String,
+    query: String,
+) -> CommandResult<Vec<PortfolioSearchHit>> {
+    let query = query.trim().to_owned();
+    if query.is_empty() || query.chars().count() > 512 {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "A pesquisa deve conter entre 1 e 512 caracteres".into(),
+        )));
+    }
+    let document = state
+        .documents
+        .lock()
+        .get(&document_id)
+        .cloned()
+        .ok_or_else(|| ErrorPayload::from(SevenError::DocumentNotOpen))?;
+    let cache_root = state.cache_dir.clone();
+    let resource_dir = state.resource_dir.clone();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        let attachments = advanced::list_attachments(document.active_path())?;
+        let needle = query.to_lowercase();
+        let pdfium = capabilities::bind_pdfium(&resource_dir)
+            .map_err(SevenError::PdfEngineUnavailable)?;
+        let mut hits = Vec::new();
+
+        for attachment in attachments {
+            if advanced::attachment_is_dangerous(&attachment.name) {
+                continue;
+            }
+            let kind = portfolio_preview_kind(&attachment.name, &attachment.mime);
+            if !matches!(kind, "pdf" | "text") {
+                continue;
+            }
+            let preview = match materialize_portfolio_payload(
+                document.active_path(),
+                &cache_root,
+                &document_id,
+                &attachment.object_id,
+            ) {
+                Ok(value) => value,
+                Err(_) => continue,
+            };
+
+            let haystack = if kind == "text" {
+                preview.text.unwrap_or_default()
+            } else {
+                let pdf = match pdfium.load_pdf_from_file(&preview.cache_path, None) {
+                    Ok(pdf) => pdf,
+                    Err(_) => continue,
+                };
+                let mut text = String::new();
+                for page in pdf.pages().iter().take(2000) {
+                    if text.len() >= 2_000_000 {
+                        break;
+                    }
+                    if let Ok(page_text) = page.text() {
+                        text.push_str(&page_text.all());
+                        text.push('\n');
+                    }
+                }
+                text
+            };
+
+            let lower = haystack.to_lowercase();
+            let occurrences = lower.matches(&needle).count();
+            if occurrences == 0 {
+                continue;
+            }
+            let first = lower.find(&needle).unwrap_or(0);
+            let start = first.saturating_sub(120);
+            let excerpt = haystack
+                .chars()
+                .skip(start)
+                .take(360)
+                .collect::<String>()
+                .replace(['\r', '\n'], " ");
+
+            hits.push(PortfolioSearchHit {
+                object_id: attachment.object_id,
+                name: attachment.name,
+                mime: attachment.mime,
+                collection_path: attachment.collection_path,
+                excerpt,
+                occurrences,
+            });
+        }
+
+        Ok::<_, SevenError>(hits)
+    })
+    .await
+    .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
+    .map_err(ErrorPayload::from)
 }
 
 #[tauri::command]

@@ -7,19 +7,28 @@ import { SevenIcon } from "./SevenIcon";
 interface CombineDialogProps {
   openDocuments: DocumentSummary[];
   officeAvailable: boolean;
+  webAvailable: boolean;
+  onListFolder: (path: string) => Promise<string[]>;
   onClose: () => void;
   onCombine: (inputs: string[], output: string) => Promise<void>;
 }
 
+function isWebSource(value: string): boolean {
+  return value.startsWith("https://") || value.startsWith("http://");
+}
+
 function fileName(path: string): string {
+  if (isWebSource(path)) return path;
   return path.replace(/\\/g, "/").split("/").pop() || path;
 }
 
 function extension(path: string): string {
+  if (isWebSource(path)) return "url";
   return fileName(path).split(".").pop()?.toLowerCase() || "";
 }
 
-function sourceKind(path: string): "pdf" | "office" | "image" | "other" {
+function sourceKind(path: string): "pdf" | "office" | "image" | "web" | "other" {
+  if (isWebSource(path)) return "web";
   const ext = extension(path);
   if (ext === "pdf") return "pdf";
   if (["doc","docx","xls","xlsx","ppt","pptx","odt","ods","odp","rtf","txt","html","htm"].includes(ext)) return "office";
@@ -30,11 +39,15 @@ function sourceKind(path: string): "pdf" | "office" | "image" | "other" {
 export function CombineDialog({
   openDocuments,
   officeAvailable,
+  webAvailable,
+  onListFolder,
   onClose,
   onCombine,
 }: CombineDialogProps) {
   const [inputs, setInputs] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [webUrl, setWebUrl] = useState("");
+  const [folderLoading, setFolderLoading] = useState(false);
 
   const acceptedExtensions = useMemo(() => [
     "pdf",
@@ -82,6 +95,33 @@ export function CombineDialog({
 
   const addOpenDocuments = () => append(openDocuments.map((document) => document.path));
 
+  const addFolder = async () => {
+    const selected = await open({
+      title: "Adicionar pasta de PDFs",
+      directory: true,
+      multiple: false,
+    });
+    if (typeof selected !== "string") return;
+    try {
+      setFolderLoading(true);
+      append(await onListFolder(selected));
+    } finally {
+      setFolderLoading(false);
+    }
+  };
+
+  const addWebUrl = () => {
+    const value = webUrl.trim();
+    if (!webAvailable || !/^https?:\/\//i.test(value)) return;
+    setInputs((current) => {
+      if (current.length >= 100 || current.some((item) => item.toLowerCase() === value.toLowerCase())) {
+        return current;
+      }
+      return [...current, value];
+    });
+    setWebUrl("");
+  };
+
   const move = (index: number, direction: -1 | 1) => {
     setInputs((current) => {
       const target = index + direction;
@@ -122,6 +162,7 @@ export function CombineDialog({
   const officeCount = inputs.filter((path) => sourceKind(path) === "office").length;
   const imageCount = inputs.filter((path) => sourceKind(path) === "image").length;
   const pdfCount = inputs.filter((path) => sourceKind(path) === "pdf").length;
+  const webCount = inputs.filter((path) => sourceKind(path) === "web").length;
 
   return (
     <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
@@ -137,17 +178,34 @@ export function CombineDialog({
 
         <div className="workflow-body">
           <div className="combine-summary-grid">
-            <span><b>{inputs.length}</b> Arquivos</span>
+            <span><b>{inputs.length}</b> Fontes</span>
             <span><b>{pdfCount}</b> PDFs</span>
             <span><b>{officeCount}</b> Documentos</span>
             <span><b>{imageCount}</b> Imagens</span>
+            <span><b>{webCount}</b> Web</span>
           </div>
 
           <div className="combine-toolbar">
             <button className="primary-button" onClick={() => void chooseFiles()}><SevenIcon name="open" /> Adicionar arquivos</button>
+            <button className="secondary-light-button" disabled={folderLoading} onClick={() => void addFolder()}><SevenIcon name="folder" /> {folderLoading ? "Lendo pasta…" : "Adicionar pasta"}</button>
             <button className="secondary-light-button" disabled={!openDocuments.length} onClick={addOpenDocuments}><SevenIcon name="pages" /> Adicionar PDFs abertos</button>
             <button className="secondary-light-button" disabled={!inputs.length} onClick={() => setInputs([])}>Limpar lista</button>
           </div>
+
+          <section className="combine-web-source">
+            <label className="workflow-field">
+              <span>Página web</span>
+              <input
+                value={webUrl}
+                disabled={!webAvailable}
+                onChange={(event) => setWebUrl(event.target.value)}
+                onKeyDown={(event) => event.key === "Enter" && addWebUrl()}
+                placeholder="https://exemplo.com/pagina"
+              />
+              <small>{webAvailable ? "Chrome/Chromium/Edge captura a página localmente antes da combinação." : "Navegador compatível não detectado."}</small>
+            </label>
+            <button className="secondary-light-button" disabled={!webAvailable || !/^https?:\/\//i.test(webUrl.trim())} onClick={addWebUrl}>Adicionar URL</button>
+          </section>
 
           {!officeAvailable && (
             <div className="organizer-note">

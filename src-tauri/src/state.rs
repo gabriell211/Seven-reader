@@ -1,5 +1,6 @@
 use parking_lot::Mutex;
 use serde::Serialize;
+use crate::watch_folder::WatchFolderConfig;
 use std::{
     collections::HashMap,
     path::PathBuf,
@@ -55,9 +56,16 @@ pub struct JobRuntime {
     pub paused: Arc<AtomicBool>,
 }
 
+#[derive(Debug)]
+pub struct WatchFolderRuntime {
+    pub config: WatchFolderConfig,
+    pub stop: Arc<AtomicBool>,
+}
+
 pub struct AppState {
     pub documents: Arc<Mutex<HashMap<String, OpenDocument>>>,
     pub jobs: Arc<Mutex<HashMap<String, JobRuntime>>>,
+    pub watch_folders: Arc<Mutex<HashMap<String, WatchFolderRuntime>>>,
     pub cache_dir: PathBuf,
     pub resource_dir: PathBuf,
 }
@@ -72,6 +80,7 @@ impl AppState {
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
             jobs: Arc::new(Mutex::new(HashMap::new())),
+            watch_folders: Arc::new(Mutex::new(HashMap::new())),
             cache_dir,
             resource_dir,
         }

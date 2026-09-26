@@ -5,13 +5,102 @@ use crate::{
 use serde::Serialize;
 use std::{
     path::{Path, PathBuf},
-    process::{Command, Stdio},
+    process::{Child, Command, Stdio},
     sync::{atomic::{AtomicBool, Ordering}, Arc},
     thread,
     time::Duration,
 };
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
+
+#[cfg(unix)]
+fn set_process_paused(pid: u32, paused: bool) -> Result<(), SevenError> {
+    let signal = if paused { libc::SIGSTOP } else { libc::SIGCONT };
+    let result = unsafe { libc::kill(pid as i32, signal) };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(SevenError::Operation(std::io::Error::last_os_error().to_string()))
+    }
+}
+
+#[cfg(windows)]
+fn set_process_paused(pid: u32, paused: bool) -> Result<(), SevenError> {
+    use windows_sys::Win32::{
+        Foundation::{CloseHandle, INVALID_HANDLE_VALUE},
+        System::{
+            Diagnostics::ToolHelp::{
+                CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD,
+                THREADENTRY32,
+            },
+            Threading::{OpenThread, ResumeThread, SuspendThread, THREAD_SUSPEND_RESUME},
+        },
+    };
+
+    let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0) };
+    if snapshot == INVALID_HANDLE_VALUE {
+        return Err(SevenError::Operation(std::io::Error::last_os_error().to_string()));
+    }
+
+    let mut entry = THREADENTRY32 {
+        dwSize: std::mem::size_of::<THREADENTRY32>() as u32,
+        ..Default::default()
+    };
+    let mut found = unsafe { Thread32First(snapshot, &mut entry) } != 0;
+    let mut touched = 0usize;
+    let mut first_error: Option<String> = None;
+
+    while found {
+        if entry.th32OwnerProcessID == pid {
+            let thread = unsafe { OpenThread(THREAD_SUSPEND_RESUME, 0, entry.th32ThreadID) };
+            if !thread.is_null() {
+                let result = unsafe {
+                    if paused {
+                        SuspendThread(thread)
+                    } else {
+                        ResumeThread(thread)
+                    }
+                };
+                if result == u32::MAX && first_error.is_none() {
+                    first_error = Some(std::io::Error::last_os_error().to_string());
+                } else if result != u32::MAX {
+                    touched += 1;
+                }
+                unsafe { CloseHandle(thread) };
+            }
+        }
+        found = unsafe { Thread32Next(snapshot, &mut entry) } != 0;
+    }
+    unsafe { CloseHandle(snapshot) };
+
+    if touched == 0 {
+        return Err(SevenError::Operation(
+            first_error.unwrap_or_else(|| "Nenhuma thread do processo pôde ser pausada/retomada".into()),
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(not(any(unix, windows)))]
+fn set_process_paused(_pid: u32, _paused: bool) -> Result<(), SevenError> {
+    Err(SevenError::CapabilityUnavailable(
+        "Pausa de processo não suportada neste sistema".into(),
+    ))
+}
+
+fn supervise_pause(
+    child: &Child,
+    pause_requested: &AtomicBool,
+    process_is_paused: &mut bool,
+) -> Result<bool, SevenError> {
+    let requested = pause_requested.load(Ordering::Relaxed);
+    if requested == *process_is_paused {
+        return Ok(requested);
+    }
+    set_process_paused(child.id(), requested)?;
+    *process_is_paused = requested;
+    Ok(requested)
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -75,6 +164,7 @@ pub fn start_process_job(
 ) -> JobStart {
     let id = Uuid::new_v4().to_string();
     let cancel = Arc::new(AtomicBool::new(false));
+    let paused = Arc::new(AtomicBool::new(false));
     let status = JobStatus {
         id: id.clone(),
         kind: kind.to_owned(),
@@ -85,7 +175,7 @@ pub fn start_process_job(
         error: None,
     };
 
-    state.jobs.lock().insert(id.clone(), JobRuntime { status, cancel: cancel.clone() });
+    state.jobs.lock().insert(id.clone(), JobRuntime { status, cancel: cancel.clone(), paused: paused.clone() });
     let jobs = state.jobs.clone();
     let id_for_thread = id.clone();
 
@@ -106,12 +196,36 @@ pub fn start_process_job(
             }
         };
 
+        let mut process_is_paused = false;
         loop {
             if cancel.load(Ordering::Relaxed) {
+                if process_is_paused {
+                    let _ = set_process_paused(child.id(), false);
+                }
                 let _ = child.kill();
                 let _ = child.wait();
                 update_job(&jobs, &app, &id_for_thread, JobUpdate::new("cancelled", "Cancelado"));
                 return;
+            }
+
+            match supervise_pause(&child, &paused, &mut process_is_paused) {
+                Ok(true) => {
+                    update_job(&jobs, &app, &id_for_thread, JobUpdate::new("paused", "Pausado"));
+                    thread::sleep(Duration::from_millis(250));
+                    continue;
+                }
+                Ok(false) => {}
+                Err(error) => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    update_job(
+                        &jobs,
+                        &app,
+                        &id_for_thread,
+                        JobUpdate::new("failed", "Falha ao pausar/retomar").error(error.to_string()),
+                    );
+                    return;
+                }
             }
 
             match child.try_wait() {
@@ -156,6 +270,7 @@ where
 {
     let id = Uuid::new_v4().to_string();
     let cancel = Arc::new(AtomicBool::new(false));
+    let paused = Arc::new(AtomicBool::new(false));
     let status = JobStatus {
         id: id.clone(),
         kind: kind.to_owned(),
@@ -166,7 +281,7 @@ where
         error: None,
     };
 
-    state.jobs.lock().insert(id.clone(), JobRuntime { status, cancel: cancel.clone() });
+    state.jobs.lock().insert(id.clone(), JobRuntime { status, cancel: cancel.clone(), paused: paused.clone() });
     let jobs = state.jobs.clone();
     let id_for_thread = id.clone();
     let postprocess_label = postprocess_label.to_owned();
@@ -198,12 +313,35 @@ where
             }
         };
 
+        let mut process_is_paused = false;
         loop {
             if cancel.load(Ordering::Relaxed) {
+                if process_is_paused {
+                    let _ = set_process_paused(child.id(), false);
+                }
                 let _ = child.kill();
                 let _ = child.wait();
                 update_job(&jobs, &app, &id_for_thread, JobUpdate::new("cancelled", "Cancelado"));
                 return;
+            }
+            match supervise_pause(&child, &paused, &mut process_is_paused) {
+                Ok(true) => {
+                    update_job(&jobs, &app, &id_for_thread, JobUpdate::new("paused", "Pausado").progress(0.1));
+                    thread::sleep(Duration::from_millis(250));
+                    continue;
+                }
+                Ok(false) => {}
+                Err(error) => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    update_job(
+                        &jobs,
+                        &app,
+                        &id_for_thread,
+                        JobUpdate::new("failed", "Falha ao pausar/retomar").error(error.to_string()),
+                    );
+                    return;
+                }
             }
             match child.try_wait() {
                 Ok(Some(status)) if status.success() => break,
@@ -231,6 +369,14 @@ where
             }
         }
 
+        while paused.load(Ordering::Relaxed) {
+            if cancel.load(Ordering::Relaxed) {
+                update_job(&jobs, &app, &id_for_thread, JobUpdate::new("cancelled", "Cancelado"));
+                return;
+            }
+            update_job(&jobs, &app, &id_for_thread, JobUpdate::new("paused", "Pausado antes do pós-processamento").progress(0.8));
+            thread::sleep(Duration::from_millis(250));
+        }
         if cancel.load(Ordering::Relaxed) {
             update_job(&jobs, &app, &id_for_thread, JobUpdate::new("cancelled", "Cancelado"));
             return;
@@ -280,6 +426,7 @@ pub fn start_process_sequence_job(
 ) -> JobStart {
     let id = Uuid::new_v4().to_string();
     let cancel = Arc::new(AtomicBool::new(false));
+    let paused = Arc::new(AtomicBool::new(false));
     let status = JobStatus {
         id: id.clone(),
         kind: kind.to_owned(),
@@ -290,7 +437,7 @@ pub fn start_process_sequence_job(
         error: None,
     };
 
-    state.jobs.lock().insert(id.clone(), JobRuntime { status, cancel: cancel.clone() });
+    state.jobs.lock().insert(id.clone(), JobRuntime { status, cancel: cancel.clone(), paused: paused.clone() });
     let jobs = state.jobs.clone();
     let id_for_thread = id.clone();
 
@@ -307,6 +454,19 @@ pub fn start_process_sequence_job(
 
         let total = steps.len() as f64;
         for (index, step) in steps.into_iter().enumerate() {
+            while paused.load(Ordering::Relaxed) {
+                if cancel.load(Ordering::Relaxed) {
+                    update_job(&jobs, &app, &id_for_thread, JobUpdate::new("cancelled", "Cancelado"));
+                    return;
+                }
+                update_job(
+                    &jobs,
+                    &app,
+                    &id_for_thread,
+                    JobUpdate::new("paused", "Fila pausada").progress(index as f64 / total),
+                );
+                thread::sleep(Duration::from_millis(250));
+            }
             if cancel.load(Ordering::Relaxed) {
                 update_job(&jobs, &app, &id_for_thread, JobUpdate::new("cancelled", "Cancelado"));
                 return;
@@ -339,12 +499,41 @@ pub fn start_process_sequence_job(
                 }
             };
 
+            let mut process_is_paused = false;
             loop {
                 if cancel.load(Ordering::Relaxed) {
+                    if process_is_paused {
+                        let _ = set_process_paused(child.id(), false);
+                    }
                     let _ = child.kill();
                     let _ = child.wait();
                     update_job(&jobs, &app, &id_for_thread, JobUpdate::new("cancelled", "Cancelado"));
                     return;
+                }
+
+                match supervise_pause(&child, &paused, &mut process_is_paused) {
+                    Ok(true) => {
+                        update_job(
+                            &jobs,
+                            &app,
+                            &id_for_thread,
+                            JobUpdate::new("paused", format!("Pausado · {}", step.label)).progress(progress),
+                        );
+                        thread::sleep(Duration::from_millis(250));
+                        continue;
+                    }
+                    Ok(false) => {}
+                    Err(error) => {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        update_job(
+                            &jobs,
+                            &app,
+                            &id_for_thread,
+                            JobUpdate::new("failed", "Falha ao pausar/retomar").error(error.to_string()),
+                        );
+                        return;
+                    }
                 }
 
                 match child.try_wait() {

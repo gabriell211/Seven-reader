@@ -687,7 +687,7 @@ Não converter o documento inteiro em imagens para simular edição.
 - [ ] Mover
 - [ ] Redimensionar
 - [ ] Rotacionar
-- [x] Duplicar
+- [ ] Duplicar
 - [ ] Excluir
 - [ ] Ordem de empilhamento
 - [ ] Propriedades
@@ -1102,7 +1102,7 @@ Ao adicionar um arquivo, detectar:
 ## Presets
 
 - [x] Criar preset
-- [ ] Duplicar
+- [x] Duplicar
 - [x] Editar
 - [x] Excluir
 - [x] Importar

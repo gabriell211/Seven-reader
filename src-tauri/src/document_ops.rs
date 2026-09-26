@@ -1,5 +1,5 @@
 use crate::error::SevenError;
-use lopdf::{Dictionary, Document, Object};
+use lopdf::{content::Content, Dictionary, Document, Object};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 
@@ -55,6 +55,8 @@ pub struct AccessibilityCheck {
     pub passed: bool,
     pub severity: String,
     pub detail: String,
+    pub page_index: Option<usize>,
+    pub fixable: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -63,6 +65,14 @@ pub struct AccessibilityReport {
     pub tagged: bool,
     pub language: Option<String>,
     pub title: Option<String>,
+    pub display_document_title: bool,
+    pub tag_count: usize,
+    pub figure_count: usize,
+    pub figures_missing_alt: usize,
+    pub form_field_count: usize,
+    pub form_fields_missing_description: usize,
+    pub pages_missing_tab_order: usize,
+    pub image_only_pages: Vec<usize>,
     pub checks: Vec<AccessibilityCheck>,
 }
 
@@ -338,39 +348,205 @@ pub fn accessibility_report(path: &Path) -> Result<AccessibilityReport, SevenErr
         .and_then(|object| match object { Object::Boolean(value) => Some(*value), _ => None })
         .unwrap_or(false);
     let tagged = has_struct_tree && marked;
+    let display_document_title = catalog
+        .get(b"ViewerPreferences")
+        .ok()
+        .and_then(|value| match value {
+            Object::Dictionary(dictionary) => Some(dictionary),
+            Object::Reference(id) => document.get_object(*id).ok()?.as_dict().ok(),
+            _ => None,
+        })
+        .and_then(|dictionary| dictionary.get(b"DisplayDocTitle").ok())
+        .and_then(|value| value.as_bool().ok())
+        .unwrap_or(false);
 
-    let checks = vec![
-        AccessibilityCheck {
-            id: "tagged".into(),
-            label: "PDF marcado (Tagged PDF)".into(),
-            passed: tagged,
-            severity: "error".into(),
-            detail: if tagged { "StructTreeRoot e MarkInfo encontrados.".into() } else { "Estrutura de tags ausente ou incompleta.".into() },
-        },
-        AccessibilityCheck {
-            id: "language".into(),
-            label: "Idioma do documento".into(),
-            passed: language.as_ref().is_some_and(|value| !value.is_empty()),
-            severity: "warning".into(),
-            detail: language.clone().unwrap_or_else(|| "O catálogo não define /Lang.".into()),
-        },
-        AccessibilityCheck {
-            id: "title".into(),
-            label: "Título do documento".into(),
-            passed: title.as_ref().is_some_and(|value| !value.is_empty()),
-            severity: "warning".into(),
-            detail: title.clone().unwrap_or_else(|| "Metadado Title não definido.".into()),
-        },
-        AccessibilityCheck {
-            id: "pages".into(),
-            label: "Documento possui páginas".into(),
-            passed: !document.get_pages().is_empty(),
-            severity: "error".into(),
-            detail: format!("{} página(s) detectada(s).", document.get_pages().len()),
-        },
-    ];
+    let mut tag_count = 0usize;
+    let mut figure_count = 0usize;
+    let mut figures_missing_alt = 0usize;
+    for object in document.objects.values() {
+        let Ok(dictionary) = object.as_dict() else { continue };
+        if dictionary
+            .get(b"Type")
+            .ok()
+            .and_then(|value| value.as_name().ok())
+            .is_some_and(|value| value == b"StructElem")
+        {
+            tag_count += 1;
+            let tag_type = dictionary.get(b"S").ok().and_then(|value| value.as_name().ok());
+            if tag_type == Some(b"Figure") {
+                figure_count += 1;
+                let alt = dictionary.get(b"Alt").ok().and_then(object_text);
+                if alt.as_ref().is_none_or(|value| value.trim().is_empty()) {
+                    figures_missing_alt += 1;
+                }
+            }
+        }
+    }
 
-    Ok(AccessibilityReport { tagged, language, title, checks })
+    let mut form_field_count = 0usize;
+    let mut form_fields_missing_description = 0usize;
+    if let Ok(form_object) = catalog.get(b"AcroForm") {
+        let form = match form_object {
+            Object::Dictionary(dictionary) => Some(dictionary),
+            Object::Reference(id) => document.get_object(*id).ok().and_then(|object| object.as_dict().ok()),
+            _ => None,
+        };
+        if let Some(form) = form {
+            let mut stack = form
+                .get(b"Fields")
+                .ok()
+                .and_then(|value| value.as_array().ok())
+                .cloned()
+                .unwrap_or_default();
+            let mut seen = std::collections::HashSet::new();
+            while let Some(value) = stack.pop() {
+                let Ok(id) = value.as_reference() else { continue };
+                if !seen.insert(id) { continue; }
+                let Ok(field) = document.get_object(id).and_then(Object::as_dict) else { continue };
+                if let Ok(Object::Array(kids)) = field.get(b"Kids") {
+                    stack.extend(kids.iter().cloned());
+                }
+                if field.get(b"FT").is_ok() {
+                    form_field_count += 1;
+                    let tooltip = field.get(b"TU").ok().and_then(object_text).unwrap_or_default();
+                    if tooltip.trim().is_empty() {
+                        form_fields_missing_description += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    let mut pages_missing_tab_order = 0usize;
+    let mut image_only_pages = Vec::new();
+    for (page_number, page_id) in document.get_pages() {
+        let page_index = page_number.saturating_sub(1) as usize;
+        let page = document
+            .get_object(page_id)
+            .ok()
+            .and_then(|object| object.as_dict().ok());
+        let has_tabs = page
+            .and_then(|dictionary| dictionary.get(b"Tabs").ok())
+            .and_then(|value| value.as_name().ok())
+            .is_some_and(|value| matches!(value, b"S" | b"R" | b"C"));
+        if !has_tabs {
+            pages_missing_tab_order += 1;
+        }
+
+        let data = document.get_page_content(page_id);
+        let has_text = Content::decode(&data)
+            .ok()
+            .is_some_and(|content| content.operations.iter().any(|operation| {
+                matches!(operation.operator.as_str(), "Tj" | "TJ" | "'" | """)
+            }));
+        if !has_text {
+            image_only_pages.push(page_index);
+        }
+    }
+
+    let mut checks = Vec::new();
+    let mut push = |id: &str, label: &str, passed: bool, severity: &str, detail: String, fixable: bool| {
+        checks.push(AccessibilityCheck {
+            id: id.into(),
+            label: label.into(),
+            passed,
+            severity: severity.into(),
+            detail,
+            page_index: None,
+            fixable,
+        });
+    };
+    push(
+        "tagged",
+        "PDF marcado (Tagged PDF)",
+        tagged,
+        "error",
+        if tagged { format!("{tag_count} tag(s) estruturais encontradas.") } else { "StructTreeRoot e/ou MarkInfo ausentes.".into() },
+        !tagged,
+    );
+    push(
+        "language",
+        "Idioma do documento",
+        language.as_ref().is_some_and(|value| !value.trim().is_empty()),
+        "warning",
+        language.clone().unwrap_or_else(|| "O catálogo não define /Lang.".into()),
+        true,
+    );
+    push(
+        "title",
+        "Título do documento",
+        title.as_ref().is_some_and(|value| !value.trim().is_empty()),
+        "warning",
+        title.clone().unwrap_or_else(|| "Metadado Title não definido.".into()),
+        true,
+    );
+    push(
+        "display-title",
+        "Exibir título do documento",
+        display_document_title,
+        "warning",
+        if display_document_title { "ViewerPreferences/DisplayDocTitle está ativo.".into() } else { "A janela pode exibir somente o nome do arquivo.".into() },
+        true,
+    );
+    push(
+        "figure-alt",
+        "Texto alternativo de figuras",
+        figures_missing_alt == 0,
+        "error",
+        format!("{figure_count} figura(s); {figures_missing_alt} sem /Alt."),
+        figures_missing_alt > 0,
+    );
+    push(
+        "form-descriptions",
+        "Descrições de campos de formulário",
+        form_fields_missing_description == 0,
+        "error",
+        format!("{form_field_count} campo(s); {form_fields_missing_description} sem /TU."),
+        form_fields_missing_description > 0,
+    );
+    push(
+        "tab-order",
+        "Ordem de tabulação",
+        pages_missing_tab_order == 0,
+        "warning",
+        format!("{pages_missing_tab_order} página(s) sem /Tabs explícito."),
+        pages_missing_tab_order > 0,
+    );
+    push(
+        "text-layer",
+        "Camada textual",
+        image_only_pages.is_empty(),
+        "warning",
+        if image_only_pages.is_empty() {
+            "Todas as páginas possuem operadores de texto detectáveis.".into()
+        } else {
+            format!("{} página(s) sem operadores de texto; OCR pode ser necessário.", image_only_pages.len())
+        },
+        false,
+    );
+    push(
+        "pages",
+        "Documento possui páginas",
+        !document.get_pages().is_empty(),
+        "error",
+        format!("{} página(s) detectada(s).", document.get_pages().len()),
+        false,
+    );
+
+    Ok(AccessibilityReport {
+        tagged,
+        language,
+        title,
+        display_document_title,
+        tag_count,
+        figure_count,
+        figures_missing_alt,
+        form_field_count,
+        form_fields_missing_description,
+        pages_missing_tab_order,
+        image_only_pages,
+        checks,
+    })
 }
 
 fn atomic_save(mut document: Document, output: &Path) -> Result<(), SevenError> {

@@ -76,6 +76,8 @@ pub fn commit_revision(
     document.redo_stack.clear();
     document.working_path = Some(output);
     document.file_size = metadata.len();
+    document.source_file_size = metadata.len();
+    document.source_modified_ns = pdf::modified_ns(&metadata);
     document.revision = document.revision.saturating_add(1);
     Ok(pdf::summary(document))
 }
@@ -138,6 +140,17 @@ pub fn redo(state: &AppState, document_id: &str) -> Result<pdf::DocumentSummary,
     Ok(pdf::summary(document))
 }
 
+fn source_changed(document: &OpenDocument) -> Result<bool, SevenError> {
+    let metadata = fs::metadata(&document.path)
+        .map_err(|_| SevenError::OperationRejected(
+            "O arquivo original não existe mais no disco".into(),
+        ))?;
+    Ok(
+        metadata.len() != document.source_file_size
+            || pdf::modified_ns(&metadata) != document.source_modified_ns
+    )
+}
+
 fn replace_file_atomically(source: &Path, destination: &Path) -> Result<(), SevenError> {
     let parent = destination
         .parent()
@@ -192,6 +205,12 @@ pub fn save(
 
     if !snapshot.is_dirty() {
         return Ok(pdf::summary(&snapshot));
+    }
+
+    if source_changed(&snapshot)? {
+        return Err(SevenError::OperationRejected(
+            "O arquivo foi alterado fora do Seven Reader desde que foi aberto. Use Salvar como ou recarregue o arquivo antes de sobrescrever.".into(),
+        ));
     }
 
     replace_file_atomically(snapshot.active_path(), &snapshot.path)?;

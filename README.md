@@ -865,31 +865,31 @@ Opções:
 
 ## Entradas
 
-- [ ] PDFs
-- [ ] DOC/DOCX
-- [ ] XLS/XLSX
-- [ ] PPT/PPTX
-- [ ] imagens
-- [ ] texto
-- [ ] páginas web
+- [x] PDFs
+- [x] DOC/DOCX
+- [x] XLS/XLSX
+- [x] PPT/PPTX
+- [x] imagens
+- [x] texto
+- [x] páginas web
 - [ ] áudio como anexo/objeto compatível
 - [ ] vídeo como anexo/objeto compatível
-- [ ] arquivos já abertos
-- [ ] pastas quando aplicável
+- [x] arquivos já abertos
+- [x] pastas quando aplicável
 
 ## Fluxo
 
-- [ ] Drag and drop
-- [ ] Adicionar arquivos
-- [ ] Adicionar arquivos abertos
+- [x] Drag and drop
+- [x] Adicionar arquivos
+- [x] Adicionar arquivos abertos
 - [ ] Expandir arquivo para ver páginas
-- [ ] Reordenar arquivos
+- [x] Reordenar arquivos
 - [ ] Reordenar páginas
 - [ ] Remover página
-- [ ] Remover arquivo
-- [ ] Preview
-- [ ] Combinar
-- [ ] Salvar como novo arquivo
+- [x] Remover arquivo
+- [x] Preview
+- [x] Combinar
+- [x] Salvar como novo arquivo
 
 ---
 

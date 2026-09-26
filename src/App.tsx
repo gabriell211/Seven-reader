@@ -2717,6 +2717,11 @@ export default function App() {
               rotatePages: true,
               outputType: settings.ocrOutputType,
               mode: "skip",
+              clean: false,
+              cleanFinal: false,
+              removeBackground: false,
+              optimize: 1,
+              rotatePagesThreshold: 14,
             })
           : kind === "optimize"
             ? await startBatchOptimize(inputs, outputDirectory, "ebook")

@@ -498,6 +498,20 @@ export interface InkAnnotationInput {
   author: string;
   points: Array<[number, number]>;
   lineWidth: number;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+}
+
+export interface SignatureImageInput {
+  pageIndex: number;
+  imagePath: string;
+  author: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 export interface AnnotationInfo {

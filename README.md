@@ -1527,10 +1527,10 @@ JavaScript nunca deve ser executado sem política de segurança.
 ## Assinatura eletrônica local
 
 - [x] Digitar
-- [ ] Desenhar
-- [ ] Usar imagem
-- [ ] Salvar localmente
-- [ ] Remover assinatura salva
+- [x] Desenhar
+- [x] Usar imagem
+- [x] Salvar localmente
+- [x] Remover assinatura salva
 - [x] Redimensionar
 - [x] Reposicionar
 

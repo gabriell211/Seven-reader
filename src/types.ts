@@ -72,6 +72,11 @@ export interface RenderResult {
   revision: number;
 }
 
+export interface CombinePdfPreview {
+  pageCount: number;
+  pages: RenderResult[];
+}
+
 export interface SearchHit {
   pageIndex: number;
   excerpt: string;

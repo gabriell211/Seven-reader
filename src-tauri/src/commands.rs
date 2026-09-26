@@ -2561,6 +2561,7 @@ enum CombineInputKind {
     Pdf,
     Office,
     Image,
+    Web(String),
 }
 
 #[derive(Clone)]
@@ -2595,8 +2596,29 @@ pub fn start_combine_mixed_documents(
 
     let mut prepared = Vec::with_capacity(inputs.len());
     let mut office_required = false;
+    let mut browser_required = false;
 
     for (index, raw) in inputs.into_iter().enumerate() {
+        if raw.starts_with("https://") || raw.starts_with("http://") {
+            if raw.len() > 4096 || raw.contains(['\r', '\n', '\0']) {
+                let _ = fs::remove_dir_all(&temp_root);
+                return Err(ErrorPayload::from(SevenError::OperationRejected(
+                    "URL inválida para combinação".into(),
+                )));
+            }
+            browser_required = true;
+            let item_dir = temp_root.join(format!("{index:03}-web"));
+            fs::create_dir_all(&item_dir)
+                .map_err(|error| ErrorPayload::from(SevenError::Io(error.to_string())))?;
+            prepared.push(CombineInput {
+                source: std::path::PathBuf::new(),
+                kind: CombineInputKind::Web(raw.clone()),
+                name: raw,
+                converted: Some(item_dir.join("pagina-web.pdf")),
+            });
+            continue;
+        }
+
         let path = std::path::PathBuf::from(&raw);
         if !path.is_file() {
             let _ = fs::remove_dir_all(&temp_root);
@@ -2658,6 +2680,15 @@ pub fn start_combine_mixed_documents(
     } else {
         None
     };
+    let browser = if browser_required {
+        Some(capabilities::find_browser().ok_or_else(|| {
+            ErrorPayload::from(SevenError::CapabilityUnavailable(
+                "Chrome, Chromium ou Edge não detectado".into(),
+            ))
+        })?)
+    } else {
+        None
+    };
 
     let total_inputs = prepared.len();
     let mut labels = prepared
@@ -2671,6 +2702,7 @@ pub fn start_combine_mixed_documents(
     let batch_output = output.clone();
     let batch_qpdf = qpdf.clone();
     let batch_libreoffice = libreoffice.clone();
+    let batch_browser = browser.clone();
     let mut converted = Vec::<std::path::PathBuf>::with_capacity(total_inputs);
 
     Ok(jobs::start_rust_batch_job_with_cleanup(
@@ -2683,7 +2715,7 @@ pub fn start_combine_mixed_documents(
         move |index| {
             if index < total_inputs {
                 let item = &batch_items[index];
-                match item.kind {
+                match &item.kind {
                     CombineInputKind::Pdf => {
                         converted.push(item.source.clone());
                     }
@@ -2720,6 +2752,36 @@ pub fn start_combine_mixed_documents(
                             return Err(SevenError::Operation(format!(
                                 "LibreOffice falhou ao converter {} (código {:?})",
                                 item.name,
+                                status.code()
+                            )));
+                        }
+                        pdf::validate_pdf_path(destination.to_string_lossy().as_ref())?;
+                        converted.push(destination.clone());
+                    }
+                    CombineInputKind::Web(url) => {
+                        let destination = item.converted.as_ref().ok_or_else(|| {
+                            SevenError::Operation("Destino intermediário da página web ausente".into())
+                        })?;
+                        let executable = batch_browser.as_ref().ok_or_else(|| {
+                            SevenError::CapabilityUnavailable("Chrome, Chromium ou Edge".into())
+                        })?;
+                        let args = vec![
+                            "--headless=new".to_owned(),
+                            "--disable-gpu".to_owned(),
+                            "--disable-extensions".to_owned(),
+                            "--incognito".to_owned(),
+                            "--no-pdf-header-footer".to_owned(),
+                            format!("--print-to-pdf={}", destination.to_string_lossy()),
+                            url.clone(),
+                        ];
+                        let status = Command::new(executable)
+                            .args(args)
+                            .status()
+                            .map_err(|error| SevenError::Operation(error.to_string()))?;
+                        if !status.success() {
+                            return Err(SevenError::Operation(format!(
+                                "Falha ao capturar a página web {} (código {:?})",
+                                url,
                                 status.code()
                             )));
                         }

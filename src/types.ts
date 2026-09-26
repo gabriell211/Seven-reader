@@ -244,16 +244,37 @@ export interface AutoTagResult {
   taggedPages: number;
 }
 
+export interface CompareOptions {
+  pageStart?: number;
+  pageEnd?: number;
+  textOnly: boolean;
+  documentType: "auto" | "report" | "spreadsheet" | "magazine" | "presentation" | "scan" | "drawing" | "illustration";
+}
+
 export interface ComparePage {
   pageIndex: number;
   leftExcerpt: string;
   rightExcerpt: string;
+  categories: string[];
+  status: "added" | "removed" | "moved" | "changed" | string;
+  textAdded: number;
+  textRemoved: number;
+  visualDifferencePercent: number;
+  graphicsDelta: number;
+  annotationsDelta: number;
+  movedFrom?: number;
+  leftPreview?: string;
+  rightPreview?: string;
 }
 
 export interface CompareReport {
   leftPages: number;
   rightPages: number;
   changedPages: number;
+  totalDifferences: number;
+  documentType: string;
+  textOnly: boolean;
+  categoryCounts: Record<string, number>;
   pages: ComparePage[];
 }
 

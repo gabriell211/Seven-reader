@@ -1857,7 +1857,7 @@ html[data-motion="reduced"] *,html[data-motion="reduced"] *::before,html[data-mo
 
 /* Mixed-file combine workspace */
 .combine-dialog { width:min(980px,calc(100vw - 32px)); max-height:min(900px,calc(100vh - 28px)); }
-.combine-summary-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+.combine-summary-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; }
 .combine-summary-grid span { min-height:58px; padding:9px; border:1px solid #e3e0e8; border-radius:10px; display:grid; place-items:center; gap:2px; background:#faf9fd; color:#858791; font-size:8px; text-align:center; }
 .combine-summary-grid b { color:#28262f; font-size:16px; }
 .combine-toolbar { display:flex; flex-wrap:wrap; gap:8px; }
@@ -1876,3 +1876,8 @@ html[data-motion="reduced"] *,html[data-motion="reduced"] *::before,html[data-mo
 .combine-empty strong { font-size:11px; color:#40384f; }
 .combine-empty span { max-width:460px; font-size:8.5px; text-align:center; color:#87828f; }
 @media(max-width:760px){.combine-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.combine-row{grid-template-columns:26px 38px minmax(0,1fr)}.combine-row-actions{grid-column:1/-1;justify-content:end}.combine-toolbar{display:grid}.combine-toolbar>button{width:100%}}
+
+.combine-web-source { padding:10px; border:1px solid #e1dee8; border-radius:10px; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:end; background:#faf9fd; }
+.combine-web-source .workflow-field { margin:0; }
+.combine-web-source>button { min-height:34px; }
+@media(max-width:760px){.combine-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.combine-web-source{grid-template-columns:1fr}}

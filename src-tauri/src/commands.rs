@@ -4366,6 +4366,14 @@ pub fn update_document_metadata(
 }
 
 #[tauri::command]
+pub fn analyze_sanitization(
+    path: String,
+) -> CommandResult<document_ops::SanitizeAnalysis> {
+    let input = pdf::validate_pdf_path(&path).map_err(ErrorPayload::from)?;
+    document_ops::analyze_sanitization(&input).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn sanitize_document(
     input: String,
     output: String,

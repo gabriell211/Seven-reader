@@ -2105,6 +2105,7 @@ pub fn merge_layers(
 
     for object in document.objects.values_mut() {
         replace_ocg_reference_in_object(object, source, target);
+        dedup_reference_arrays(object, target);
     }
     if let Ok(catalog) = document.catalog_mut() {
         if let Ok(oc) = catalog.get_mut(b"OCProperties") {
@@ -2142,6 +2143,114 @@ fn property_layer_map(document: &Document, page_id: ObjectId) -> HashMap<Vec<u8>
     output
 }
 
+fn xobject_layer_map(document: &Document, page_id: ObjectId) -> HashMap<Vec<u8>, ObjectId> {
+    let resources = inherited_resources(document, page_id);
+    let xobjects = resolved_subdictionary(document, &resources, b"XObject");
+    let mut output = HashMap::new();
+    for (name, value) in xobjects.iter() {
+        let Some(id) = value.as_reference().ok() else { continue };
+        let Some(layer_id) = document
+            .get_object(id)
+            .ok()
+            .and_then(|object| object.as_stream().ok())
+            .and_then(|stream| stream.dict.get(b"OC").ok())
+            .and_then(|value| value.as_reference().ok())
+        else { continue };
+        output.insert(name.clone(), layer_id);
+    }
+    output
+}
+
+fn flatten_page_annotations(
+    document: &mut Document,
+    page_id: ObjectId,
+    visibility: &HashMap<ObjectId, bool>,
+) -> Result<(), SevenError> {
+    let annots = document
+        .get_object(page_id)
+        .ok()
+        .and_then(|object| object.as_dict().ok())
+        .and_then(|page| page.get(b"Annots").ok())
+        .and_then(|value| value.as_array().ok())
+        .cloned()
+        .unwrap_or_default();
+
+    if annots.is_empty() {
+        return Ok(());
+    }
+
+    let mut keep = Vec::with_capacity(annots.len());
+    for entry in annots {
+        let Some(id) = entry.as_reference().ok() else {
+            keep.push(entry);
+            continue;
+        };
+        let layer_id = document
+            .get_object(id)
+            .ok()
+            .and_then(|object| object.as_dict().ok())
+            .and_then(|dictionary| dictionary.get(b"OC").ok())
+            .and_then(|value| value.as_reference().ok());
+
+        match layer_id {
+            Some(layer) if !visibility.get(&layer).copied().unwrap_or(true) => {}
+            Some(_) => {
+                if let Ok(dictionary) = document.get_object_mut(id).and_then(Object::as_dict_mut) {
+                    dictionary.remove(b"OC");
+                }
+                keep.push(Object::Reference(id));
+            }
+            None => keep.push(Object::Reference(id)),
+        }
+    }
+
+    let page = document
+        .get_object_mut(page_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    if keep.is_empty() {
+        page.remove(b"Annots");
+    } else {
+        page.set("Annots", keep);
+    }
+    Ok(())
+}
+
+fn dedup_reference_arrays(object: &mut Object, target: ObjectId) {
+    match object {
+        Object::Array(values) => {
+            let mut seen_target = false;
+            values.retain(|value| {
+                if value.as_reference().ok() == Some(target) {
+                    if seen_target {
+                        false
+                    } else {
+                        seen_target = true;
+                        true
+                    }
+                } else {
+                    true
+                }
+            });
+            for value in values {
+                dedup_reference_arrays(value, target);
+            }
+        }
+        Object::Dictionary(dictionary) => {
+            for (_, value) in dictionary.iter_mut() {
+                dedup_reference_arrays(value, target);
+            }
+        }
+        Object::Stream(stream) => {
+            for (_, value) in stream.dict.iter_mut() {
+                dedup_reference_arrays(value, target);
+            }
+        }
+        _ => {}
+    }
+}
+
 #[derive(Clone, Copy)]
 struct MarkedFrame {
     hidden: bool,
@@ -2159,6 +2268,8 @@ pub fn flatten_layers(input: &Path, output: &Path) -> Result<usize, SevenError> 
     let mut changed_pages = 0usize;
     for page_id in page_ids {
         let properties = property_layer_map(&document, page_id);
+        let xobject_layers = xobject_layer_map(&document, page_id);
+        flatten_page_annotations(&mut document, page_id, &visibility)?;
         let data = document.get_page_content(page_id);
         if data.is_empty() {
             continue;
@@ -2208,6 +2319,15 @@ pub fn flatten_layers(input: &Path, output: &Path) -> Result<usize, SevenError> 
             }
 
             if !stack.last().is_some_and(|frame| frame.hidden) {
+                if operation.operator == "Do" {
+                    let hidden_xobject = operation.operands.first()
+                        .and_then(|value| value.as_name().ok())
+                        .and_then(|name| xobject_layers.get(name))
+                        .is_some_and(|layer| !visibility.get(layer).copied().unwrap_or(true));
+                    if hidden_xobject {
+                        continue;
+                    }
+                }
                 output_ops.push(operation);
             }
         }

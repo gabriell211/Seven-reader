@@ -47,6 +47,7 @@ import type {
   NewFormField,
   NormalizedRect,
   OcrOptions,
+  OcrLanguageDetection,
   OcrWord,
   OptimizationAudit,
   OptimizeOptions,
@@ -1010,6 +1011,18 @@ export async function startBatchOcr(
   options: OcrOptions,
 ): Promise<JobStart> {
   return invoke<JobStart>("start_batch_ocr", { inputs, outputDirectory, options });
+}
+
+export async function detectOcrLanguage(
+  documentId: string,
+  pageIndex: number,
+  candidates: string[],
+): Promise<OcrLanguageDetection> {
+  return invoke<OcrLanguageDetection>("detect_ocr_language", {
+    documentId,
+    pageIndex,
+    candidates,
+  });
 }
 
 export async function reviewOcrPage(

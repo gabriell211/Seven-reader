@@ -4097,6 +4097,8 @@ export default function App() {
         <CombineDialog
           openDocuments={openTabs}
           officeAvailable={Boolean(capabilities?.office.available)}
+          webAvailable={Boolean(capabilities?.web_pdf.available)}
+          onListFolder={(path) => listPdfFilesInFolder(path, true, 100)}
           onClose={() => setCombineDialogOpen(false)}
           onCombine={runCombineMixedDocuments}
         />

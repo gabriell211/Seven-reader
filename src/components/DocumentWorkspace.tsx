@@ -9,13 +9,14 @@ import type {
   InkAnnotationInput,
   JobStatus,
   NormalizedRect,
+  PagePreflight,
   DocumentSummary,
   RenderResult,
   SearchHit,
   ToolId,
   ViewMode,
 } from "../types";
-import { cropPageSelection, extractTextInRect, nativeAssetUrl } from "../lib/native";
+import { cropPageSelection, extractTextInRect, getPagePreflight, nativeAssetUrl } from "../lib/native";
 import { writeImage, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { ProtectedViewBanner } from "./ProtectedViewBanner";
 import type { QuickToolId, SidePanelId } from "../lib/settings";
@@ -160,6 +161,14 @@ export function DocumentWorkspace({
   const [viewerTool, setViewerTool] = useState<"select" | "hand" | "draw" | "highlight" | "underline" | "strikeout">("select");
   const [visualRotation, setVisualRotation] = useState<0 | 90 | 180 | 270>(0);
   const [immersiveMode, setImmersiveMode] = useState<"normal" | "reading" | "presentation">("normal");
+  const [pageGeometry, setPageGeometry] = useState<PagePreflight | null>(null);
+  const [showRulers, setShowRulers] = useState(false);
+  const [showGrid, setShowGrid] = useState(false);
+  const [snapGrid, setSnapGrid] = useState(false);
+  const [gridStepPt, setGridStepPt] = useState(18);
+  const [rulerUnit, setRulerUnit] = useState<"pt" | "mm" | "cm" | "in">("mm");
+  const [cursorPoint, setCursorPoint] = useState<[number, number] | null>(null);
+  const [guides, setGuides] = useState<Array<{ id: string; axis: "x" | "y"; valuePt: number }>>([]);
 
   useEffect(() => {
     const focus = () => searchRef.current?.focus();
@@ -174,6 +183,14 @@ export function DocumentWorkspace({
     setSelectedText("");
   }, [page]);
   useEffect(() => setToolbarPosition(quickToolsPosition), [quickToolsPosition]);
+  useEffect(() => {
+    let active = true;
+    void getPagePreflight(document.id, page)
+      .then((geometry) => active && setPageGeometry(geometry))
+      .catch(() => active && setPageGeometry(null));
+    return () => { active = false; };
+  }, [document.id, document.revision, page]);
+
   useEffect(() => {
     if (!tabMenu) return;
     const close = () => setTabMenu(null);
@@ -235,6 +252,30 @@ export function DocumentWorkspace({
     }
     const target = Math.max(1, Math.min(document.pageCount, Math.trunc(requested))) - 1;
     onRender(target, zoom);
+  };
+
+  const pointsToUnit = (value: number) => {
+    if (rulerUnit === "in") return value / 72;
+    if (rulerUnit === "cm") return value * 2.54 / 72;
+    if (rulerUnit === "mm") return value * 25.4 / 72;
+    return value;
+  };
+
+  const unitDigits = rulerUnit === "pt" ? 0 : rulerUnit === "mm" ? 1 : 2;
+
+  const formatMeasure = (valuePt: number) =>
+    `${pointsToUnit(valuePt).toFixed(unitDigits)} ${rulerUnit}`;
+
+  const addGuide = (axis: "x" | "y") => {
+    if (!pageGeometry) return;
+    const fallback = axis === "x" ? pageGeometry.widthPt / 2 : pageGeometry.heightPt / 2;
+    const valuePt = cursorPoint
+      ? axis === "x" ? cursorPoint[0] : cursorPoint[1]
+      : fallback;
+    setGuides((current) => [
+      ...current,
+      { id: `${axis}-${Date.now()}-${current.length}`, axis, valuePt },
+    ]);
   };
 
   const rotatedDimensions = (result: RenderResult) =>
@@ -420,10 +461,31 @@ export function DocumentWorkspace({
     if (!rect || rect.width <= 0 || rect.height <= 0) return null;
     const rx = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
     const ry = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
-    if (visualRotation === 90) return [ry, 1 - rx];
-    if (visualRotation === 180) return [1 - rx, 1 - ry];
-    if (visualRotation === 270) return [1 - ry, rx];
-    return [rx, ry];
+    let point: [number, number];
+    if (visualRotation === 90) point = [ry, 1 - rx];
+    else if (visualRotation === 180) point = [1 - rx, 1 - ry];
+    else if (visualRotation === 270) point = [1 - ry, rx];
+    else point = [rx, ry];
+
+    if (snapGrid && pageGeometry && gridStepPt > 0) {
+      const xPt = Math.round((point[0] * pageGeometry.widthPt) / gridStepPt) * gridStepPt;
+      const yPt = Math.round((point[1] * pageGeometry.heightPt) / gridStepPt) * gridStepPt;
+      point = [
+        Math.max(0, Math.min(1, xPt / pageGeometry.widthPt)),
+        Math.max(0, Math.min(1, yPt / pageGeometry.heightPt)),
+      ];
+    }
+    return point;
+  };
+
+  const updateCursorPoint = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!pageGeometry) return;
+    const point = normalizedPoint(event.clientX, event.clientY);
+    if (!point) return;
+    setCursorPoint([
+      point[0] * pageGeometry.widthPt,
+      point[1] * pageGeometry.heightPt,
+    ]);
   };
 
   const rectFromPoints = (start: [number, number], end: [number, number]): NormalizedRect => ({
@@ -829,9 +891,11 @@ export function DocumentWorkspace({
                       beginSelection(event);
                     }}
                     onPointerMove={(event) => {
+                      updateCursorPoint(event);
                       moveInk(event);
                       moveSelection(event);
                     }}
+                    onPointerLeave={() => setCursorPoint(null)}
                     onPointerUp={(event) => {
                       finishInk(event);
                       finishSelection(event);
@@ -842,6 +906,39 @@ export function DocumentWorkspace({
                     }}
                   >
                     <img src={nativeAssetUrl(result.cachePath)} alt={`Página ${result.pageIndex + 1}`} draggable={false} />
+                    {showGrid && pageGeometry && (
+                      <div
+                        className="page-grid-overlay"
+                        style={{
+                          backgroundSize: `${(gridStepPt / pageGeometry.widthPt) * 100}% ${(gridStepPt / pageGeometry.heightPt) * 100}%`,
+                        }}
+                        aria-hidden="true"
+                      />
+                    )}
+                    {pageGeometry && guides.map((guide) => (
+                      <div
+                        key={guide.id}
+                        className={guide.axis === "x" ? "page-guide page-guide--vertical" : "page-guide page-guide--horizontal"}
+                        style={guide.axis === "x"
+                          ? { left: `${(guide.valuePt / pageGeometry.widthPt) * 100}%` }
+                          : { top: `${(guide.valuePt / pageGeometry.heightPt) * 100}%` }}
+                        title={formatMeasure(guide.valuePt)}
+                      />
+                    ))}
+                    {showRulers && pageGeometry && (
+                      <>
+                        <div className="page-ruler page-ruler--horizontal">
+                          {Array.from({ length: 11 }, (_, index) => (
+                            <span key={index} style={{ left: `${index * 10}%` }}>{formatMeasure(pageGeometry.widthPt * index / 10).replace(` ${rulerUnit}`, "")}</span>
+                          ))}
+                        </div>
+                        <div className="page-ruler page-ruler--vertical">
+                          {Array.from({ length: 11 }, (_, index) => (
+                            <span key={index} style={{ top: `${index * 10}%` }}>{formatMeasure(pageGeometry.heightPt * index / 10).replace(` ${rulerUnit}`, "")}</span>
+                          ))}
+                        </div>
+                      </>
+                    )}
                     {isRectSelectionTool && selectionRect && (
                       <div
                         className={`selection-rect selection-rect--${viewerTool}`}
@@ -888,6 +985,22 @@ export function DocumentWorkspace({
             ) : (
               <div className="loading-page"><span className="loader-ring" /><strong>Renderizando página…</strong></div>
             )}
+          </div>
+
+          <div className="measurement-toolbar">
+            <button className={showRulers ? "active" : ""} onClick={() => setShowRulers((value) => !value)}>Réguas</button>
+            <button className={showGrid ? "active" : ""} onClick={() => setShowGrid((value) => !value)}>Grade</button>
+            <button className={snapGrid ? "active" : ""} disabled={!showGrid} onClick={() => setSnapGrid((value) => !value)}>Snap</button>
+            <label>Passo <input type="number" min={1} max={288} step={1} value={gridStepPt} onChange={(event) => setGridStepPt(Math.max(1, Math.min(288, Number(event.target.value) || 18)))} /> pt</label>
+            <button disabled={!pageGeometry} onClick={() => addGuide("x")}>Guia V</button>
+            <button disabled={!pageGeometry} onClick={() => addGuide("y")}>Guia H</button>
+            <button disabled={!guides.length} onClick={() => setGuides([])}>Limpar guias</button>
+            <select value={rulerUnit} onChange={(event) => setRulerUnit(event.target.value as typeof rulerUnit)}>
+              <option value="pt">pt</option><option value="mm">mm</option><option value="cm">cm</option><option value="in">in</option>
+            </select>
+            <span className="cursor-coordinate">
+              {cursorPoint ? `X ${formatMeasure(cursorPoint[0])} · Y ${formatMeasure(cursorPoint[1])}` : "X — · Y —"}
+            </span>
           </div>
 
           <div

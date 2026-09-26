@@ -7,7 +7,7 @@ interface CombineDialogProps {
   openDocuments: DocumentSummary[];
   officeAvailable: boolean;
   onClose: () => void;
-  onCombine: (inputs: string[], output: string) => void;
+  onCombine: (inputs: string[], output: string) => Promise<void>;
 }
 
 function fileName(path: string): string {
@@ -104,7 +104,7 @@ export function CombineDialog({
     if (!output) return;
     setBusy(true);
     try {
-      onCombine(inputs, output);
+      await onCombine(inputs, output);
     } finally {
       setBusy(false);
     }
@@ -142,7 +142,7 @@ export function CombineDialog({
 
           {!officeAvailable && (
             <div className="organizer-note">
-              <SevenIcon name="info" />
+              <SevenIcon name="shield" />
               <span>LibreOffice não foi detectado; formatos Office/OpenDocument/RTF/TXT/HTML ficam ocultos. PDF e imagens continuam disponíveis.</span>
             </div>
           )}

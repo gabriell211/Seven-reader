@@ -977,6 +977,33 @@ export default function App() {
     }
   };
 
+  const updateVisiblePage = async (nextPage: number) => {
+    if (!document) return;
+    const boundedPage = Math.max(0, Math.min(document.pageCount - 1, nextPage));
+    if (boundedPage === page) return;
+    setPage(boundedPage);
+    setTabViews((current) => ({
+      ...current,
+      [document.id]: { page: boundedPage, zoom },
+    }));
+    const currentRender = renderedPages.find((result) => result.pageIndex === boundedPage);
+    if (currentRender) setRendered(currentRender);
+
+    if (viewMode === "continuous" || viewMode === "facing-continuous") {
+      const first = renderedPages.at(0)?.pageIndex ?? boundedPage;
+      const last = renderedPages.at(-1)?.pageIndex ?? boundedPage;
+      const nearStart = boundedPage <= first + 1 && first > 0;
+      const nearEnd = boundedPage >= last - 1 && last < document.pageCount - 1;
+      if (nearStart || nearEnd || !currentRender) {
+        try {
+          await renderDocumentWindow(document, boundedPage, zoom);
+        } catch (error) {
+          setNotice(errorMessage(error));
+        }
+      }
+    }
+  };
+
   const changeViewMode = async (mode: ViewMode) => {
     if (!document) return;
     setViewMode(mode);
@@ -2871,7 +2898,7 @@ export default function App() {
           onRedo={() => void redoCurrent()}
           onPrint={() => void runPrint()}
           onRender={(nextPage, nextZoom) => void render(nextPage, nextZoom)}
-          onVisiblePage={(nextPage) => void render(nextPage, zoom, false)}
+          onVisiblePage={(nextPage) => void updateVisiblePage(nextPage)}
           onViewModeChange={(mode) => void changeViewMode(mode)}
           onSearch={(query) => void runSearch(query)}
           onInk={(ink) => void runInkAnnotation(ink)}

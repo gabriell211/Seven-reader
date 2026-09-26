@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { confirm, open, save } from "@tauri-apps/plugin-dialog";
+import { readImage, readText } from "@tauri-apps/plugin-clipboard-manager";
 import type {
   AdvancedPdfReport,
   BookmarkInfo,
@@ -19,6 +20,8 @@ interface AdvancedPdfDialogProps {
   loading: boolean;
   initialTab?: AdvancedTab;
   portfolioPreview: PortfolioPreview | null;
+  canScan: boolean;
+  canWeb: boolean;
   portfolioSearchHits: PortfolioSearchHit[];
   portfolioSearching: boolean;
   onClose: () => void;
@@ -39,6 +42,10 @@ interface AdvancedPdfDialogProps {
   onSearchPortfolioItems: (query: string) => void;
   onOpenPortfolioItemExternal: (objectId: string) => void;
   onOpenPortfolioPdf: (preview: PortfolioPreview) => void;
+  onAddPortfolioClipboardText: (text: string, name: string, folderPath: string) => void;
+  onAddPortfolioClipboardImage: (rgba: number[], width: number, height: number, name: string, folderPath: string) => void;
+  onAddPortfolioWeb: (url: string, name: string, folderPath: string) => void;
+  onAddPortfolioScan: (dpi: number, name: string, folderPath: string) => void;
   onAddPortfolioItem: (filePath: string, displayName: string, description: string, folderPath: string) => void;
   onConfigurePortfolio: (view: "details" | "tile" | "hidden") => void;
   onSetPortfolioView: (view: "details" | "tile" | "hidden") => void;
@@ -69,6 +76,8 @@ export function AdvancedPdfDialog({
   loading,
   initialTab = "overview",
   portfolioPreview,
+  canScan,
+  canWeb,
   portfolioSearchHits,
   portfolioSearching,
   onClose,
@@ -89,6 +98,10 @@ export function AdvancedPdfDialog({
   onSearchPortfolioItems,
   onOpenPortfolioItemExternal,
   onOpenPortfolioPdf,
+  onAddPortfolioClipboardText,
+  onAddPortfolioClipboardImage,
+  onAddPortfolioWeb,
+  onAddPortfolioScan,
   onAddPortfolioItem,
   onConfigurePortfolio,
   onSetPortfolioView,
@@ -138,6 +151,11 @@ export function AdvancedPdfDialog({
   const [portfolioItemPath, setPortfolioItemPath] = useState("");
   const [portfolioItemName, setPortfolioItemName] = useState("");
   const [portfolioItemDescription, setPortfolioItemDescription] = useState("");
+  const [portfolioWebUrl, setPortfolioWebUrl] = useState("");
+  const [portfolioWebName, setPortfolioWebName] = useState("Pagina-Web.pdf");
+  const [portfolioScanName, setPortfolioScanName] = useState("Digitalizacao.pdf");
+  const [portfolioScanDpi, setPortfolioScanDpi] = useState(300);
+  const [portfolioClipboardStatus, setPortfolioClipboardStatus] = useState("");
   const [portfolioItemMoves, setPortfolioItemMoves] = useState<Record<string,string>>({});
   const [portfolioQuery, setPortfolioQuery] = useState("");
   const [portfolioContentQuery, setPortfolioContentQuery] = useState("");
@@ -246,6 +264,41 @@ export function AdvancedPdfDialog({
       { title: "Achatar camadas", kind: "warning" },
     );
     if (accepted) onFlattenLayers();
+  };
+
+  const addClipboardTextToPortfolio = async () => {
+    try {
+      const text = await readText();
+      if (!text) {
+        setPortfolioClipboardStatus("O clipboard não contém texto.");
+        return;
+      }
+      onAddPortfolioClipboardText(text, "Clipboard.txt", portfolioSelectedFolder);
+      setPortfolioClipboardStatus("Texto enviado para o portfólio.");
+    } catch {
+      setPortfolioClipboardStatus("Não foi possível ler texto do clipboard.");
+    }
+  };
+
+  const addClipboardImageToPortfolio = async () => {
+    try {
+      const image = await readImage();
+      const [{ width, height }, rgba] = await Promise.all([image.size(), image.rgba()]);
+      await image.close();
+      if (!width || !height || rgba.length !== width * height * 4) {
+        throw new Error("Imagem inválida");
+      }
+      onAddPortfolioClipboardImage(
+        Array.from(rgba),
+        width,
+        height,
+        "Clipboard.png",
+        portfolioSelectedFolder,
+      );
+      setPortfolioClipboardStatus(`Imagem ${width}×${height}px enviada para o portfólio.`);
+    } catch {
+      setPortfolioClipboardStatus("O clipboard não contém uma imagem compatível.");
+    }
   };
 
   const choosePortfolioItem = async () => {

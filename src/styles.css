@@ -1850,3 +1850,7 @@ html[data-motion="reduced"] *,html[data-motion="reduced"] *::before,html[data-mo
 .saved-signature-load strong { font-size:9px; }
 .saved-signature-load small { color:#888a93; font-size:7.8px; }
 @media(max-width:680px){.signature-draw-head,.saved-signature-save{align-items:stretch;flex-direction:column}.electronic-signature-modes{grid-template-columns:1fr}}
+
+.guided-options-box { padding:10px; border:1px solid #dfdde7; border-radius:10px; display:grid; gap:8px; background:#faf9fd; }
+.guided-options-box .toggle-row { min-height:34px; }
+.guided-options-box .organizer-note { margin:0; }

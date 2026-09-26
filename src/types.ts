@@ -190,6 +190,10 @@ export interface WatchFolderConfig {
   preset: string;
   presetName?: string;
   conversionOptions?: ConversionOptions;
+  maxRetries?: number;
+  retryBackoffSeconds?: number;
+  quarantineEnabled?: boolean;
+  quarantineDirectory?: string;
   extensions: string[];
 }
 

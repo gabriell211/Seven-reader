@@ -4080,6 +4080,9 @@ export default function App() {
           onAdd={(annotation) => void runAddAnnotation(annotation)}
           onStamp={(stamp) => void runStamp(stamp)}
           onDelete={(objectId) => void runDeleteAnnotation(objectId)}
+          onNavigate={(pageIndex) => void render(pageIndex, zoom)}
+          onExportXfdf={(destination) => runExportReview(destination)}
+          onImportXfdf={(path) => runImportReview(path)}
         />
       )}
       {formsOpen && document && (

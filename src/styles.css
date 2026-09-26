@@ -244,7 +244,8 @@ svg { width: 20px; height: 20px; }
 .search-hit small { color: #9a9ca5; font-size: 8.5px; }
 .thumb-number { height: 100%; display: grid; place-items: center; color: #c7c7cd; font: 700 26px "Segoe UI", sans-serif; }
 .quick-tools button.active { color: var(--violet); background: #ece6ff; }
-.viewer-hand .document-canvas { cursor: grab; }
+.viewer-hand .document-canvas { cursor: grab; user-select:none; }
+.viewer-hand .document-canvas.is-panning { cursor:grabbing; }
 .viewer-select .document-canvas { cursor: text; }
 
 .modal-backdrop { position: fixed; inset: 0; z-index: 1400; display: grid; place-items: center; padding: 28px; background: rgba(12,13,17,.54); backdrop-filter: blur(9px); animation: modalFade .18s ease-out; }
@@ -1041,3 +1042,5 @@ svg { width: 20px; height: 20px; }
 .reflow-view header strong { color:#51535c; font-size:10px; }
 .reflow-text { white-space:pre-wrap; overflow-wrap:anywhere; font:17px/1.72 "Segoe UI Variable Text","Segoe UI",sans-serif; letter-spacing:.01em; }
 .immersive-presentation .reflow-view { width:min(900px,calc(100vw - 48px)); min-height:calc(100vh - 36px); }
+
+.tab-context-divider { height:1px; margin:4px 5px; background:#ecebf0; }

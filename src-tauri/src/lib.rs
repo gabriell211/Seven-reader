@@ -180,6 +180,7 @@ pub fn run() {
             commands::start_batch_ocr,
             commands::detect_ocr_language,
             commands::review_ocr_page,
+            commands::list_scanners,
             commands::scan_page_image,
             commands::delete_scan_pages,
             commands::finalize_scan_session,

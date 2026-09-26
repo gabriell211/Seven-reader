@@ -65,7 +65,15 @@ const defaults: GuidedActionPreset[] = [
 function loadPresets(): GuidedActionPreset[] {
   try {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]");
-    return Array.isArray(parsed) && parsed.length ? parsed : defaults;
+    const custom = Array.isArray(parsed)
+      ? parsed.filter((item): item is GuidedActionPreset =>
+          Boolean(item)
+          && typeof item.id === "string"
+          && item.id.startsWith("custom-")
+          && typeof item.name === "string"
+          && typeof item.kind === "string")
+      : [];
+    return [...defaults, ...custom];
   } catch {
     return defaults;
   }

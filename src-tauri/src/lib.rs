@@ -190,6 +190,7 @@ pub fn run() {
             commands::scan_page_to_pdf,
             commands::start_combine_documents,
             commands::start_combine_mixed_documents,
+            commands::preview_combine_pdf,
             commands::start_split_pages,
             commands::start_extract_pages,
             commands::start_reorder_pages,

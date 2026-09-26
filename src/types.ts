@@ -814,6 +814,8 @@ export interface RedactionReport {
   areasApplied: number;
   objectsRemoved: number;
   annotationsRemoved: number;
+  verifiedAreas: number;
+  verificationPassed: boolean;
   output: string;
 }
 

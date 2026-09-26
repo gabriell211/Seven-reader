@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { save } from "@tauri-apps/plugin-dialog";
+import { confirm, save } from "@tauri-apps/plugin-dialog";
 import type { RedactionArea } from "../types";
 import { SevenIcon } from "./SevenIcon";
 
@@ -43,15 +43,22 @@ export function RedactionDialog({
     filters: [{ name: "Documento PDF", extensions: ["pdf"] }],
   });
 
+  const confirmPermanentRedaction = async (count: number) => confirm(
+    "Aplicar redação permanente em " + count + " área(s)?\n\nO Seven removerá os objetos que cruzam as áreas marcadas e validará novamente a saída. Esta operação não pode ser desfeita no arquivo gerado.",
+    { title: "Seven Reader · Redação permanente", kind: "warning" },
+  );
+
   const applyManual = async () => {
+    if (!await confirmPermanentRedaction(1)) return;
     const output = await chooseOutput();
     if (!output) return;
     onApply(output, [{ pageIndex, x, y, width, height }]);
   };
 
   const applySearch = async () => {
+    if (selectedMatches.length === 0 || !await confirmPermanentRedaction(selectedMatches.length)) return;
     const output = await chooseOutput();
-    if (!output || selectedMatches.length === 0) return;
+    if (!output) return;
     onApply(output, selectedMatches);
   };
 

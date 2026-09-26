@@ -140,6 +140,15 @@ export function SettingsDialog({ settings, onClose, onChange }: SettingsDialogPr
           </section>
 
           <section className="settings-section">
+            <div><span className="eyebrow">ACESSIBILIDADE</span><h3>Leitura e interface</h3></div>
+            <label className="toggle-row"><input type="checkbox" checked={settings.highContrast} onChange={(e)=>patch("highContrast",e.target.checked)}/><span><strong>Alto contraste</strong><small>Aumenta contraste de texto, bordas e superfícies do aplicativo.</small></span></label>
+            <label className="toggle-row"><input type="checkbox" checked={settings.reducedMotion} onChange={(e)=>patch("reducedMotion",e.target.checked)}/><span><strong>Reduzir movimento</strong><small>Desativa animações e transições não essenciais.</small></span></label>
+            <label className="settings-number"><span>Tamanho do texto em Reflow</span><input type="number" min={12} max={40} value={settings.reflowFontSize} onChange={(e)=>patch("reflowFontSize",Math.max(12,Math.min(40,Number(e.target.value)||18)))}/><small>px</small></label>
+            <label className="workflow-field"><span>Velocidade da leitura em voz alta</span><div className="range-row"><input type="range" min={0.5} max={2} step={0.1} value={settings.readAloudRate} onChange={(e)=>patch("readAloudRate",Number(e.target.value))}/><strong>{settings.readAloudRate.toFixed(1)}×</strong></div></label>
+            <label className="workflow-field"><span>Tom da voz</span><div className="range-row"><input type="range" min={0.5} max={2} step={0.1} value={settings.readAloudPitch} onChange={(e)=>patch("readAloudPitch",Number(e.target.value))}/><strong>{settings.readAloudPitch.toFixed(1)}</strong></div></label>
+          </section>
+
+          <section className="settings-section">
             <div><span className="eyebrow">SEGURANÇA</span><h3>Modo protegido</h3></div>
             <label className="toggle-row"><input type="checkbox" checked={settings.protectedView} onChange={(e)=>patch("protectedView",e.target.checked)}/><span><strong>Visualização protegida para arquivos não confiáveis</strong><small>Bloqueia operações de escrita quando conteúdo ativo é encontrado.</small></span></label>
             <label className="toggle-row"><input type="checkbox" checked={settings.blockLaunchActions} onChange={(e)=>patch("blockLaunchActions",e.target.checked)}/><span><strong>Bloquear Launch actions</strong><small>O Seven nunca executa Launch automaticamente.</small></span></label>

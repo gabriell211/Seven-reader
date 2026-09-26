@@ -2076,18 +2076,18 @@ Módulo profissional.
 
 Elementos do PDF podem disparar ações, desde que a política de segurança permita.
 
-- [ ] Link action
-- [ ] Button action
-- [ ] Page open
-- [ ] Page close
-- [ ] Bookmark action
-- [ ] Go to page
-- [ ] Go to named destination
-- [ ] Open URL
-- [ ] Submit form
-- [ ] Reset form
+- [x] Link action
+- [x] Button action
+- [x] Page open
+- [x] Page close
+- [x] Bookmark action
+- [x] Go to page
+- [x] Go to named destination
+- [x] Open URL
+- [x] Submit form
+- [x] Reset form
 - [ ] Execute JavaScript em sandbox restrita
-- [ ] Bloquear launch actions perigosas
+- [x] Bloquear launch actions perigosas
 
 ---
 
@@ -2097,31 +2097,31 @@ Ferramenta para executar sequências de comandos sobre um ou vários arquivos.
 
 ## Executar
 
-- [ ] Ação predefinida
-- [ ] Ação customizada
+- [x] Ação predefinida
+- [x] Ação customizada
 - [ ] Arquivo atual
-- [ ] Vários arquivos
+- [x] Vários arquivos
 - [ ] Pasta
 - [ ] Scanner
 - [ ] Página web
 - [ ] Clipboard
-- [ ] Start
-- [ ] Stop
-- [ ] Resume
-- [ ] Progresso por etapa
+- [x] Start
+- [x] Stop
+- [x] Resume
+- [x] Progresso por etapa
 - [ ] Full report
 
 ## Criar ação
 
-- [ ] Adicionar tarefa
+- [x] Adicionar tarefa
 - [ ] Reordenar tarefa
 - [ ] Remover tarefa
-- [ ] Fixar configurações
+- [x] Fixar configurações
 - [ ] Perguntar ao usuário durante execução
 - [ ] Adicionar grupo/painel
 - [ ] Adicionar instrução
 - [ ] Adicionar divisor
-- [ ] Nome
+- [x] Nome
 - [ ] Descrição
 
 ## Gerenciar
@@ -2129,7 +2129,7 @@ Ferramenta para executar sequências de comandos sobre um ou vários arquivos.
 - [ ] Editar
 - [ ] Renomear
 - [ ] Copiar
-- [ ] Excluir
+- [x] Excluir
 - [ ] Reordenar
 - [ ] Importar
 - [ ] Exportar
@@ -2140,26 +2140,26 @@ Ferramenta para executar sequências de comandos sobre um ou vários arquivos.
 
 Artigos definem uma sequência de regiões de leitura para documentos com múltiplas colunas ou conteúdo distribuído entre páginas.
 
-- [ ] Painel Articles
-- [ ] Criar Article Box
-- [ ] Encadear várias caixas
-- [ ] Numeração automática artigo-caixa
-- [ ] Finalizar artigo
-- [ ] Título
-- [ ] Assunto
-- [ ] Autor
-- [ ] Keywords
-- [ ] Ler artigo seguindo a sequência
-- [ ] Avançar caixa a caixa
-- [ ] Voltar caixa a caixa
-- [ ] Restaurar visualização ao terminar
-- [ ] Insert article box no meio do thread
-- [ ] Mover article box
-- [ ] Redimensionar article box
-- [ ] Excluir uma caixa
-- [ ] Excluir artigo inteiro
-- [ ] Renumerar automaticamente após edição
-- [ ] Combinar dois artigos
+- [x] Painel Articles
+- [x] Criar Article Box
+- [x] Encadear várias caixas
+- [x] Numeração automática artigo-caixa
+- [x] Finalizar artigo
+- [x] Título
+- [x] Assunto
+- [x] Autor
+- [x] Keywords
+- [x] Ler artigo seguindo a sequência
+- [x] Avançar caixa a caixa
+- [x] Voltar caixa a caixa
+- [x] Restaurar visualização ao terminar
+- [x] Insert article box no meio do thread
+- [x] Mover article box
+- [x] Redimensionar article box
+- [x] Excluir uma caixa
+- [x] Excluir artigo inteiro
+- [x] Renumerar automaticamente após edição
+- [x] Combinar dois artigos
 - [ ] Ação de formulário "Read an article"
 - [ ] Article Box disponível também em Print Production
 
@@ -2169,24 +2169,24 @@ Artigos definem uma sequência de regiões de leitura para documentos com múlti
 
 Suporte a pesquisa em grandes coleções de PDFs sem abrir todos os arquivos.
 
-- [ ] Criar índice de texto completo
+- [x] Criar índice de texto completo
 - [ ] Adicionar pastas ao catálogo
 - [ ] Incluir subpastas
 - [ ] Excluir paths/padrões
 - [ ] Descrição do índice
 - [ ] Opções avançadas de indexação
-- [ ] Construir índice
+- [x] Construir índice
 - [ ] Atualizar/reconstruir índice
-- [ ] Limpar índice
-- [ ] Abrir índice existente
-- [ ] Pesquisar em índice selecionado
-- [ ] Pesquisa em múltiplos documentos
-- [ ] Mostrar documento, página e contexto do resultado
-- [ ] Navegar diretamente ao resultado
+- [x] Limpar índice
+- [x] Abrir índice existente
+- [x] Pesquisar em índice selecionado
+- [x] Pesquisa em múltiplos documentos
+- [x] Mostrar documento, página e contexto do resultado
+- [x] Navegar diretamente ao resultado
 - [ ] Processamento em background
 - [ ] Cancelamento
 - [ ] Progresso
-- [ ] Índices locais, sem upload
+- [x] Índices locais, sem upload
 
 ---
 
@@ -2207,10 +2207,10 @@ Módulo de colaboração sem IA. Pode utilizar backend configurável e deve perm
 - [ ] Data limite
 - [ ] Lembretes
 - [ ] Encerrar revisão
-- [ ] Exportar/importar comentários
+- [x] Exportar/importar comentários
 - [ ] Backend próprio configurável
 - [ ] SharePoint/servidor interno como adapter opcional
-- [ ] Operação local de comentários continua independente do serviço online
+- [x] Operação local de comentários continua independente do serviço online
 
 ---
 

@@ -26,13 +26,14 @@ import { CatalogDialog } from "./components/CatalogDialog";
 import { GuidedActionsDialog, type GuidedActionKind } from "./components/GuidedActionsDialog";
 import { SharedReviewDialog } from "./components/SharedReviewDialog";
 import { OptimizeDialog } from "./components/OptimizeDialog";
-import { applyAppearance, isTrustedPath, loadSettings, saveSettings, type SevenSettings } from "./lib/settings";
+import { applyAccessibilityPreferences, applyAppearance, isTrustedPath, loadSettings, saveSettings, type SevenSettings } from "./lib/settings";
 import {
   buildCatalog,
   listCatalogs,
   searchCatalog,
   deleteCatalog,
   exportReviewXfdf,
+  extractTextInRect,
   sessionImportReviewXfdf,
   addAnnotation,
   addInkAnnotation,
@@ -419,6 +420,7 @@ export default function App() {
 
   useEffect(() => {
     applyAppearance(settings.appearance);
+    applyAccessibilityPreferences(settings);
     saveSettings(settings);
   }, [settings]);
 

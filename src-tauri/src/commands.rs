@@ -231,6 +231,36 @@ pub struct ExternalFileStatus {
 }
 
 #[tauri::command]
+pub async fn session_transfer_pages(
+    state: State<'_, AppState>,
+    source_document_id: String,
+    target_document_id: String,
+    page_range: String,
+    insert_after: usize,
+    move_pages: bool,
+) -> CommandResult<page_transfer::PageTransferResult> {
+    let snapshot = AppState {
+        documents: state.documents.clone(),
+        jobs: state.jobs.clone(),
+        cache_dir: state.cache_dir.clone(),
+        resource_dir: state.resource_dir.clone(),
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        page_transfer::transfer_pages(
+            &snapshot,
+            &source_document_id,
+            &target_document_id,
+            &page_range,
+            insert_after,
+            move_pages,
+        )
+    })
+    .await
+    .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn get_external_file_status(
     state: State<'_, AppState>,
     document_id: String,

@@ -4,6 +4,7 @@ use crate::{
     annotations,
     capabilities,
     catalog,
+    compare,
     error::{CommandResult, ErrorPayload, SevenError},
     jobs::{self, JobStart},
     forms,
@@ -3693,6 +3694,38 @@ pub fn get_accessibility_report(
 ) -> CommandResult<document_ops::AccessibilityReport> {
     let input = pdf::validate_pdf_path(&path).map_err(ErrorPayload::from)?;
     document_ops::accessibility_report(&input).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub async fn compare_documents_advanced(
+    state: State<'_, AppState>,
+    left: String,
+    right: String,
+    options: compare::CompareOptions,
+) -> CommandResult<compare::CompareReport> {
+    let left = pdf::validate_pdf_path(&left).map_err(ErrorPayload::from)?;
+    let right = pdf::validate_pdf_path(&right).map_err(ErrorPayload::from)?;
+    let state_snapshot = AppState {
+        documents: state.documents.clone(),
+        jobs: state.jobs.clone(),
+        cache_dir: state.cache_dir.clone(),
+        resource_dir: state.resource_dir.clone(),
+    };
+    tauri::async_runtime::spawn_blocking(move || compare::compare(&state_snapshot, &left, &right, options))
+        .await
+        .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
+        .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn export_compare_report_pdf(
+    destination: String,
+    left_name: String,
+    right_name: String,
+    report: compare::CompareReport,
+) -> CommandResult<()> {
+    let destination = jobs::validated_output(&destination, "pdf").map_err(ErrorPayload::from)?;
+    compare::export_report_pdf(&destination, &left_name, &right_name, &report).map_err(ErrorPayload::from)
 }
 
 #[tauri::command]

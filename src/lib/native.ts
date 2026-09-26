@@ -620,6 +620,52 @@ export async function searchPdfPortfolioItems(
   return invoke<PortfolioSearchHit[]>("search_pdf_portfolio_items", { documentId, query });
 }
 
+export async function sessionAddPdfPortfolioClipboardText(
+  documentId: string,
+  text: string,
+  displayName: string,
+  folderPath: string,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_add_pdf_portfolio_clipboard_text", {
+    documentId, text, displayName, folderPath,
+  });
+}
+
+export async function sessionAddPdfPortfolioClipboardImage(
+  documentId: string,
+  rgba: number[],
+  width: number,
+  height: number,
+  displayName: string,
+  folderPath: string,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_add_pdf_portfolio_clipboard_image", {
+    documentId, rgba, width, height, displayName, folderPath,
+  });
+}
+
+export async function sessionAddPdfPortfolioWeb(
+  documentId: string,
+  url: string,
+  displayName: string,
+  folderPath: string,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_add_pdf_portfolio_web", {
+    documentId, url, displayName, folderPath,
+  });
+}
+
+export async function sessionAddPdfPortfolioScan(
+  documentId: string,
+  dpi: number,
+  displayName: string,
+  folderPath: string,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_add_pdf_portfolio_scan", {
+    documentId, dpi, displayName, folderPath,
+  });
+}
+
 export async function sessionAddPdfPortfolioItem(
   documentId: string,
   filePath: string,

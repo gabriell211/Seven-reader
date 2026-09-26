@@ -1299,6 +1299,13 @@ export async function startCombine(inputs: string[], output: string): Promise<Jo
   return invoke<JobStart>("start_combine_documents", { inputs, output });
 }
 
+export async function startCombineMixed(
+  inputs: string[],
+  output: string,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_combine_mixed_documents", { inputs, output });
+}
+
 export async function startSplitPages(
   input: string,
   output: string,

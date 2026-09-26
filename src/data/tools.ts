@@ -23,6 +23,7 @@ export const tools: ToolDefinition[] = [
   { id: "attachments", label: "Anexos", description: "Incorpore e extraia arquivos EmbeddedFiles; inclusões participam do histórico de edição.", icon: "attachment", group: "Documento", implemented: true },
 
   { id: "comment", label: "Comentar", description: "Notas, marcações de texto, carimbos e texto livre persistidos como anotações PDF.", icon: "comment", group: "Revisão", implemented: true },
+  { id: "measure", label: "Medir", description: "Distância, perímetro e área com escala calibrada, snap, labels e exportação CSV.", icon: "tools", group: "Revisão", capability: "pdf_engine", implemented: true },
   { id: "fill-sign", label: "Preencher e assinar", description: "Assinatura eletrônica visual ou assinatura digital PAdES com certificado PKCS#12.", icon: "sign", group: "Revisão", implemented: true },
   { id: "certificates", label: "Certificados", description: "PAdES, certificação, timestamp e validação criptográfica de assinaturas.", icon: "certificate", group: "Segurança", capability: "certificates", implemented: true },
   { id: "scan-ocr", label: "Digitalizar e OCR", description: "Digitalização local, OCR pesquisável, PDF/A e revisão de confiança.", icon: "ocr", group: "Documento", capability: ["ocr", "scanner", "tesseract"], implemented: true },

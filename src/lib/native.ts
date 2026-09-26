@@ -266,6 +266,18 @@ export async function measureGeospatial(
 }
 
 
+export async function startWatchFolder(config: WatchFolderConfig): Promise<WatchFolderConfig> {
+  return invoke<WatchFolderConfig>("start_watch_folder", { config });
+}
+
+export async function stopWatchFolder(id: string): Promise<void> {
+  await invoke("stop_watch_folder", { id });
+}
+
+export async function listWatchFolders(): Promise<WatchFolderConfig[]> {
+  return invoke<WatchFolderConfig[]>("list_watch_folders");
+}
+
 export async function getCapabilities(): Promise<Capabilities | null> {
   if (!isNativeDesktop()) return null;
   return invoke<Capabilities>("get_capabilities");

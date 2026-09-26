@@ -298,6 +298,7 @@ import type {
   RenderResult,
   SanitizeAnalysis,
   SanitizeOptions,
+  SanitizeReport,
   SearchHit,
   SearchOccurrence,
   StampInput,
@@ -428,6 +429,7 @@ export default function App() {
   const [watchFolderEvents, setWatchFolderEvents] = useState<WatchFolderEvent[]>([]);
   const [securityMode, setSecurityMode] = useState<"protect" | "sanitize" | null>(null);
   const [sanitizeAnalysis, setSanitizeAnalysis] = useState<SanitizeAnalysis | null>(null);
+  const [sanitizeReport, setSanitizeReport] = useState<SanitizeReport | null>(null);
   const [sanitizeAnalysisLoading, setSanitizeAnalysisLoading] = useState(false);
   const [propertiesOpen, setPropertiesOpen] = useState(false);
   const [reportMode, setReportMode] = useState<"compare" | "accessibility" | null>(null);
@@ -3688,6 +3690,7 @@ export default function App() {
   const loadSanitizeAnalysis = async () => {
     if (!document) return;
     try {
+      setSanitizeReport(null);
       setSanitizeAnalysisLoading(true);
       setSanitizeAnalysis(await analyzeSanitization(document.activePath));
     } catch (error) {
@@ -3702,7 +3705,7 @@ export default function App() {
     if (!document) return;
     try {
       const report = await sanitizeDocument(document.activePath, output, options);
-      setSecurityMode(null);
+      setSanitizeReport(report);
       setNotice(`Sanitização concluída · ${report.removedEntries} entrada(s) removida(s).`);
     } catch (error) {
       setNotice(errorMessage(error));
@@ -4171,6 +4174,7 @@ export default function App() {
           onClose={() => setSecurityMode(null)}
           sanitizeAnalysis={sanitizeAnalysis}
           sanitizeAnalysisLoading={sanitizeAnalysisLoading}
+          sanitizeReport={sanitizeReport}
           onAnalyzeSanitization={() => void loadSanitizeAnalysis()}
           onEncrypt={(output, userPassword, ownerPassword, options) => void runEncrypt(output, userPassword, ownerPassword, options)}
           onDecrypt={(output, password) => void runDecrypt(output, password)}

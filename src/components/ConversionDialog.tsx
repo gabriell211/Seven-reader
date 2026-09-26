@@ -40,6 +40,8 @@ const defaultExtensions = [
   "odt", "ods", "odp", "rtf", "txt", "html", "htm",
 ];
 
+const STANDARD_PRESET = BUILT_IN_CONVERSION_PRESETS.find((preset) => preset.id === "standard")!;
+
 const standardLabel = (value: ConversionOptions["pdfStandard"]) => ({
   pdf: "PDF",
   "pdfa-1b": "PDF/A-1b",
@@ -107,7 +109,7 @@ export function ConversionDialog({
     return result;
   }, [presets, watchFolders]);
 
-  const selectedPreset = presets.find((preset) => preset.id === selectedPresetId) ?? presets[0];
+  const selectedPreset = presets.find((preset) => preset.id === selectedPresetId) ?? STANDARD_PRESET;
   const imageAvailable = Boolean(capabilities?.ghostscript.available);
   const textAvailable = Boolean(capabilities?.pdftotext.available);
   const officeAvailable = Boolean(capabilities?.office.available);
@@ -343,7 +345,7 @@ export function ConversionDialog({
 
   const saveWatch = () => {
     if (!watchName.trim() || !watchInput || !watchOutput) return;
-    const preset = watchPresetChoices.find((item) => item.id === watchPreset) ?? BUILT_IN_CONVERSION_PRESETS[0];
+    const preset = watchPresetChoices.find((item) => item.id === watchPreset) ?? STANDARD_PRESET;
     const needsGhostscript = preset.options.postProcess || preset.options.pdfStandard !== "pdf";
     if (needsGhostscript && !imageAvailable) return;
     if (preset.options.pdfStandard !== "pdf" && !preset.options.outputProfile) return;
@@ -507,9 +509,9 @@ export function ConversionDialog({
                         <small>{preset.builtIn ? "Nativo" : "Personalizado"} · {standardLabel(preset.options.pdfStandard)} · {preset.options.colorDpi} DPI</small>
                       </button>
                       <div className="conversion-preset-card-actions">
-                        <button title={preset.builtIn ? "Criar versão personalizada" : "Editar"} onClick={() => beginEditPreset(preset)}><SevenIcon name="edit" /></button>
-                        <button title="Duplicar" onClick={() => duplicatePreset(preset)}><SevenIcon name="pages" /></button>
-                        {!preset.builtIn && <button title="Excluir" onClick={() => deletePreset(preset)}><SevenIcon name="close" /></button>}
+                        <button aria-label={preset.builtIn ? "Criar versão personalizada do preset " + preset.name : "Editar preset " + preset.name} title={preset.builtIn ? "Criar versão personalizada" : "Editar"} onClick={() => beginEditPreset(preset)}><SevenIcon name="edit" /></button>
+                        <button aria-label={"Duplicar preset " + preset.name} title="Duplicar" onClick={() => duplicatePreset(preset)}><SevenIcon name="pages" /></button>
+                        {!preset.builtIn && <button aria-label={"Excluir preset " + preset.name} title="Excluir" onClick={() => deletePreset(preset)}><SevenIcon name="close" /></button>}
                       </div>
                     </article>
                   ))}

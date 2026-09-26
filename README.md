@@ -2568,20 +2568,20 @@ A ferramenta deve reproduzir o fluxo completo de **Use print production**, com c
 
 # Salvamento
 
-- [ ] Salvar
-- [ ] Salvar como
-- [ ] Salvar cópia
+- [x] Salvar
+- [x] Salvar como
+- [x] Salvar cópia
 - [ ] Incremental save quando seguro
-- [ ] Full rewrite quando necessário
+- [x] Full rewrite quando necessário
 - [ ] Autosave
 - [ ] Recovery file
-- [ ] Escrita atômica
-- [ ] Detectar alteração externa
-- [ ] Resolver conflito
-- [ ] Validar arquivo salvo
-- [ ] Preservar assinatura quando permitido
-- [ ] Avisar antes de invalidar assinatura
-- [ ] Histórico de undo/redo da sessão
+- [x] Escrita atômica
+- [x] Detectar alteração externa
+- [x] Resolver conflito
+- [x] Validar arquivo salvo
+- [x] Preservar assinatura quando permitido
+- [x] Avisar antes de invalidar assinatura
+- [x] Histórico de undo/redo da sessão
 
 ---
 
@@ -2592,18 +2592,18 @@ Toda operação pesada deve gerar um `job_id`.
 - [ ] Fila global
 - [ ] Prioridade
 - [ ] Concorrência limitada
-- [ ] Progresso real
-- [ ] Etapa atual
-- [ ] Cancelamento cooperativo
-- [ ] Pausa
-- [ ] Retomar
+- [x] Progresso real
+- [x] Etapa atual
+- [x] Cancelamento cooperativo
+- [x] Pausa
+- [x] Retomar
 - [ ] Retry
 - [ ] Backoff
 - [ ] Persistência
 - [ ] Recuperação após reinício quando segura
-- [ ] Notificação
-- [ ] Log
-- [ ] Erro por arquivo
+- [x] Notificação
+- [x] Log
+- [x] Erro por arquivo
 - [ ] Relatório
 
 ---
@@ -2633,28 +2633,28 @@ Toda operação pesada deve gerar um `job_id`.
 
 # Segurança da aplicação
 
-- [ ] CSP restritiva
-- [ ] Tauri capabilities mínimas
-- [ ] Allowlist explícita de commands
-- [ ] Validação de todo path
-- [ ] Canonicalização de path
-- [ ] Proteção contra path traversal
-- [ ] Arquivos temporários seguros
-- [ ] Temp directory isolado
-- [ ] Limpeza de temporários
-- [ ] Limite de tamanho
+- [x] CSP restritiva
+- [x] Tauri capabilities mínimas
+- [x] Allowlist explícita de commands
+- [x] Validação de todo path
+- [x] Canonicalização de path
+- [x] Proteção contra path traversal
+- [x] Arquivos temporários seguros
+- [x] Temp directory isolado
+- [x] Limpeza de temporários
+- [x] Limite de tamanho
 - [ ] Limite de memória
 - [ ] Timeout
-- [ ] Cancelamento
+- [x] Cancelamento
 - [ ] Parser fuzzing
 - [ ] Corpus de PDFs malformados
 - [ ] Isolamento de codecs quando necessário
-- [ ] Nunca executar attachment automaticamente
-- [ ] Nunca executar launch action automaticamente
-- [ ] JavaScript desativado por padrão
-- [ ] URLs externas com confirmação
-- [ ] Security warnings compreensíveis
-- [ ] Logs sem conteúdo sensível
+- [x] Nunca executar attachment automaticamente
+- [x] Nunca executar launch action automaticamente
+- [x] JavaScript desativado por padrão
+- [x] URLs externas com confirmação
+- [x] Security warnings compreensíveis
+- [x] Logs sem conteúdo sensível
 
 ---
 
@@ -2718,25 +2718,25 @@ Por padrão:
 
 ## Aparência
 
-- [ ] Claro
-- [ ] Escuro
-- [ ] Sistema
+- [x] Claro
+- [x] Escuro
+- [x] Sistema
 - [ ] Densidade
 - [ ] Escala
 - [ ] Fonte UI
-- [ ] Reduced motion
-- [ ] Quick tools
-- [ ] Painéis
+- [x] Reduced motion
+- [x] Quick tools
+- [x] Painéis
 - [ ] Barra global
 - [ ] Cor de destaque Seven
 
 ## Documentos
 
-- [ ] Zoom padrão
+- [x] Zoom padrão
 - [ ] Layout
 - [ ] Rolagem
-- [ ] Reabrir na última página
-- [ ] Restaurar abas
+- [x] Reabrir na última página
+- [x] Restaurar abas
 - [ ] Mostrar miniaturas
 - [ ] Unidades
 - [ ] Cache
@@ -2746,24 +2746,24 @@ Por padrão:
 
 ## Segurança
 
-- [ ] URLs externas
-- [ ] JavaScript
-- [ ] Attachments
-- [ ] Trusted locations
+- [x] URLs externas
+- [x] JavaScript
+- [x] Attachments
+- [x] Trusted locations
 - [ ] Trusted certificates
-- [ ] Protected view
+- [x] Protected view
 - [ ] Sandbox
-- [ ] Recent files
+- [x] Recent files
 - [ ] Limpeza de dados
 
 ## OCR
 
-- [ ] Idioma
-- [ ] Idiomas adicionais
-- [ ] Auto rotate
-- [ ] Deskew
+- [x] Idioma
+- [x] Idiomas adicionais
+- [x] Auto rotate
+- [x] Deskew
 - [ ] Confidence threshold
-- [ ] OCR automático em scan
+- [x] OCR automático em scan
 - [ ] Pasta de lote
 
 ## Conversão
@@ -2771,8 +2771,8 @@ Por padrão:
 - [ ] Pasta padrão
 - [ ] Nome
 - [ ] Sobrescrita
-- [ ] Preset
-- [ ] DPI
+- [x] Preset
+- [x] DPI
 - [ ] OCR automático
 - [ ] Abrir ao concluir
 
@@ -2780,9 +2780,9 @@ Por padrão:
 
 - [ ] Digital ID padrão
 - [ ] Timestamp server
-- [ ] Validation
-- [ ] Revocation
-- [ ] Trust
+- [x] Validation
+- [x] Revocation
+- [x] Trust
 - [ ] Aparência padrão
 
 ---

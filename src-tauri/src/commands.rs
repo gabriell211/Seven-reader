@@ -1741,6 +1741,28 @@ pub fn session_set_pdf_portfolio_view(
     .map_err(ErrorPayload::from)
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionPortfolioDirectoryImportResult {
+    pub document: pdf::DocumentSummary,
+    pub report: advanced::PortfolioDirectoryImportReport,
+}
+
+#[tauri::command]
+pub fn session_import_pdf_portfolio_directory(
+    state: State<'_, AppState>,
+    document_id: String,
+    directory: String,
+    target_path: String,
+) -> CommandResult<SessionPortfolioDirectoryImportResult> {
+    let directory = std::path::PathBuf::from(directory);
+    session::apply_revision(&state, &document_id, "portfolio-import-directory", move |input, output| {
+        advanced::import_directory_to_portfolio(input, output, &directory, &target_path)
+    })
+    .map(|(document, report)| SessionPortfolioDirectoryImportResult { document, report })
+    .map_err(ErrorPayload::from)
+}
+
 #[tauri::command]
 pub fn session_create_pdf_portfolio_folder(
     state: State<'_, AppState>,

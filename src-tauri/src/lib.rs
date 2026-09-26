@@ -64,6 +64,7 @@ pub fn run() {
             commands::redo_document,
             commands::session_add_annotation,
             commands::session_delete_annotation,
+            commands::session_add_stamp,
             commands::session_add_ink,
             commands::session_add_markup,
             commands::session_edit_add_text,

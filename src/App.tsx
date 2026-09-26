@@ -290,6 +290,11 @@ export default function App() {
   const [navHistories, setNavHistories] = useState<Record<string, { entries: number[]; index: number }>>({});
   const [rendered, setRendered] = useState<RenderResult | null>(null);
   const [renderedPages, setRenderedPages] = useState<RenderResult[]>([]);
+  const [splitDocumentId, setSplitDocumentId] = useState<string | null>(null);
+  const [splitRendered, setSplitRendered] = useState<RenderResult | null>(null);
+  const [splitPage, setSplitPage] = useState(0);
+  const [splitZoom, setSplitZoom] = useState(100);
+  const [splitOrientation, setSplitOrientation] = useState<"vertical" | "horizontal">("vertical");
   const [viewMode, setViewMode] = useState<ViewMode>("single");
   const [page, setPage] = useState(0);
   const [zoom, setZoom] = useState(100);
@@ -536,6 +541,10 @@ export default function App() {
     () => Object.values(jobs).filter((job) => job.state === "queued" || job.state === "running"),
     [jobs],
   );
+
+  const splitDocument = splitDocumentId
+    ? openTabs.find((tab) => tab.id === splitDocumentId) ?? null
+    : null;
 
   const currentNavigation = document ? navHistories[document.id] : undefined;
   const canNavigateBack = Boolean(currentNavigation && currentNavigation.index > 0);
@@ -840,9 +849,50 @@ export default function App() {
     }
   };
 
+  const renderSplitDocument = async (
+    tab: DocumentSummary,
+    nextPage: number,
+    nextZoom: number,
+  ) => {
+    const boundedPage = Math.max(0, Math.min(tab.pageCount - 1, nextPage));
+    const boundedZoom = Math.max(25, Math.min(400, nextZoom));
+    const targetWidth = Math.max(520, Math.min(3600, Math.round(1050 * (boundedZoom / 100))));
+    const result = await renderPage(tab.id, boundedPage, targetWidth);
+    setSplitPage(boundedPage);
+    setSplitZoom(boundedZoom);
+    setSplitRendered(result);
+  };
+
+  const openSideBySide = async (documentId: string) => {
+    if (!document || documentId === document.id) return;
+    const tab = openTabs.find((item) => item.id === documentId);
+    if (!tab) return;
+    const view = tabViews[tab.id] ?? { page: 0, zoom: settings.defaultZoom };
+    try {
+      setSplitDocumentId(tab.id);
+      await renderSplitDocument(tab, view.page, view.zoom);
+      setNotice(`"${tab.name}" aberto lado a lado.`);
+    } catch (error) {
+      setSplitDocumentId(null);
+      setSplitRendered(null);
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const closeSideBySide = () => {
+    setSplitDocumentId(null);
+    setSplitRendered(null);
+  };
+
   const selectTab = async (summary: DocumentSummary) => {
     if (summary.id === document?.id) return;
     try {
+      if (summary.id === splitDocumentId && document) {
+        const previous = document;
+        const previousView = tabViews[previous.id] ?? { page, zoom };
+        setSplitDocumentId(previous.id);
+        await renderSplitDocument(previous, previousView.page, previousView.zoom);
+      }
       localStorage.setItem("seven-reader:last-document", summary.path);
       await activateDocument(summary, tabViews[summary.id]);
     } catch (error) {
@@ -870,6 +920,10 @@ export default function App() {
 
     const remaining = openTabs.filter((tab) => !ids.includes(tab.id));
     setOpenTabs(remaining);
+    if (splitDocumentId && ids.includes(splitDocumentId)) {
+      setSplitDocumentId(null);
+      setSplitRendered(null);
+    }
     if (!remaining.length) localStorage.removeItem(windowSessionKey);
     setTabViews((current) => {
       const next = { ...current };
@@ -2970,6 +3024,11 @@ export default function App() {
           tabs={openTabs}
           rendered={rendered}
           renderedPages={renderedPages}
+          splitDocument={splitDocument}
+          splitRendered={splitRendered}
+          splitPage={splitPage}
+          splitZoom={splitZoom}
+          splitOrientation={splitOrientation}
           viewMode={viewMode}
           canReopenClosed={closedTabs.length > 0}
           canNavigateBack={canNavigateBack}
@@ -2992,6 +3051,10 @@ export default function App() {
           canCreateWindow={currentWindowLabel === "main"}
           onOpenInNewWindow={(documentId) => void openTabInNewWindow(documentId, false)}
           onMoveToNewWindow={(documentId) => void openTabInNewWindow(documentId, true)}
+          onOpenSideBySide={(documentId) => void openSideBySide(documentId)}
+          onCloseSideBySide={closeSideBySide}
+          onSplitRender={(nextPage, nextZoom) => splitDocument && void renderSplitDocument(splitDocument, nextPage, nextZoom)}
+          onSplitOrientationChange={setSplitOrientation}
           onNavigateBack={() => void navigateHistory(-1)}
           onNavigateForward={() => void navigateHistory(1)}
           onQuickToolsPositionChange={(position) => setSettings((current) => ({ ...current, quickToolsPosition: position }))}

@@ -1,4 +1,5 @@
 use crate::{
+    conversion,
     error::SevenError,
     jobs,
     state::{AppState, WatchFolderRuntime},
@@ -25,6 +26,10 @@ pub struct WatchFolderConfig {
     pub recursive: bool,
     pub enabled: bool,
     pub preset: String,
+    #[serde(default)]
+    pub preset_name: Option<String>,
+    #[serde(default)]
+    pub conversion_options: Option<conversion::ConversionOptions>,
     pub extensions: Vec<String>,
 }
 
@@ -105,8 +110,17 @@ fn validate_config(mut config: WatchFolderConfig) -> Result<(WatchFolderConfig, 
     if config.extensions.is_empty() {
         config.extensions = allowed.iter().map(|value| (*value).to_owned()).collect();
     }
-    if !matches!(config.preset.as_str(), "standard" | "compact" | "print") {
-        config.preset = "standard".into();
+    config.preset = config.preset.trim().to_owned();
+    config.preset_name = config.preset_name.and_then(|value| {
+        let value = value.trim().to_owned();
+        if value.is_empty() { None } else { Some(value) }
+    });
+    if let Some(options) = &config.conversion_options {
+        options.validate()?;
+    } else if !matches!(config.preset.as_str(), "standard" | "compact" | "print") {
+        return Err(SevenError::OperationRejected(
+            "Watch Folder referencia um preset personalizado sem a configuração incorporada".into(),
+        ));
     }
     if config.id.trim().is_empty() {
         config.id = Uuid::new_v4().to_string();
@@ -121,10 +135,15 @@ pub fn start(
 ) -> Result<WatchFolderConfig, SevenError> {
     let (config, input, output) = validate_config(config)?;
     let executable = jobs::require_executable(&["soffice", "libreoffice"], "LibreOffice")?;
-    let ghostscript = if config.preset == "standard" {
-        None
-    } else {
+    let conversion_options = config
+        .conversion_options
+        .clone()
+        .unwrap_or_else(|| conversion::ConversionOptions::from_legacy_preset(&config.preset));
+    conversion_options.validate()?;
+    let ghostscript = if conversion_options.requires_postprocess() {
         Some(jobs::require_executable(&["gswin64c", "gswin32c", "gs"], "Ghostscript")?)
+    } else {
+        None
     };
 
     if let Some(existing) = state.watch_folders.lock().remove(&config.id) {
@@ -147,7 +166,8 @@ pub fn start(
     let id = config.id.clone();
     let extensions = config.extensions.clone();
     let recursive = config.recursive;
-    let preset = config.preset.clone();
+    let preset_label = config.preset_name.clone().unwrap_or_else(|| config.preset.clone());
+    let conversion_options = conversion_options.clone();
     let cache_dir = state.cache_dir.clone();
     let jobs_state = AppState {
         documents: state.documents.clone(),
@@ -220,7 +240,7 @@ pub fn start(
                     continue;
                 }
 
-                let started = if preset == "standard" {
+                let started = if !conversion_options.requires_postprocess() {
                     let args = vec![
                         "--headless".into(),
                         "--convert-to".into(),
@@ -253,17 +273,36 @@ pub fn start(
                         job_temp.to_string_lossy().into_owned(),
                         path.to_string_lossy().into_owned(),
                     ];
-                    let gs_setting = if preset == "print" { "/printer" } else { "/ebook" };
-                    let ghostscript_args = vec![
-                        "-sDEVICE=pdfwrite".into(),
-                        "-dCompatibilityLevel=1.7".into(),
-                        format!("-dPDFSETTINGS={gs_setting}"),
-                        "-dNOPAUSE".into(),
-                        "-dQUIET".into(),
-                        "-dBATCH".into(),
-                        format!("-sOutputFile={}", final_output.to_string_lossy()),
-                        intermediate.to_string_lossy().into_owned(),
-                    ];
+                    let prefix = match conversion_options.write_standard_prefix(&job_temp) {
+                        Ok(value) => value,
+                        Err(error) => {
+                            let _ = fs::remove_dir_all(&job_temp);
+                            converted.insert(path.clone(), (size, modified));
+                            known.remove(&path);
+                            let _ = app_thread.emit("seven://watch-folder", WatchFolderEvent {
+                                watcher_id: id.clone(),
+                                state: "error".into(),
+                                path: Some(path.to_string_lossy().into_owned()),
+                                detail: error.to_string(),
+                            });
+                            continue;
+                        }
+                    };
+                    let ghostscript_args = match conversion_options.ghostscript_args(&intermediate, &final_output, prefix.as_deref()) {
+                        Ok(value) => value,
+                        Err(error) => {
+                            let _ = fs::remove_dir_all(&job_temp);
+                            converted.insert(path.clone(), (size, modified));
+                            known.remove(&path);
+                            let _ = app_thread.emit("seven://watch-folder", WatchFolderEvent {
+                                watcher_id: id.clone(),
+                                state: "error".into(),
+                                path: Some(path.to_string_lossy().into_owned()),
+                                detail: error.to_string(),
+                            });
+                            continue;
+                        }
+                    };
                     jobs::start_process_sequence_job_with_cleanup(
                         app_thread.clone(),
                         &jobs_state,
@@ -277,7 +316,7 @@ pub fn start(
                             jobs::ProcessStep {
                                 program: ghostscript.clone().expect("validado acima"),
                                 args: ghostscript_args,
-                                label: if preset == "print" { "Aplicando preset de impressão".into() } else { "Compactando PDF".into() },
+                                label: format!("Aplicando preset {preset_label}"),
                             },
                         ],
                         Some(final_output),

@@ -1493,6 +1493,14 @@ export async function startExportPdf(
   return invoke<JobStart>("start_export_pdf", { input, output, format, dpi: dpi ?? null });
 }
 
+export async function pauseJob(jobId: string): Promise<void> {
+  await invoke("pause_job", { jobId });
+}
+
+export async function resumeJob(jobId: string): Promise<void> {
+  await invoke("resume_job", { jobId });
+}
+
 export async function cancelJob(jobId: string): Promise<void> {
   await invoke("cancel_job", { jobId });
 }

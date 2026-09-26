@@ -24,6 +24,7 @@ pub struct WatchFolderConfig {
     pub output_directory: String,
     pub recursive: bool,
     pub enabled: bool,
+    pub preset: String,
     pub extensions: Vec<String>,
 }
 
@@ -104,6 +105,9 @@ fn validate_config(mut config: WatchFolderConfig) -> Result<(WatchFolderConfig, 
     if config.extensions.is_empty() {
         config.extensions = allowed.iter().map(|value| (*value).to_owned()).collect();
     }
+    if !matches!(config.preset.as_str(), "standard" | "compact" | "print") {
+        config.preset = "standard".into();
+    }
     if config.id.trim().is_empty() {
         config.id = Uuid::new_v4().to_string();
     }
@@ -117,6 +121,11 @@ pub fn start(
 ) -> Result<WatchFolderConfig, SevenError> {
     let (config, input, output) = validate_config(config)?;
     let executable = jobs::require_executable(&["soffice", "libreoffice"], "LibreOffice")?;
+    let ghostscript = if config.preset == "standard" {
+        None
+    } else {
+        Some(jobs::require_executable(&["gswin64c", "gswin32c", "gs"], "Ghostscript")?)
+    };
 
     if let Some(existing) = state.watch_folders.lock().remove(&config.id) {
         existing.stop.store(true, Ordering::Relaxed);
@@ -138,6 +147,8 @@ pub fn start(
     let id = config.id.clone();
     let extensions = config.extensions.clone();
     let recursive = config.recursive;
+    let preset = config.preset.clone();
+    let cache_dir = state.cache_dir.clone();
     let jobs_state = AppState {
         documents: state.documents.clone(),
         jobs: state.jobs.clone(),
@@ -209,22 +220,70 @@ pub fn start(
                     continue;
                 }
 
-                let args = vec![
-                    "--headless".into(),
-                    "--convert-to".into(),
-                    "pdf".into(),
-                    "--outdir".into(),
-                    output.to_string_lossy().into_owned(),
-                    path.to_string_lossy().into_owned(),
-                ];
-                let started = jobs::start_process_job(
-                    app_thread.clone(),
-                    &jobs_state,
-                    "watch-folder-convert",
-                    executable.clone(),
-                    args,
-                    Some(output.clone()),
-                );
+                let started = if preset == "standard" {
+                    let args = vec![
+                        "--headless".into(),
+                        "--convert-to".into(),
+                        "pdf".into(),
+                        "--outdir".into(),
+                        output.to_string_lossy().into_owned(),
+                        path.to_string_lossy().into_owned(),
+                    ];
+                    jobs::start_process_job(
+                        app_thread.clone(),
+                        &jobs_state,
+                        "watch-folder-convert",
+                        executable.clone(),
+                        args,
+                        Some(output.clone()),
+                    )
+                } else {
+                    let job_temp = cache_dir.join("jobs").join(format!("watch-{}", Uuid::new_v4()));
+                    if fs::create_dir_all(&job_temp).is_err() {
+                        continue;
+                    }
+                    let stem = path.file_stem().and_then(|value| value.to_str()).unwrap_or("documento");
+                    let intermediate = job_temp.join(format!("{stem}.pdf"));
+                    let final_output = output.join(format!("{stem}.pdf"));
+                    let libreoffice_args = vec![
+                        "--headless".into(),
+                        "--convert-to".into(),
+                        "pdf".into(),
+                        "--outdir".into(),
+                        job_temp.to_string_lossy().into_owned(),
+                        path.to_string_lossy().into_owned(),
+                    ];
+                    let gs_setting = if preset == "print" { "/printer" } else { "/ebook" };
+                    let ghostscript_args = vec![
+                        "-sDEVICE=pdfwrite".into(),
+                        "-dCompatibilityLevel=1.7".into(),
+                        format!("-dPDFSETTINGS={gs_setting}"),
+                        "-dNOPAUSE".into(),
+                        "-dQUIET".into(),
+                        "-dBATCH".into(),
+                        format!("-sOutputFile={}", final_output.to_string_lossy()),
+                        intermediate.to_string_lossy().into_owned(),
+                    ];
+                    jobs::start_process_sequence_job_with_cleanup(
+                        app_thread.clone(),
+                        &jobs_state,
+                        "watch-folder-convert",
+                        vec![
+                            jobs::ProcessStep {
+                                program: executable.clone(),
+                                args: libreoffice_args,
+                                label: "Convertendo documento para PDF".into(),
+                            },
+                            jobs::ProcessStep {
+                                program: ghostscript.clone().expect("validado acima"),
+                                args: ghostscript_args,
+                                label: if preset == "print" { "Aplicando preset de impressão".into() } else { "Compactando PDF".into() },
+                            },
+                        ],
+                        Some(final_output),
+                        vec![job_temp],
+                    )
+                };
                 converted.insert(path.clone(), (size, modified));
                 known.remove(&path);
 

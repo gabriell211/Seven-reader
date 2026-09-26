@@ -77,6 +77,7 @@ import {
   sessionDeleteAnnotation,
   sessionAddInk,
   sessionAddMarkup,
+  sessionAddStamp,
   sessionEditAddText,
   sessionEditReplaceText,
   listPageImageObjects,
@@ -227,6 +228,7 @@ import type {
   RenderResult,
   SanitizeOptions,
   SearchHit,
+  StampInput,
   SignRequest,
   SignatureValidationReport,
   TextPlacement,
@@ -3233,6 +3235,7 @@ export default function App() {
           onClose={() => setCommentsOpen(false)}
           onReload={() => void reloadAnnotations()}
           onAdd={(annotation) => void runAddAnnotation(annotation)}
+          onStamp={(stamp) => void runStamp(stamp)}
           onDelete={(objectId) => void runDeleteAnnotation(objectId)}
         />
       )}

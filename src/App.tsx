@@ -314,6 +314,7 @@ const emptyCapabilities: Capabilities = {
   tesseract: { available: false },
   unpaper: { available: false },
   web_pdf: { available: false },
+  verapdf: { available: false },
 };
 
 function errorMessage(error: unknown): string {

@@ -2987,12 +2987,38 @@ pub async fn review_ocr_page(
     .map_err(ErrorPayload::from)
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScannedPage {
+    pub cache_path: String,
+    pub width: u32,
+    pub height: u32,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanFinalizeResult {
+    pub output: String,
+    pub job_id: Option<String>,
+}
+
+fn validate_scan_mode(mode: &str) -> Result<&'static str, SevenError> {
+    match mode {
+        "color" => Ok("Color"),
+        "gray" => Ok("Gray"),
+        "lineart" => Ok("Lineart"),
+        _ => Err(SevenError::OperationRejected("Modo de cor do scanner inválido".into())),
+    }
+}
+
 #[cfg(target_os = "linux")]
-fn scan_pdf_blocking(output: &std::path::Path, dpi: u16) -> Result<(), SevenError> {
+fn scan_image_blocking(output: &std::path::Path, dpi: u16, color_mode: &str) -> Result<(), SevenError> {
     let scanner = jobs::require_executable(&["scanimage"], "SANE/scanimage")?;
+    let mode = validate_scan_mode(color_mode)?;
     let scan = std::process::Command::new(scanner)
         .arg("--format=png")
         .arg(format!("--resolution={dpi}"))
+        .arg(format!("--mode={mode}"))
         .stdin(std::process::Stdio::null())
         .output()
         .map_err(|error| SevenError::Operation(error.to_string()))?;
@@ -3002,29 +3028,31 @@ fn scan_pdf_blocking(output: &std::path::Path, dpi: u16) -> Result<(), SevenErro
             scan.status.code()
         )));
     }
-    let temp = output.with_extension(format!("seven-scan-{}.png", uuid::Uuid::new_v4()));
-    fs::write(&temp, scan.stdout).map_err(|error| SevenError::Io(error.to_string()))?;
-    let result = pdf::create_pdf_from_images(&[temp.clone()], output, dpi);
-    let _ = fs::remove_file(temp);
-    result
+    fs::write(output, scan.stdout).map_err(|error| SevenError::Io(error.to_string()))
 }
 
 #[cfg(target_os = "windows")]
-fn scan_pdf_blocking(output: &std::path::Path, dpi: u16) -> Result<(), SevenError> {
+fn scan_image_blocking(output: &std::path::Path, dpi: u16, color_mode: &str) -> Result<(), SevenError> {
     let powershell = jobs::require_executable(&["powershell"], "Windows PowerShell/WIA")?;
-    let temp = output.with_extension(format!("seven-wia-scan-{}.png", uuid::Uuid::new_v4()));
-    let escaped_temp = temp.to_string_lossy().replace('\'', "''");
+    let intent = match color_mode {
+        "color" => 1,
+        "gray" => 2,
+        "lineart" => 4,
+        _ => return Err(SevenError::OperationRejected("Modo de cor do scanner inválido".into())),
+    };
+    let escaped_output = output.to_string_lossy().replace(''', "''");
     let script = format!(
         "$ErrorActionPreference='Stop'; \
          $dialog=New-Object -ComObject WIA.CommonDialog; \
          $device=$dialog.ShowSelectDevice(1,$false,$false); \
          if($null -eq $device){{ throw 'Nenhum scanner selecionado.' }}; \
          $item=$device.Items.Item(1); \
+         try{{$item.Properties.Item('6146').Value={intent}}}catch{{}}; \
          try{{$item.Properties.Item('6147').Value={dpi}}}catch{{}}; \
          try{{$item.Properties.Item('6148').Value={dpi}}}catch{{}}; \
          $image=$dialog.ShowTransfer($item,'{{B96B3CAF-0728-11D3-9D7B-0000F81EF32E}}',$false); \
          if($null -eq $image){{ throw 'Digitalização cancelada.' }}; \
-         $image.SaveFile('{escaped_temp}')"
+         $image.SaveFile('{escaped_output}')"
     );
     let result = std::process::Command::new(powershell)
         .args(["-NoProfile", "-STA", "-Command", &script])
@@ -3040,21 +3068,146 @@ fn scan_pdf_blocking(output: &std::path::Path, dpi: u16) -> Result<(), SevenErro
             stderr
         }));
     }
-
-    if !temp.is_file() {
+    if !output.is_file() {
         return Err(SevenError::Operation("O scanner não gerou uma imagem".into()));
     }
-
-    let created = pdf::create_pdf_from_images(&[temp.clone()], output, dpi);
-    let _ = fs::remove_file(&temp);
-    created
+    Ok(())
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "windows")))]
-fn scan_pdf_blocking(_output: &std::path::Path, _dpi: u16) -> Result<(), SevenError> {
+fn scan_image_blocking(_output: &std::path::Path, _dpi: u16, _color_mode: &str) -> Result<(), SevenError> {
     Err(SevenError::CapabilityUnavailable(
         "Scanner nativo ainda não disponível neste sistema operacional".into(),
     ))
+}
+
+fn scan_cache_directory(state: &AppState) -> Result<std::path::PathBuf, SevenError> {
+    let directory = state.cache_dir.join("scans");
+    fs::create_dir_all(&directory).map_err(|error| SevenError::Io(error.to_string()))?;
+    Ok(directory)
+}
+
+fn validated_scan_cache_paths(
+    state: &AppState,
+    inputs: &[String],
+) -> Result<Vec<std::path::PathBuf>, SevenError> {
+    let directory = scan_cache_directory(state)?;
+    let directory = fs::canonicalize(directory).map_err(|error| SevenError::Io(error.to_string()))?;
+    let mut paths = Vec::with_capacity(inputs.len());
+    for input in inputs {
+        let path = fs::canonicalize(input).map_err(|error| SevenError::InvalidPath(error.to_string()))?;
+        if !path.starts_with(&directory) || !path.is_file() {
+            return Err(SevenError::OperationRejected(
+                "A sessão de scanner contém um arquivo fora do cache isolado".into(),
+            ));
+        }
+        paths.push(path);
+    }
+    Ok(paths)
+}
+
+#[tauri::command]
+pub async fn scan_page_image(
+    state: State<'_, AppState>,
+    dpi: u16,
+    color_mode: String,
+) -> CommandResult<ScannedPage> {
+    let dpi = dpi.clamp(75, 1200);
+    validate_scan_mode(&color_mode).map_err(ErrorPayload::from)?;
+    let directory = scan_cache_directory(&state).map_err(ErrorPayload::from)?;
+    let output = directory.join(format!("scan-{}.png", uuid::Uuid::new_v4()));
+    let output_for_task = output.clone();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        scan_image_blocking(&output_for_task, dpi, &color_mode)?;
+        let (width, height) = image::image_dimensions(&output_for_task)
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+        Ok::<_, SevenError>((width, height))
+    })
+    .await
+    .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
+    .map(|(width, height)| ScannedPage {
+        cache_path: output.to_string_lossy().into_owned(),
+        width,
+        height,
+    })
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn delete_scan_pages(
+    state: State<'_, AppState>,
+    inputs: Vec<String>,
+) -> CommandResult<usize> {
+    let paths = validated_scan_cache_paths(&state, &inputs).map_err(ErrorPayload::from)?;
+    let mut removed = 0usize;
+    for path in paths {
+        if fs::remove_file(path).is_ok() {
+            removed += 1;
+        }
+    }
+    Ok(removed)
+}
+
+#[tauri::command]
+pub fn finalize_scan_session(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    inputs: Vec<String>,
+    destination: String,
+    dpi: u16,
+    ocr_options: Option<ocr::OcrOptions>,
+) -> CommandResult<ScanFinalizeResult> {
+    if inputs.is_empty() || inputs.len() > 500 {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "A sessão deve conter entre 1 e 500 páginas".into(),
+        )));
+    }
+    let pages = validated_scan_cache_paths(&state, &inputs).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&destination, "pdf").map_err(ErrorPayload::from)?;
+    let dpi = dpi.clamp(75, 1200);
+
+    if let Some(options) = ocr_options {
+        options.validated().map_err(ErrorPayload::from)?;
+        if options.clean || options.clean_final {
+            jobs::require_executable(&["unpaper"], "unpaper").map_err(ErrorPayload::from)?;
+        }
+        let executable = jobs::require_executable(&["ocrmypdf"], "OCRmyPDF").map_err(ErrorPayload::from)?;
+        let raw = scan_cache_directory(&state)
+            .map_err(ErrorPayload::from)?
+            .join(format!("scan-session-{}.pdf", uuid::Uuid::new_v4()));
+        pdf::create_pdf_from_images(&pages, &raw, dpi).map_err(ErrorPayload::from)?;
+        let args = options
+            .args(raw.to_string_lossy().as_ref(), output.to_string_lossy().as_ref())
+            .map_err(ErrorPayload::from)?;
+        let mut cleanup = pages;
+        cleanup.push(raw);
+        let started = jobs::start_process_sequence_job_with_cleanup(
+            app,
+            &state,
+            "scan-ocr",
+            vec![jobs::ProcessStep {
+                program: executable,
+                args,
+                label: "Aplicando OCR à digitalização".into(),
+            }],
+            Some(output.clone()),
+            cleanup,
+        );
+        Ok(ScanFinalizeResult {
+            output: output.to_string_lossy().into_owned(),
+            job_id: Some(started.job_id),
+        })
+    } else {
+        pdf::create_pdf_from_images(&pages, &output, dpi).map_err(ErrorPayload::from)?;
+        for page in pages {
+            let _ = fs::remove_file(page);
+        }
+        Ok(ScanFinalizeResult {
+            output: output.to_string_lossy().into_owned(),
+            job_id: None,
+        })
+    }
 }
 
 #[tauri::command]
@@ -3064,10 +3217,15 @@ pub async fn scan_page_to_pdf(
 ) -> CommandResult<()> {
     let output = jobs::validated_output(&destination, "pdf").map_err(ErrorPayload::from)?;
     let dpi = dpi.clamp(75, 1200);
-    tauri::async_runtime::spawn_blocking(move || scan_pdf_blocking(&output, dpi))
+    let temp = output.with_extension(format!("seven-scan-{}.png", uuid::Uuid::new_v4()));
+    let temp_for_task = temp.clone();
+    tauri::async_runtime::spawn_blocking(move || scan_image_blocking(&temp_for_task, dpi, "color"))
         .await
         .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
-        .map_err(ErrorPayload::from)
+        .map_err(ErrorPayload::from)?;
+    let result = pdf::create_pdf_from_images(&[temp.clone()], &output, dpi).map_err(ErrorPayload::from);
+    let _ = fs::remove_file(temp);
+    result
 }
 
 #[tauri::command]

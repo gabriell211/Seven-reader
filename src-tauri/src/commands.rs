@@ -1231,6 +1231,77 @@ pub fn session_remove_pdf_attachment(
     .map_err(ErrorPayload::from)
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionFlattenLayersResult {
+    pub document: pdf::DocumentSummary,
+    pub changed_pages: usize,
+}
+
+#[tauri::command]
+pub fn session_import_image_as_pdf_layer(
+    state: State<'_, AppState>,
+    document_id: String,
+    page_index: usize,
+    image_path: String,
+    name: String,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    visible: bool,
+    locked: bool,
+) -> CommandResult<pdf::DocumentSummary> {
+    let image_path = std::path::PathBuf::from(image_path);
+    session::apply_revision(&state, &document_id, "import-layer", move |input, output| {
+        advanced::import_image_as_layer(
+            input, output, page_index, &image_path, &name, x, y, width, height, visible, locked,
+        )
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_reorder_pdf_layer(
+    state: State<'_, AppState>,
+    document_id: String,
+    object_id: String,
+    direction: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "reorder-layer", move |input, output| {
+        advanced::reorder_layer(input, output, &object_id, &direction)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_merge_pdf_layers(
+    state: State<'_, AppState>,
+    document_id: String,
+    source_id: String,
+    target_id: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "merge-layers", move |input, output| {
+        advanced::merge_layers(input, output, &source_id, &target_id)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_flatten_pdf_layers(
+    state: State<'_, AppState>,
+    document_id: String,
+) -> CommandResult<SessionFlattenLayersResult> {
+    session::apply_revision(&state, &document_id, "flatten-layers", move |input, output| {
+        advanced::flatten_layers(input, output)
+    })
+    .map(|(document, changed_pages)| SessionFlattenLayersResult { document, changed_pages })
+    .map_err(ErrorPayload::from)
+}
+
 #[tauri::command]
 pub fn session_apply_pdf_layer_overrides(
     state: State<'_, AppState>,

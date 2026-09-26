@@ -158,6 +158,8 @@ export function DocumentWorkspace({
   const visiblePageRef = useRef(page);
   const scrollFrameRef = useRef<number | null>(null);
   const [viewerTool, setViewerTool] = useState<"select" | "hand" | "draw" | "highlight" | "underline" | "strikeout">("select");
+  const [visualRotation, setVisualRotation] = useState<0 | 90 | 180 | 270>(0);
+  const [immersiveMode, setImmersiveMode] = useState<"normal" | "reading" | "presentation">("normal");
 
   useEffect(() => {
     const focus = () => searchRef.current?.focus();
@@ -196,6 +198,11 @@ export function DocumentWorkspace({
         event.preventDefault();
         void copySelectedText();
       }
+      if (event.key === "Escape" && immersiveMode === "presentation") {
+        setImmersiveMode("normal");
+        if (window.document.fullscreenElement) void window.document.exitFullscreen();
+        return;
+      }
       if (event.key === "Escape" && selectionRect) {
         event.preventDefault();
         clearSelection();
@@ -203,7 +210,7 @@ export function DocumentWorkspace({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [viewerTool, selectedText, selectionRect, page, document.id, rendered?.width]);
+  }, [viewerTool, selectedText, selectionRect, page, document.id, rendered?.width, immersiveMode]);
 
   const filteredTools = useMemo(() => {
     const query = toolSearch.trim().toLocaleLowerCase("pt-BR");
@@ -230,6 +237,38 @@ export function DocumentWorkspace({
     onRender(target, zoom);
   };
 
+  const rotatedDimensions = (result: RenderResult) =>
+    visualRotation === 90 || visualRotation === 270
+      ? { width: result.height, height: result.width }
+      : { width: result.width, height: result.height };
+
+  const rotateView = (direction: -1 | 1) => {
+    const sequence: Array<0 | 90 | 180 | 270> = [0, 90, 180, 270];
+    const index = sequence.indexOf(visualRotation);
+    const next = sequence[(index + direction + sequence.length) % sequence.length];
+    setVisualRotation(next);
+    clearSelection();
+  };
+
+  const toggleFullscreen = async () => {
+    try {
+      if (window.document.fullscreenElement) await window.document.exitFullscreen();
+      else await window.document.documentElement.requestFullscreen();
+    } catch {
+      // The OS/webview may reject fullscreen; the layout mode remains available.
+    }
+  };
+
+  const toggleReading = () =>
+    setImmersiveMode((current) => current === "reading" ? "normal" : "reading");
+
+  const togglePresentation = async () => {
+    const entering = immersiveMode !== "presentation";
+    setImmersiveMode(entering ? "presentation" : "normal");
+    if (entering && !window.document.fullscreenElement) await toggleFullscreen();
+    if (!entering && window.document.fullscreenElement) await toggleFullscreen();
+  };
+
   const fitView = (mode: "page" | "width" | "actual") => {
     if (mode === "actual") {
       onRender(page, 100);
@@ -237,8 +276,9 @@ export function DocumentWorkspace({
     }
     if (!rendered || !stageRef.current) return;
     const scale = Math.max(0.01, zoom / 100);
-    const baseWidth = rendered.width / scale;
-    const baseHeight = rendered.height / scale;
+    const rotated = rotatedDimensions(rendered);
+    const baseWidth = rotated.width / scale;
+    const baseHeight = rotated.height / scale;
     const facing = viewMode === "facing" || viewMode === "facing-continuous";
     const availableWidth = Math.max(320, (stageRef.current.clientWidth - 96) / (facing ? 2 : 1) - (facing ? 18 : 0));
     const availableHeight = Math.max(320, stageRef.current.clientHeight - 132);
@@ -378,10 +418,12 @@ export function DocumentWorkspace({
   const normalizedPoint = (clientX: number, clientY: number): [number, number] | null => {
     const rect = pageRef.current?.getBoundingClientRect();
     if (!rect || rect.width <= 0 || rect.height <= 0) return null;
-    return [
-      Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)),
-      Math.max(0, Math.min(1, (clientY - rect.top) / rect.height)),
-    ];
+    const rx = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const ry = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+    if (visualRotation === 90) return [ry, 1 - rx];
+    if (visualRotation === 180) return [1 - rx, 1 - ry];
+    if (visualRotation === 270) return [1 - ry, rx];
+    return [rx, ry];
   };
 
   const rectFromPoints = (start: [number, number], end: [number, number]): NormalizedRect => ({
@@ -537,7 +579,7 @@ export function DocumentWorkspace({
   };
 
   return (
-    <div className={`workspace viewer-${viewerTool}`}>
+    <div className={`workspace viewer-${viewerTool} immersive-${immersiveMode}`}>
       <header className="workspace-topbar">
         <button className="workspace-brand" onClick={onHome} aria-label="Início"><BrandMark size={30} /></button>
         <div className="document-tabs" role="tablist" aria-label="Documentos abertos">
@@ -741,18 +783,33 @@ export function DocumentWorkspace({
                 if (!active) {
                   return (
                     <div
-                      className="rendered-page rendered-page--passive"
-                      style={{ width: result.width }}
+                      className="page-rotation-shell"
+                      style={rotatedDimensions(result)}
                       data-page-index={result.pageIndex}
                       key={result.pageIndex}
                       onDoubleClick={() => onRender(result.pageIndex, zoom)}
                     >
-                      <img src={nativeAssetUrl(result.cachePath)} alt={`Página ${result.pageIndex + 1}`} draggable={false} />
-                      <span className="page-corner-label">{result.pageIndex + 1}</span>
+                      <div
+                        className="rendered-page rendered-page--passive"
+                        style={{
+                          width: result.width,
+                          transform: `translate(-50%,-50%) rotate(${visualRotation}deg)`,
+                        }}
+                      >
+                        <img src={nativeAssetUrl(result.cachePath)} alt={`Página ${result.pageIndex + 1}`} draggable={false} />
+                        <span className="page-corner-label">{result.pageIndex + 1}</span>
+                      </div>
                     </div>
                   );
                 }
                 return (
+                  <div
+                    className="page-rotation-shell"
+                    style={rotatedDimensions(result)}
+                    data-page-index={result.pageIndex}
+                    ref={pageRef}
+                    key={result.pageIndex}
+                  >
                   <div
                     className={[
                       "rendered-page",
@@ -763,10 +820,10 @@ export function DocumentWorkspace({
                       viewerTool === "underline" ? "markup-underline" : "",
                       viewerTool === "strikeout" ? "markup-strikeout" : "",
                     ].filter(Boolean).join(" ")}
-                    style={{ width: result.width }}
-                    ref={pageRef}
-                    data-page-index={result.pageIndex}
-                    key={result.pageIndex}
+                    style={{
+                      width: result.width,
+                      transform: `translate(-50%,-50%) rotate(${visualRotation}deg)`,
+                    }}
                     onPointerDown={(event) => {
                       beginInk(event);
                       beginSelection(event);
@@ -824,6 +881,7 @@ export function DocumentWorkspace({
                       </svg>
                     )}
                     <span className="page-corner-label">{result.pageIndex + 1}</span>
+                  </div>
                   </div>
                 );
               })
@@ -889,6 +947,12 @@ export function DocumentWorkspace({
             <button className={viewMode === "continuous" ? "view-mode-button active" : "view-mode-button"} onClick={() => onViewModeChange("continuous")} title="Rolagem contínua">Cont.</button>
             <button className={viewMode === "facing" ? "view-mode-button active" : "view-mode-button"} onClick={() => onViewModeChange("facing")} title="Duas páginas">2 pág.</button>
             <button className={viewMode === "facing-continuous" ? "view-mode-button active" : "view-mode-button"} onClick={() => onViewModeChange("facing-continuous")} title="Duas páginas contínuas">2 cont.</button>
+            <i />
+            <button className="view-mode-button" onClick={() => rotateView(-1)} title="Girar visualização 90° à esquerda">↶</button>
+            <button className="view-mode-button" onClick={() => rotateView(1)} title="Girar visualização 90° à direita">↷</button>
+            <button className={immersiveMode === "reading" ? "view-mode-button active" : "view-mode-button"} onClick={toggleReading} title="Modo leitura">Ler</button>
+            <button className={immersiveMode === "presentation" ? "view-mode-button active" : "view-mode-button"} onClick={() => void togglePresentation()} title="Modo apresentação">Apres.</button>
+            <button className="view-mode-button" onClick={() => void toggleFullscreen()} title="Tela cheia">Full</button>
             <i />
             <button className="view-mode-button" onClick={() => fitView("page")} title="Ajustar página">Página</button>
             <button className="view-mode-button" onClick={() => fitView("width")} title="Ajustar largura">Largura</button>

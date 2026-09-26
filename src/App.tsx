@@ -119,6 +119,7 @@ import {
   sessionMovePdfBookmark,
   sessionSetPdfBookmarkOpen,
   sessionAddPdfAttachment,
+  sessionAddPdfPortfolioItem,
   sessionConfigurePdfPortfolio,
   sessionSetPdfPortfolioView,
   sessionCreatePdfPortfolioFolder,
@@ -1839,6 +1840,24 @@ export default function App() {
       const summary = await sessionUpdatePdfLayerProperties(document.id, update);
       await acceptDocumentRevision(summary, "Propriedades da camada atualizadas.");
       await refreshAdvancedFrom(summary);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runAddPortfolioItem = async (
+    filePath: string,
+    displayName: string,
+    description: string,
+    folderPath: string,
+  ) => {
+    if (!document) return;
+    try {
+      const summary = await sessionAddPdfPortfolioItem(
+        document.id, filePath, displayName, description, folderPath,
+      );
+      await acceptDocumentRevision(summary, `Componente "${displayName}" incorporado ao portfólio.`);
+      await reloadAdvanced(summary.activePath);
     } catch (error) {
       setNotice(errorMessage(error));
     }

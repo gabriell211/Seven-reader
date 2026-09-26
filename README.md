@@ -2615,12 +2615,12 @@ Toda operação pesada deve gerar um `job_id`.
 - [x] Compactar
 - [ ] Aplicar senha
 - [ ] Criptografar
-- [ ] Remover metadados
-- [ ] Sanitizar
-- [ ] Marca d'água
-- [ ] Cabeçalho/rodapé
-- [ ] Bates
-- [ ] Redação por busca
+- [x] Remover metadados
+- [x] Sanitizar
+- [x] Marca d'água
+- [x] Cabeçalho/rodapé
+- [x] Bates
+- [x] Redação por busca
 - [ ] Combinar
 - [ ] Dividir
 - [ ] Extrair

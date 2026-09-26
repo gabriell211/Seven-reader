@@ -4007,6 +4007,25 @@ pub fn get_page_preflight(
 }
 
 #[tauri::command]
+pub async fn validate_pdf_iso(
+    state: State<'_, AppState>,
+    input: String,
+    flavour: String,
+    custom_profile: Option<String>,
+) -> CommandResult<iso_validation::IsoValidationReport> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let executable = jobs::require_executable(&["verapdf", "verapdf.bat"], "veraPDF")
+        .map_err(ErrorPayload::from)?;
+    let custom_profile = custom_profile.map(std::path::PathBuf::from);
+    tauri::async_runtime::spawn_blocking(move || {
+        iso_validation::validate(&executable, &input, &flavour, custom_profile)
+    })
+    .await
+    .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn get_print_preflight(path: String) -> CommandResult<print_production::PrintPreflightReport> {
     let input = pdf::validate_pdf_path(&path).map_err(ErrorPayload::from)?;
     print_production::preflight(&input).map_err(ErrorPayload::from)

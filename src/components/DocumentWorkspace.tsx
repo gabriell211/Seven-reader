@@ -1095,7 +1095,7 @@ export function DocumentWorkspace({
               )}
               {globalCommandMatches.map((command) => (
                 <button key={command} onClick={() => runGlobalCommand(command)}>
-                  <SevenIcon name={command === "save" ? "save" : command === "print" ? "print" : command === "settings" ? "settings" : "document"} />
+                  <SevenIcon name={command === "save" ? "save" : command === "print" ? "print" : command === "settings" ? "settings" : "pages"} />
                   <span>
                     <strong>{command === "save" ? "Salvar documento" : command === "print" ? "Imprimir" : command === "settings" ? "Preferências" : "Propriedades"}</strong>
                     <small>Comando do aplicativo</small>

@@ -10,6 +10,7 @@ mod editing;
 mod error;
 mod forms;
 mod jobs;
+mod interactive;
 mod measurement;
 mod ocr;
 mod optimizer;
@@ -44,6 +45,10 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_capabilities,
+            commands::list_interactive_assets,
+            commands::extract_interactive_asset,
+            commands::list_geospatial_viewports,
+            commands::resolve_geospatial_coordinate,
             commands::export_review_xfdf,
             commands::session_import_review_xfdf,
             commands::build_catalog,

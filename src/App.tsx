@@ -303,6 +303,7 @@ import type {
   TextPlacement,
   ToolId,
   ViewMode,
+  ConversionOptions,
   WatchFolderConfig,
   WatchFolderEvent,
 } from "./types";
@@ -3575,9 +3576,9 @@ export default function App() {
   };
 
 
-  const runConvertToPdf = async (input: string, outputDirectory: string) => {
+  const runConvertToPdf = async (input: string, outputDirectory: string, options?: ConversionOptions) => {
     try {
-      const started = await startConvertToPdf(input, outputDirectory);
+      const started = await startConvertToPdf(input, outputDirectory, options);
       setConversionOpen(false);
       setNotice(`Conversão iniciada · job ${started.jobId.slice(0, 8)}`);
     } catch (error) {
@@ -3585,9 +3586,9 @@ export default function App() {
     }
   };
 
-  const runBatchConvertToPdf = async (inputs: string[], outputDirectory: string) => {
+  const runBatchConvertToPdf = async (inputs: string[], outputDirectory: string, options?: ConversionOptions) => {
     try {
-      const started = await startBatchConvertToPdf(inputs, outputDirectory);
+      const started = await startBatchConvertToPdf(inputs, outputDirectory, options);
       setConversionOpen(false);
       setNotice(`Conversão em lote iniciada · ${inputs.length} arquivo(s) · job ${started.jobId.slice(0, 8)}`);
     } catch (error) {
@@ -4128,8 +4129,8 @@ export default function App() {
           watchFolders={watchFolders}
           watchFolderEvents={watchFolderEvents}
           onClose={() => setConversionOpen(false)}
-          onConvertToPdf={(input, outputDirectory) => void runConvertToPdf(input, outputDirectory)}
-          onBatchConvertToPdf={(inputs, outputDirectory) => void runBatchConvertToPdf(inputs, outputDirectory)}
+          onConvertToPdf={(input, outputDirectory, options) => void runConvertToPdf(input, outputDirectory, options)}
+          onBatchConvertToPdf={(inputs, outputDirectory, options) => void runBatchConvertToPdf(inputs, outputDirectory, options)}
           onExport={(input, output, format, dpi) => void runExport(input, output, format, dpi)}
           onUpsertWatchFolder={(config) => void upsertWatchFolder(config)}
           onToggleWatchFolder={(id, enabled) => void toggleWatchFolder(id, enabled)}

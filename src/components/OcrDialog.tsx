@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type { Capabilities, OcrLanguageDetection, OcrOptions, OcrReviewResult, ScannedPage } from "../types";
-import { nativeAssetUrl } from "../lib/native";
+import type { Capabilities, OcrLanguageDetection, OcrOptions, OcrReviewResult, ScannedPage, ScannerInfo } from "../types";
+import { listScanners, nativeAssetUrl } from "../lib/native";
 import { SevenIcon } from "./SevenIcon";
+
+const DEFAULT_SCANNER_KEY = "seven-reader:default-scanner:v1";
 
 interface OcrDialogProps {
   capabilities: Capabilities | null;
@@ -17,7 +19,7 @@ interface OcrDialogProps {
   onReview: (language: string, threshold: number) => void;
   onDetectLanguage: (candidates: string[]) => Promise<OcrLanguageDetection>;
   onCorrectWord: (recognized: string, replacement: string, occurrence: number) => Promise<void> | void;
-  onScanPage: (dpi: number, colorMode: "color" | "gray" | "lineart") => Promise<ScannedPage>;
+  onScanPage: (dpi: number, colorMode: "color" | "gray" | "lineart", scannerId?: string) => Promise<ScannedPage>;
   onDeleteScanPages: (inputs: string[]) => Promise<void> | void;
   onFinalizeScan: (inputs: string[], output: string, dpi: number, options?: OcrOptions) => Promise<void> | void;
 }
@@ -58,6 +60,9 @@ export function OcrDialog({
   const [sidecarEnabled, setSidecarEnabled] = useState(false);
   const [scanDpi, setScanDpi] = useState(300);
   const [scanColorMode, setScanColorMode] = useState<"color" | "gray" | "lineart">("color");
+  const [scanners, setScanners] = useState<ScannerInfo[]>([]);
+  const [scannerId, setScannerId] = useState("");
+  const [scannerLoading, setScannerLoading] = useState(false);
   const [scanPages, setScanPages] = useState<ScannedPage[]>([]);
   const [scanBusy, setScanBusy] = useState(false);
   const [scanError, setScanError] = useState("");
@@ -72,6 +77,39 @@ export function OcrDialog({
   const reviewWords = reviewResult?.words ?? [];
   const activeReviewWord = reviewWords[Math.min(reviewIndex, Math.max(0, reviewWords.length - 1))];
   const reviewKey = activeReviewWord ? `${activeReviewWord.text}::${activeReviewWord.occurrence}` : "";
+
+  const refreshScanners = async () => {
+    if (!capabilities?.scanner.available) {
+      setScanners([]);
+      setScannerId("");
+      return;
+    }
+    try {
+      setScannerLoading(true);
+      setScanError("");
+      const devices = await listScanners();
+      setScanners(devices);
+      const saved = localStorage.getItem(DEFAULT_SCANNER_KEY);
+      const selected =
+        devices.find((device) => device.id === scannerId)
+        ?? devices.find((device) => device.id === saved)
+        ?? devices.find((device) => device.isDefault)
+        ?? devices[0];
+      setScannerId(selected?.id ?? "");
+      if (selected) localStorage.setItem(DEFAULT_SCANNER_KEY, selected.id);
+      if (!devices.length) setScanError("Nenhum scanner foi detectado pelo driver do sistema.");
+    } catch {
+      setScanners([]);
+      setScanError("Não foi possível enumerar os scanners instalados.");
+    } finally {
+      setScannerLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tab !== "scan" || !capabilities?.scanner.available) return;
+    void refreshScanners();
+  }, [tab, capabilities?.scanner.available]);
 
   useEffect(() => {
     setReviewIndex(0);
@@ -203,7 +241,7 @@ export function OcrDialog({
     try {
       setScanBusy(true);
       setScanError("");
-      const captured = await onScanPage(scanDpi, scanColorMode);
+      const captured = await onScanPage(scanDpi, scanColorMode, scannerId || undefined);
       setScanPages((current) => [...current, captured]);
     } catch {
       setScanError("A captura não foi concluída. Verifique o scanner/driver e tente novamente.");
@@ -404,6 +442,31 @@ export function OcrDialog({
           )}
           {tab === "scan" && (
             <>
+              <div className="ocr-language-row">
+                <label className="workflow-field">
+                  <span>Scanner</span>
+                  <select
+                    value={scannerId}
+                    disabled={scannerLoading || !capabilities?.scanner.available}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setScannerId(value);
+                      if (value) localStorage.setItem(DEFAULT_SCANNER_KEY, value);
+                    }}
+                  >
+                    {!scanners.length && <option value="">Seleção automática do sistema</option>}
+                    {scanners.map((scanner) => (
+                      <option key={scanner.id} value={scanner.id}>
+                        {scanner.name} · {scanner.backend.toUpperCase()}
+                      </option>
+                    ))}
+                  </select>
+                  <small>{scannerId ? "Este scanner fica salvo como padrão no Seven Reader." : "O sistema escolherá o primeiro scanner disponível."}</small>
+                </label>
+                <button className="secondary-light-button" disabled={scannerLoading || !capabilities?.scanner.available} onClick={() => void refreshScanners()}>
+                  <SevenIcon name="refresh" /> {scannerLoading ? "Atualizando…" : "Atualizar scanners"}
+                </button>
+              </div>
               <div className="two-column-fields">
                 <label className="workflow-field">
                   <span>Resolução do scanner</span>

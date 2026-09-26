@@ -286,6 +286,17 @@ export interface CompareReport {
   pages: ComparePage[];
 }
 
+export interface ScannedPage {
+  cachePath: string;
+  width: number;
+  height: number;
+}
+
+export interface ScanFinalizeResult {
+  output: string;
+  jobId?: string;
+}
+
 export interface OcrOptions {
   language: string;
   deskew: boolean;

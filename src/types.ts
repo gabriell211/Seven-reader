@@ -1007,6 +1007,47 @@ export interface PdfActionInfo {
   automatic: boolean;
 }
 
+export interface ArticleBoxInfo {
+  objectId: string;
+  index: number;
+  pageIndex: number;
+  rect: [number, number, number, number];
+}
+
+export interface ArticleInfo {
+  objectId: string;
+  title: string;
+  subject: string;
+  author: string;
+  keywords: string;
+  boxes: ArticleBoxInfo[];
+}
+
+export interface ArticleMetadataUpdate {
+  objectId: string;
+  title: string;
+  subject: string;
+  author: string;
+  keywords: string;
+}
+
+export interface NewArticleBox {
+  articleObjectId?: string;
+  title: string;
+  subject: string;
+  author: string;
+  keywords: string;
+  pageIndex: number;
+  rect: NormalizedRect;
+  insertAt?: number;
+}
+
+export interface ArticleBoxUpdate {
+  objectId: string;
+  pageIndex: number;
+  rect: NormalizedRect;
+}
+
 export interface InteractiveAssetInfo {
   objectId: string;
   pageIndex: number;

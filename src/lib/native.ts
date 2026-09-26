@@ -58,6 +58,7 @@ import type {
   SignatureValidationReport,
   SanitizeReport,
   SessionFormFillResult,
+  SessionFlattenLayersResult,
   SessionReplaceTextResult,
   TextPlacement,
   TextSelectionResult,
@@ -593,6 +594,49 @@ export async function sessionRemovePdfAttachment(
   return invoke<DocumentSummary>("session_remove_pdf_attachment", {
     documentId, objectId,
   });
+}
+
+export async function sessionImportImageAsPdfLayer(
+  documentId: string,
+  pageIndex: number,
+  imagePath: string,
+  name: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  visible: boolean,
+  locked: boolean,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_import_image_as_pdf_layer", {
+    documentId, pageIndex, imagePath, name, x, y, width, height, visible, locked,
+  });
+}
+
+export async function sessionReorderPdfLayer(
+  documentId: string,
+  objectId: string,
+  direction: "up" | "down",
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_reorder_pdf_layer", {
+    documentId, objectId, direction,
+  });
+}
+
+export async function sessionMergePdfLayers(
+  documentId: string,
+  sourceId: string,
+  targetId: string,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_merge_pdf_layers", {
+    documentId, sourceId, targetId,
+  });
+}
+
+export async function sessionFlattenPdfLayers(
+  documentId: string,
+): Promise<SessionFlattenLayersResult> {
+  return invoke<SessionFlattenLayersResult>("session_flatten_pdf_layers", { documentId });
 }
 
 export async function sessionApplyPdfLayerOverrides(

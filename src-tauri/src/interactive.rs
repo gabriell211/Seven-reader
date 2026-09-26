@@ -37,6 +37,31 @@ pub struct GeospatialViewportInfo {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct GeospatialLocation {
+    pub page_index: usize,
+    pub normalized_x: f64,
+    pub normalized_y: f64,
+    pub viewport_object_id: Option<String>,
+    pub first: f64,
+    pub second: f64,
+    pub coordinate_kind: String,
+    pub epsg: Option<i64>,
+    pub wkt: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GeospatialMeasurementResult {
+    pub kind: String,
+    pub value: f64,
+    pub unit: String,
+    pub coordinate_kind: String,
+    pub epsg: Option<i64>,
+    pub points: Vec<[f64; 2]>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GeospatialCoordinate {
     pub page_index: usize,
     pub viewport_object_id: Option<String>,
@@ -521,6 +546,62 @@ fn transform_local_to_geo(
     None
 }
 
+fn transform_geo_to_local(
+    viewport: &GeospatialViewportInfo,
+    point: [f64; 2],
+) -> Option<[f64; 2]> {
+    for first in 0..viewport.gpts.len() {
+        for second in (first + 1)..viewport.gpts.len() {
+            for third in (second + 1)..viewport.gpts.len() {
+                let geo = [viewport.gpts[first], viewport.gpts[second], viewport.gpts[third]];
+                let local = [viewport.lpts[first], viewport.lpts[second], viewport.lpts[third]];
+                if let Some(result) = affine_from_three(geo, local, point) {
+                    return Some(result);
+                }
+            }
+        }
+    }
+    None
+}
+
+fn haversine_meters(a: [f64; 2], b: [f64; 2]) -> f64 {
+    const EARTH_RADIUS_M: f64 = 6_371_008.8;
+    let lat1 = a[0].to_radians();
+    let lon1 = a[1].to_radians();
+    let lat2 = b[0].to_radians();
+    let lon2 = b[1].to_radians();
+    let dlat = lat2 - lat1;
+    let dlon = lon2 - lon1;
+    let h = (dlat / 2.0).sin().powi(2)
+        + lat1.cos() * lat2.cos() * (dlon / 2.0).sin().powi(2);
+    2.0 * EARTH_RADIUS_M * h.sqrt().asin()
+}
+
+fn spherical_polygon_area_m2(points: &[[f64; 2]]) -> f64 {
+    if points.len() < 3 {
+        return 0.0;
+    }
+    const EARTH_RADIUS_M: f64 = 6_371_008.8;
+    let mut sum = 0.0;
+    for index in 0..points.len() {
+        let current = points[index];
+        let next = points[(index + 1) % points.len()];
+        let lat1 = current[0].to_radians();
+        let lat2 = next[0].to_radians();
+        let lon1 = current[1].to_radians();
+        let lon2 = next[1].to_radians();
+        let mut delta_lon = lon2 - lon1;
+        while delta_lon > std::f64::consts::PI {
+            delta_lon -= std::f64::consts::TAU;
+        }
+        while delta_lon < -std::f64::consts::PI {
+            delta_lon += std::f64::consts::TAU;
+        }
+        sum += delta_lon * (2.0 + lat1.sin() + lat2.sin());
+    }
+    (sum * EARTH_RADIUS_M * EARTH_RADIUS_M / 2.0).abs()
+}
+
 pub fn resolve_geospatial_coordinate(
     path: &Path,
     page_index: usize,
@@ -595,4 +676,152 @@ pub fn materialize_interactive_media(
     let destination = cache_dir.join(format!("{}-{}", uuid::Uuid::new_v4(), clean_name));
     extract_interactive_asset(input, object_id, &destination)?;
     Ok(destination)
+}
+
+
+pub fn locate_geospatial_coordinate(
+    path: &Path,
+    page_index: usize,
+    first: f64,
+    second: f64,
+) -> Result<GeospatialLocation, SevenError> {
+    if !first.is_finite() || !second.is_finite() {
+        return Err(SevenError::OperationRejected("Coordenada geoespacial inválida".into()));
+    }
+
+    let document = Document::load(path).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let page_id = document
+        .get_pages()
+        .get(&((page_index + 1) as u32))
+        .copied()
+        .ok_or_else(|| SevenError::OperationRejected("Página não existe".into()))?;
+    let page_box = inherited_box(&document, page_id, b"CropBox")
+        .or_else(|| inherited_box(&document, page_id, b"MediaBox"))
+        .unwrap_or([0.0, 0.0, 612.0, 792.0]);
+    let page_width = (page_box[2] - page_box[0]).abs().max(1e-9);
+    let page_height = (page_box[3] - page_box[1]).abs().max(1e-9);
+
+    for viewport in list_geospatial_viewports(path)?
+        .into_iter()
+        .filter(|viewport| viewport.page_index == page_index)
+    {
+        let Some(local) = transform_geo_to_local(&viewport, [first, second]) else { continue };
+        if local[0] < -1e-6 || local[0] > 1.0 + 1e-6 || local[1] < -1e-6 || local[1] > 1.0 + 1e-6 {
+            continue;
+        }
+
+        let [x1, y1, x2, y2] = viewport.bbox;
+        let min_x = x1.min(x2);
+        let max_x = x1.max(x2);
+        let min_y = y1.min(y2);
+        let max_y = y1.max(y2);
+        let page_x = min_x + local[0] * (max_x - min_x);
+        let page_y = min_y + local[1] * (max_y - min_y);
+        let normalized_x = (page_x - page_box[0]) / page_width;
+        let normalized_y = 1.0 - ((page_y - page_box[1]) / page_height);
+
+        if !(0.0..=1.0).contains(&normalized_x) || !(0.0..=1.0).contains(&normalized_y) {
+            continue;
+        }
+
+        return Ok(GeospatialLocation {
+            page_index,
+            normalized_x,
+            normalized_y,
+            viewport_object_id: viewport.object_id,
+            first,
+            second,
+            coordinate_kind: viewport.coordinate_kind,
+            epsg: viewport.epsg,
+            wkt: viewport.wkt,
+        });
+    }
+
+    Err(SevenError::OperationRejected(
+        "A coordenada não pertence a um viewport geoespacial compatível desta página".into(),
+    ))
+}
+
+pub fn measure_geospatial(
+    path: &Path,
+    page_index: usize,
+    kind: &str,
+    normalized_points: Vec<[f64; 2]>,
+) -> Result<GeospatialMeasurementResult, SevenError> {
+    let minimum = if kind == "distance" { 2 } else { 3 };
+    if !matches!(kind, "distance" | "perimeter" | "area") {
+        return Err(SevenError::OperationRejected("Tipo de medição geoespacial inválido".into()));
+    }
+    if normalized_points.len() < minimum || normalized_points.len() > 10_000 {
+        return Err(SevenError::OperationRejected(format!(
+            "A medição exige entre {minimum} e 10.000 pontos"
+        )));
+    }
+
+    let mut coordinates = Vec::with_capacity(normalized_points.len());
+    let mut coordinate_kind = String::new();
+    let mut epsg = None;
+    for point in normalized_points {
+        let resolved = resolve_geospatial_coordinate(path, page_index, point[0], point[1])?;
+        if coordinate_kind.is_empty() {
+            coordinate_kind = resolved.coordinate_kind.clone();
+            epsg = resolved.epsg;
+        } else if coordinate_kind != resolved.coordinate_kind || epsg != resolved.epsg {
+            return Err(SevenError::OperationRejected(
+                "Os pontos atravessam sistemas de coordenadas diferentes".into(),
+            ));
+        }
+        coordinates.push([resolved.first, resolved.second]);
+    }
+
+    let (value, unit) = if coordinate_kind == "geographic" {
+        match kind {
+            "distance" => (haversine_meters(coordinates[0], coordinates[1]), "m".to_owned()),
+            "perimeter" => {
+                let mut perimeter = 0.0;
+                for index in 0..coordinates.len() {
+                    perimeter += haversine_meters(
+                        coordinates[index],
+                        coordinates[(index + 1) % coordinates.len()],
+                    );
+                }
+                (perimeter, "m".to_owned())
+            }
+            "area" => (spherical_polygon_area_m2(&coordinates), "m²".to_owned()),
+            _ => unreachable!(),
+        }
+    } else {
+        let distance = |a: [f64; 2], b: [f64; 2]| {
+            ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2)).sqrt()
+        };
+        match kind {
+            "distance" => (distance(coordinates[0], coordinates[1]), "map-unit".to_owned()),
+            "perimeter" => {
+                let mut perimeter = 0.0;
+                for index in 0..coordinates.len() {
+                    perimeter += distance(coordinates[index], coordinates[(index + 1) % coordinates.len()]);
+                }
+                (perimeter, "map-unit".to_owned())
+            }
+            "area" => {
+                let mut twice_area = 0.0;
+                for index in 0..coordinates.len() {
+                    let current = coordinates[index];
+                    let next = coordinates[(index + 1) % coordinates.len()];
+                    twice_area += current[0] * next[1] - next[0] * current[1];
+                }
+                (twice_area.abs() / 2.0, "map-unit²".to_owned())
+            }
+            _ => unreachable!(),
+        }
+    };
+
+    Ok(GeospatialMeasurementResult {
+        kind: kind.into(),
+        value,
+        unit,
+        coordinate_kind,
+        epsg,
+        points: coordinates,
+    })
 }

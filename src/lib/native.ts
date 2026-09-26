@@ -30,6 +30,9 @@ import type {
   LinkPlacement,
   LinkInfo,
   LinkUpdate,
+  MeasurementInfo,
+  MeasurementInput,
+  SessionMeasurementResult,
   ManagedElementInfo,
   PageLabelOptions,
   PagePreflight,
@@ -238,6 +241,24 @@ export async function sessionDeleteAnnotation(
   objectId: string,
 ): Promise<DocumentSummary> {
   return invoke<DocumentSummary>("session_delete_annotation", { documentId, objectId });
+}
+
+export async function sessionAddMeasurement(
+  documentId: string,
+  measurement: MeasurementInput,
+): Promise<SessionMeasurementResult> {
+  return invoke<SessionMeasurementResult>("session_add_measurement", { documentId, measurement });
+}
+
+export async function listMeasurements(documentId: string): Promise<MeasurementInfo[]> {
+  return invoke<MeasurementInfo[]>("list_measurements", { documentId });
+}
+
+export async function exportMeasurements(
+  documentId: string,
+  destination: string,
+): Promise<number> {
+  return invoke<number>("export_measurements", { documentId, destination });
 }
 
 export async function sessionAddStamp(

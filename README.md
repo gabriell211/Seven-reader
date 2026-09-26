@@ -2601,7 +2601,7 @@ Toda operação pesada deve gerar um `job_id`.
 - [ ] Backoff
 - [ ] Persistência
 - [ ] Recuperação após reinício quando segura
-- [x] Notificação
+- [ ] Notificação
 - [x] Log
 - [x] Erro por arquivo
 - [ ] Relatório

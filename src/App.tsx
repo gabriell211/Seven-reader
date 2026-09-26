@@ -542,6 +542,18 @@ export default function App() {
           void redoCurrent();
         }
       }
+      if (modifier && event.key.toLowerCase() === "p" && document) {
+        event.preventDefault();
+        void runPrint();
+      }
+      if (modifier && event.key === "0" && document) {
+        event.preventDefault();
+        void render(page, 100);
+      }
+      if (event.key === "F1") {
+        event.preventDefault();
+        void openUrl("https://github.com/gabriell211/Seven-reader#readme");
+      }
       if (modifier && event.key.toLowerCase() === "f") {
         event.preventDefault();
         window.dispatchEvent(new Event("seven:focus-search"));
@@ -3702,6 +3714,7 @@ export default function App() {
           onAdvancedSearch={(options) => void runAdvancedSearch(options)}
           onTool={(tool) => void selectTool(tool)}
           onSettings={() => setSettingsOpen(true)}
+          onHelp={() => void openUrl("https://github.com/gabriell211/Seven-reader#readme")}
           externalFileStatus={externalFileStatus}
           onReloadExternal={() => void reloadExternalDocument()}
           protectedView={protectedView}

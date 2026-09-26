@@ -4431,6 +4431,22 @@ pub fn list_pdf_files_in_folder(
 }
 
 #[tauri::command]
+pub fn list_printers() -> CommandResult<Vec<printing::PrinterInfo>> {
+    printing::list_printers().map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn start_print_document_advanced(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: String,
+    options: printing::PrintOptions,
+) -> CommandResult<JobStart> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    printing::start_print_job(app, &state, input, options).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn start_print_document(
     app: AppHandle,
     state: State<'_, AppState>,

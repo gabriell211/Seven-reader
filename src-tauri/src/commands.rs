@@ -158,6 +158,83 @@ pub fn session_import_review_xfdf(
 }
 
 #[tauri::command]
+pub fn list_interactive_assets(
+    state: State<'_, AppState>,
+    document_id: String,
+) -> CommandResult<Vec<interactive::InteractiveAssetInfo>> {
+    let document = state
+        .documents
+        .lock()
+        .get(&document_id)
+        .cloned()
+        .ok_or_else(|| ErrorPayload::from(SevenError::DocumentNotOpen))?;
+    interactive::list_interactive_assets(document.active_path()).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn extract_interactive_asset(
+    state: State<'_, AppState>,
+    document_id: String,
+    object_id: String,
+    destination: String,
+) -> CommandResult<usize> {
+    let document = state
+        .documents
+        .lock()
+        .get(&document_id)
+        .cloned()
+        .ok_or_else(|| ErrorPayload::from(SevenError::DocumentNotOpen))?;
+    let destination = std::path::PathBuf::from(destination);
+    let parent = destination.parent()
+        .ok_or_else(|| ErrorPayload::from(SevenError::InvalidPath("Destino inválido".into())))?;
+    fs::canonicalize(parent)
+        .map_err(|error| ErrorPayload::from(SevenError::InvalidPath(error.to_string())))?;
+    interactive::extract_interactive_asset(
+        document.active_path(),
+        &object_id,
+        &destination,
+    )
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn list_geospatial_viewports(
+    state: State<'_, AppState>,
+    document_id: String,
+) -> CommandResult<Vec<interactive::GeospatialViewportInfo>> {
+    let document = state
+        .documents
+        .lock()
+        .get(&document_id)
+        .cloned()
+        .ok_or_else(|| ErrorPayload::from(SevenError::DocumentNotOpen))?;
+    interactive::list_geospatial_viewports(document.active_path()).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn resolve_geospatial_coordinate(
+    state: State<'_, AppState>,
+    document_id: String,
+    page_index: usize,
+    normalized_x: f64,
+    normalized_y: f64,
+) -> CommandResult<interactive::GeospatialCoordinate> {
+    let document = state
+        .documents
+        .lock()
+        .get(&document_id)
+        .cloned()
+        .ok_or_else(|| ErrorPayload::from(SevenError::DocumentNotOpen))?;
+    interactive::resolve_geospatial_coordinate(
+        document.active_path(),
+        page_index,
+        normalized_x,
+        normalized_y,
+    )
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn get_capabilities(state: State<'_, AppState>) -> capabilities::Capabilities {
     capabilities::detect(&state)
 }

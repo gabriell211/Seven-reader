@@ -38,6 +38,8 @@ import type {
   InteractiveAssetInfo,
   GeospatialViewportInfo,
   GeospatialCoordinate,
+  GeospatialLocation,
+  GeospatialMeasurementResult,
   ImageObjectInfo,
   InkAnnotationInput,
   LinkPlacement,
@@ -234,6 +236,35 @@ export async function resolveGeospatialCoordinate(
     documentId, pageIndex, normalizedX, normalizedY,
   });
 }
+
+export async function locateGeospatialCoordinate(
+  documentId: string,
+  pageIndex: number,
+  first: number,
+  second: number,
+): Promise<GeospatialLocation> {
+  return invoke<GeospatialLocation>("locate_geospatial_coordinate", {
+    documentId,
+    pageIndex,
+    first,
+    second,
+  });
+}
+
+export async function measureGeospatial(
+  documentId: string,
+  pageIndex: number,
+  kind: "distance" | "perimeter" | "area",
+  normalizedPoints: Array<[number, number]>,
+): Promise<GeospatialMeasurementResult> {
+  return invoke<GeospatialMeasurementResult>("measure_geospatial", {
+    documentId,
+    pageIndex,
+    kind,
+    normalizedPoints,
+  });
+}
+
 
 export async function getCapabilities(): Promise<Capabilities | null> {
   if (!isNativeDesktop()) return null;

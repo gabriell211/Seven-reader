@@ -240,13 +240,15 @@ fn remove_selected_annotations(
                 .unwrap_or_default();
 
             let is_widget = subtype.as_slice() == b"Widget";
+            let is_file_attachment = subtype.as_slice() == b"FileAttachment";
             let is_multimedia = matches!(
                 subtype.as_slice(),
                 b"RichMedia" | b"3D" | b"Movie" | b"Sound" | b"Screen"
             );
             let remove = (options.remove_forms && is_widget)
+                || (options.remove_embedded_files && is_file_attachment)
                 || (options.remove_multimedia && is_multimedia)
-                || (options.remove_annotations && !is_widget && !is_multimedia);
+                || (options.remove_annotations && !is_widget && !is_multimedia && !is_file_attachment);
 
             if remove {
                 *removed += 1;
@@ -339,7 +341,6 @@ fn cleanup_invalid_links(document: &mut Document, removed: &mut usize) -> Result
         }
 
         if let Ok(page) = document.get_object_mut(page_id).and_then(Object::as_dict_mut) {
-            page.remove(b"Thumb");
             if keep.is_empty() {
                 page.remove(b"Annots");
             } else {

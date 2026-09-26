@@ -985,6 +985,40 @@ export interface PdfActionInfo {
   automatic: boolean;
 }
 
+export interface InteractiveAssetInfo {
+  objectId: string;
+  pageIndex: number;
+  kind: "rich-media" | "3d" | string;
+  subtype: string;
+  name: string;
+  mime: string;
+  size: number;
+  sha256: string;
+}
+
+export interface GeospatialViewportInfo {
+  objectId?: string;
+  pageIndex: number;
+  bbox: [number, number, number, number];
+  gpts: Array<[number, number]>;
+  lpts: Array<[number, number]>;
+  coordinateKind: "geographic" | "projected" | string;
+  epsg?: number;
+  wkt?: string;
+}
+
+export interface GeospatialCoordinate {
+  pageIndex: number;
+  viewportObjectId?: string;
+  localX: number;
+  localY: number;
+  first: number;
+  second: number;
+  coordinateKind: "geographic" | "projected" | string;
+  epsg?: number;
+  wkt?: string;
+}
+
 export interface AdvancedPdfReport {
   bookmarks: BookmarkInfo[];
   attachments: AttachmentInfo[];

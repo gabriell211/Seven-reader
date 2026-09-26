@@ -48,6 +48,20 @@ pub struct SanitizeReport {
     pub output: String,
 }
 
+#[derive(Debug, Clone, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SanitizeAnalysis {
+    pub metadata_entries: usize,
+    pub annotation_count: usize,
+    pub attachment_entries: usize,
+    pub javascript_entries: usize,
+    pub action_entries: usize,
+    pub xfa_entries: usize,
+    pub form_field_count: usize,
+    pub multimedia_entries: usize,
+    pub invalid_structure_entries: usize,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AccessibilityCheck {

@@ -17,6 +17,7 @@ import type {
   AnnotationInfo,
   AnnotationInput,
   CompareReport,
+  CompareOptions,
   DocumentMetadata,
   JobStart,
   BackgroundOptions,
@@ -1382,6 +1383,23 @@ export async function sessionAutoTagBasic(
 
 export async function getAccessibilityReport(path: string): Promise<AccessibilityReport> {
   return invoke<AccessibilityReport>("get_accessibility_report", { path });
+}
+
+export async function compareDocumentsAdvanced(
+  left: string,
+  right: string,
+  options: CompareOptions,
+): Promise<CompareReport> {
+  return invoke<CompareReport>("compare_documents_advanced", { left, right, options });
+}
+
+export async function exportCompareReportPdf(
+  destination: string,
+  leftName: string,
+  rightName: string,
+  report: CompareReport,
+): Promise<void> {
+  await invoke("export_compare_report_pdf", { destination, leftName, rightName, report });
 }
 
 export async function compareDocuments(left: string, right: string): Promise<CompareReport> {

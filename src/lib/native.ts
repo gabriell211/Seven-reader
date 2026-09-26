@@ -1772,6 +1772,46 @@ export async function startBatchEncryptPdf(
   });
 }
 
+export async function startBatchSplitPdf(
+  inputs: string[],
+  outputDirectory: string,
+  pagesPerFile: number,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_batch_split_pdf", { inputs, outputDirectory, pagesPerFile });
+}
+
+export async function startBatchExtractPdf(
+  inputs: string[],
+  outputDirectory: string,
+  pageRange: string,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_batch_extract_pdf", { inputs, outputDirectory, pageRange });
+}
+
+export async function startBatchRenamePdf(
+  inputs: string[],
+  outputDirectory: string,
+  prefix: string,
+  suffix: string,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_batch_rename_pdf", { inputs, outputDirectory, prefix, suffix });
+}
+
+export async function startBatchValidatePdfa(
+  inputs: string[],
+  outputDirectory: string,
+  flavour: string,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_batch_validate_pdfa", { inputs, outputDirectory, flavour });
+}
+
+export async function startBatchPreflightPdf(
+  inputs: string[],
+  outputDirectory: string,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_batch_preflight_pdf", { inputs, outputDirectory });
+}
+
 export async function startDecryptPdf(
   input: string,
   output: string,

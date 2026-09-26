@@ -614,6 +614,29 @@ pub fn start_rust_batch_job<F>(
     kind: &str,
     labels: Vec<String>,
     output_path: Option<PathBuf>,
+    operation: F,
+) -> JobStart
+where
+    F: FnMut(usize) -> Result<(), SevenError> + Send + 'static,
+{
+    start_rust_batch_job_with_cleanup(
+        app,
+        state,
+        kind,
+        labels,
+        output_path,
+        Vec::new(),
+        operation,
+    )
+}
+
+pub fn start_rust_batch_job_with_cleanup<F>(
+    app: AppHandle,
+    state: &AppState,
+    kind: &str,
+    labels: Vec<String>,
+    output_path: Option<PathBuf>,
+    cleanup_paths: Vec<PathBuf>,
     mut operation: F,
 ) -> JobStart
 where
@@ -644,6 +667,7 @@ where
     let id_for_thread = id.clone();
 
     thread::spawn(move || {
+        let _cleanup = CleanupPaths(cleanup_paths);
         if labels.is_empty() {
             update_job(
                 &jobs,

@@ -39,6 +39,7 @@ interface AdvancedPdfDialogProps {
   onRemoveAttachment: (objectId: string) => void;
   onExtractAttachment: (objectId: string, destination: string) => void;
   onPreviewPortfolioItem: (objectId: string) => void;
+  onClearPortfolioPreview: () => void;
   onSearchPortfolioItems: (query: string) => void;
   onOpenPortfolioItemExternal: (objectId: string) => void;
   onOpenPortfolioPdf: (preview: PortfolioPreview) => void;
@@ -96,6 +97,7 @@ export function AdvancedPdfDialog({
   onRemoveAttachment,
   onExtractAttachment,
   onPreviewPortfolioItem,
+  onClearPortfolioPreview,
   onSearchPortfolioItems,
   onOpenPortfolioItemExternal,
   onOpenPortfolioPdf,
@@ -163,7 +165,7 @@ export function AdvancedPdfDialog({
   const [portfolioContentQuery, setPortfolioContentQuery] = useState("");
   const [portfolioSort, setPortfolioSort] = useState<"name" | "size" | "type">("name");
 
-  useEffect(() => { onReload(); }, [onReload]);
+  useEffect(() => { onReload(); }, []);
   useEffect(() => {
     const view = report?.portfolioView;
     if (view === "T") setPortfolioView("tile");
@@ -676,7 +678,7 @@ export function AdvancedPdfDialog({
 
                     {portfolioPreview && (
                       <section className="portfolio-preview">
-                        <header><div><strong>{portfolioPreview.name}</strong><small>{portfolioPreview.mime} · {fileSize(portfolioPreview.size)}</small></div><button className="icon-button" onClick={()=>onPreviewPortfolioItem("")}><SevenIcon name="close"/></button></header>
+                        <header><div><strong>{portfolioPreview.name}</strong><small>{portfolioPreview.mime} · {fileSize(portfolioPreview.size)}</small></div><button className="icon-button" onClick={onClearPortfolioPreview}><SevenIcon name="close"/></button></header>
                         {portfolioPreview.kind==="image"&&<img src={nativeAssetUrl(portfolioPreview.cachePath)} alt={portfolioPreview.name}/>}
                         {portfolioPreview.kind==="text"&&<pre>{portfolioPreview.text||"Arquivo de texto vazio."}</pre>}
                         {portfolioPreview.kind==="pdf"&&<button className="primary-button" onClick={()=>onOpenPortfolioPdf(portfolioPreview)}><SevenIcon name="open"/> Abrir PDF no Seven Reader</button>}

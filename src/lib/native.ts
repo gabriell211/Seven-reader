@@ -1021,6 +1021,31 @@ export async function reviewOcrPage(
   return invoke<OcrWord[]>("review_ocr_page", { documentId, pageIndex, language, threshold });
 }
 
+export async function scanPageImage(
+  dpi: number,
+  colorMode: "color" | "gray" | "lineart",
+): Promise<ScannedPage> {
+  return invoke<ScannedPage>("scan_page_image", { dpi, colorMode });
+}
+
+export async function deleteScanPages(inputs: string[]): Promise<number> {
+  return invoke<number>("delete_scan_pages", { inputs });
+}
+
+export async function finalizeScanSession(
+  inputs: string[],
+  destination: string,
+  dpi: number,
+  ocrOptions?: OcrOptions,
+): Promise<ScanFinalizeResult> {
+  return invoke<ScanFinalizeResult>("finalize_scan_session", {
+    inputs,
+    destination,
+    dpi,
+    ocrOptions: ocrOptions ?? null,
+  });
+}
+
 export async function scanPageToPdf(destination: string, dpi: number): Promise<void> {
   await invoke("scan_page_to_pdf", { destination, dpi });
 }

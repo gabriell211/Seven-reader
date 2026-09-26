@@ -46,6 +46,8 @@ export interface DocumentSummary {
   canRedo: boolean;
 }
 
+export type ViewMode = "single" | "continuous" | "facing" | "facing-continuous";
+
 export interface RenderResult {
   documentId: string;
   pageIndex: number;

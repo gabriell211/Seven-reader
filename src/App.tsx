@@ -119,6 +119,9 @@ import {
   sessionMovePdfBookmark,
   sessionSetPdfBookmarkOpen,
   sessionAddPdfAttachment,
+  materializePdfPortfolioItem,
+  openPdfPortfolioItemExternal,
+  searchPdfPortfolioItems,
   sessionAddPdfPortfolioItem,
   sessionConfigurePdfPortfolio,
   sessionSetPdfPortfolioView,
@@ -209,6 +212,8 @@ import type {
   OverlayTextOptions,
   PdfActionInfo,
   PrintPreflightReport,
+  PortfolioPreview,
+  PortfolioSearchHit,
   PageBoxUpdate,
   PageGeometryUpdate,
   RecentDocument,
@@ -364,6 +369,9 @@ export default function App() {
   const [advancedTab, setAdvancedTab] = useState<"overview"|"bookmarks"|"attachments"|"layers"|"portfolio"|null>(null);
   const [advancedReport, setAdvancedReport] = useState<AdvancedPdfReport|null>(null);
   const [advancedLoading, setAdvancedLoading] = useState(false);
+  const [portfolioPreview, setPortfolioPreview] = useState<PortfolioPreview | null>(null);
+  const [portfolioSearchHits, setPortfolioSearchHits] = useState<PortfolioSearchHit[]>([]);
+  const [portfolioSearching, setPortfolioSearching] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [pdfActions, setPdfActions] = useState<PdfActionInfo[]>([]);
   const [actionsLoading, setActionsLoading] = useState(false);
@@ -1375,7 +1383,9 @@ export default function App() {
           return;
         }
         setAdvancedReport(null);
-        setAdvancedTab(
+        setPortfolioPreview(null);
+      setPortfolioSearchHits([]);
+      setAdvancedTab(
         tool === "bookmarks" ? "bookmarks"
           : tool === "attachments" ? "attachments"
             : tool === "layers" ? "layers"
@@ -1843,6 +1853,45 @@ export default function App() {
     } catch (error) {
       setNotice(errorMessage(error));
     }
+  };
+
+  const runPortfolioPreview = async (objectId: string) => {
+    if (!document) return;
+    try {
+      setPortfolioPreview(await materializePdfPortfolioItem(document.id, objectId));
+    } catch (error) {
+      setPortfolioPreview(null);
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runPortfolioSearch = async (query: string) => {
+    if (!document || !query.trim()) {
+      setPortfolioSearchHits([]);
+      return;
+    }
+    try {
+      setPortfolioSearching(true);
+      setPortfolioSearchHits(await searchPdfPortfolioItems(document.id, query));
+    } catch (error) {
+      setNotice(errorMessage(error));
+    } finally {
+      setPortfolioSearching(false);
+    }
+  };
+
+  const runPortfolioOpenExternal = async (objectId: string) => {
+    if (!document) return;
+    try {
+      await openPdfPortfolioItemExternal(document.id, objectId);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runOpenPortfolioPdf = async (preview: PortfolioPreview) => {
+    if (preview.kind !== "pdf") return;
+    await openPath(preview.cachePath);
   };
 
   const runAddPortfolioItem = async (

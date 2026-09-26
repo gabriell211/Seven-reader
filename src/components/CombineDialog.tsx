@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import type { DocumentSummary } from "../types";
 import { SevenIcon } from "./SevenIcon";
 
@@ -41,7 +42,7 @@ export function CombineDialog({
     ...(officeAvailable ? ["doc","docx","xls","xlsx","ppt","pptx","odt","ods","odp","rtf","txt","html","htm"] : []),
   ], [officeAvailable]);
 
-  const append = (paths: string[]) => {
+  const append = useCallback((paths: string[]) => {
     setInputs((current) => {
       const next = [...current];
       const seen = new Set(current.map((path) => path.toLowerCase()));
@@ -55,7 +56,15 @@ export function CombineDialog({
       }
       return next;
     });
-  };
+  }, [acceptedExtensions]);
+
+  useEffect(() => {
+    let dispose: (() => void) | undefined;
+    void getCurrentWebviewWindow().onDragDropEvent((event) => {
+      if (event.payload.type === "drop") append(event.payload.paths);
+    }).then((unlisten) => { dispose = unlisten; });
+    return () => dispose?.();
+  }, [append]);
 
   const chooseFiles = async () => {
     const selected = await open({
@@ -173,7 +182,7 @@ export function CombineDialog({
               <button className="combine-empty" onClick={() => void chooseFiles()}>
                 <SevenIcon name="merge" />
                 <strong>Adicione pelo menos dois arquivos</strong>
-                <span>A ordem desta lista será a ordem final do PDF combinado.</span>
+                <span>Arraste arquivos para esta janela ou clique aqui. A ordem da lista será a ordem final.</span>
               </button>
             )}
           </div>

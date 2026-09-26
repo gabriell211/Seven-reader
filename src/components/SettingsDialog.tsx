@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { defaultSettings, type QuickToolId, type SevenSettings, type SidePanelId } from "../lib/settings";
 import { SevenIcon } from "./SevenIcon";
@@ -9,6 +10,9 @@ interface SettingsDialogProps {
 }
 
 export function SettingsDialog({ settings, onClose, onChange }: SettingsDialogProps) {
+  const [trustedHostInput, setTrustedHostInput] = useState("");
+  const [trustedHostError, setTrustedHostError] = useState("");
+
   const patch = <K extends keyof SevenSettings>(key: K, value: SevenSettings[K]) =>
     onChange({ ...settings, [key]: value });
 
@@ -68,6 +72,33 @@ export function SettingsDialog({ settings, onClose, onChange }: SettingsDialogPr
     const selected = await open({ title: "Adicionar local confiável", directory: true, multiple: false });
     if (typeof selected !== "string" || settings.trustedLocations.includes(selected)) return;
     patch("trustedLocations", [...settings.trustedLocations, selected]);
+  };
+
+  const normalizeTrustedHost = (value: string): string | null => {
+    const candidate = value.trim().toLocaleLowerCase();
+    if (!candidate) return null;
+    try {
+      const url = candidate.includes("://") ? new URL(candidate) : new URL("https://" + candidate);
+      if (!url.hostname || url.username || url.password || (url.pathname !== "/" && url.pathname !== "")) return null;
+      return url.hostname.toLocaleLowerCase();
+    } catch {
+      return null;
+    }
+  };
+
+  const addTrustedHost = () => {
+    const host = normalizeTrustedHost(trustedHostInput);
+    if (!host) {
+      setTrustedHostError("Informe somente um host válido, por exemplo: empresa.com.br");
+      return;
+    }
+    if (settings.trustedHosts.includes(host)) {
+      setTrustedHostError("Esse host já está na lista confiável.");
+      return;
+    }
+    patch("trustedHosts", [...settings.trustedHosts, host].sort());
+    setTrustedHostInput("");
+    setTrustedHostError("");
   };
 
   return (
@@ -157,6 +188,22 @@ export function SettingsDialog({ settings, onClose, onChange }: SettingsDialogPr
               <div className="setting-row-title"><strong>Locais confiáveis</strong><button onClick={()=>void addTrustedLocation()}><SevenIcon name="create"/> Adicionar pasta</button></div>
               {settings.trustedLocations.map((path)=><div className="trusted-row" key={path}><SevenIcon name="folder"/><span>{path}</span><button onClick={()=>patch("trustedLocations",settings.trustedLocations.filter((item)=>item!==path))}><SevenIcon name="close"/></button></div>)}
               {!settings.trustedLocations.length&&<small>Nenhum local confiável configurado.</small>}
+            </div>
+            <div className="trusted-locations">
+              <div className="setting-row-title"><strong>Hosts confiáveis</strong></div>
+              <div className="trusted-host-entry">
+                <input
+                  value={trustedHostInput}
+                  onChange={(event) => { setTrustedHostInput(event.target.value); setTrustedHostError(""); }}
+                  onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addTrustedHost(); } }}
+                  placeholder="empresa.com.br"
+                  aria-label="Host confiável"
+                />
+                <button disabled={!trustedHostInput.trim()} onClick={addTrustedHost}><SevenIcon name="create"/> Adicionar</button>
+              </div>
+              {trustedHostError && <small className="settings-error">{trustedHostError}</small>}
+              {settings.trustedHosts.map((host)=><div className="trusted-row" key={host}><SevenIcon name="shield"/><span>{host}</span><button aria-label={"Remover host " + host} onClick={()=>patch("trustedHosts",settings.trustedHosts.filter((item)=>item!==host))}><SevenIcon name="close"/></button></div>)}
+              {!settings.trustedHosts.length&&<small>Nenhum host confiável configurado. URLs externas continuam pedindo confirmação.</small>}
             </div>
           </section>
 

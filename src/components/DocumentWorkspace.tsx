@@ -214,6 +214,16 @@ export function DocumentWorkspace({
   }, [reflowEnabled, document.id, document.revision, page]);
 
   useEffect(() => {
+    const onFullscreenChange = () => {
+      if (!window.document.fullscreenElement && immersiveMode === "presentation") {
+        setImmersiveMode("normal");
+      }
+    };
+    window.document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => window.document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, [immersiveMode]);
+
+  useEffect(() => {
     if (!tabMenu) return;
     const close = () => setTabMenu(null);
     window.addEventListener("click", close);
@@ -227,6 +237,11 @@ export function DocumentWorkspace({
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       const editing = target?.matches("input, textarea, select, [contenteditable='true']");
+      if (event.key === "Escape" && immersiveMode === "presentation") {
+        setImmersiveMode("normal");
+        if (window.document.fullscreenElement) void window.document.exitFullscreen();
+        return;
+      }
       if (editing || viewerTool !== "select") return;
       const modifier = event.ctrlKey || event.metaKey;
       if (modifier && event.key.toLowerCase() === "a") {
@@ -236,11 +251,6 @@ export function DocumentWorkspace({
       if (modifier && event.key.toLowerCase() === "c" && selectedText) {
         event.preventDefault();
         void copySelectedText();
-      }
-      if (event.key === "Escape" && immersiveMode === "presentation") {
-        setImmersiveMode("normal");
-        if (window.document.fullscreenElement) void window.document.exitFullscreen();
-        return;
       }
       if (event.key === "Escape" && selectionRect) {
         event.preventDefault();
@@ -989,6 +999,7 @@ export function DocumentWorkspace({
                       finishSelection(event);
                     }}
                     onPointerCancel={(event) => {
+                      finishDynamicZoom(event);
                       finishInk(event);
                       finishSelection(event);
                     }}

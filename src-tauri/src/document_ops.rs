@@ -12,9 +12,14 @@ pub struct DocumentMetadata {
     pub keywords: String,
     pub creator: String,
     pub producer: String,
+    pub creation_date: String,
+    pub modification_date: String,
     pub pdf_version: String,
     pub encrypted: bool,
     pub page_count: usize,
+    pub file_size: u64,
+    pub language: String,
+    pub has_xmp: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -114,6 +119,17 @@ fn info_value(document: &Document, key: &[u8]) -> String {
 
 pub fn read_metadata(path: &Path) -> Result<DocumentMetadata, SevenError> {
     let document = Document::load(path).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let metadata = fs::metadata(path).map_err(|error| SevenError::Io(error.to_string()))?;
+    let (language, has_xmp) = document
+        .catalog()
+        .ok()
+        .map(|catalog| {
+            (
+                catalog.get(b"Lang").ok().and_then(object_text).unwrap_or_default(),
+                catalog.get(b"Metadata").is_ok(),
+            )
+        })
+        .unwrap_or_default();
     Ok(DocumentMetadata {
         title: info_value(&document, b"Title"),
         author: info_value(&document, b"Author"),
@@ -121,9 +137,14 @@ pub fn read_metadata(path: &Path) -> Result<DocumentMetadata, SevenError> {
         keywords: info_value(&document, b"Keywords"),
         creator: info_value(&document, b"Creator"),
         producer: info_value(&document, b"Producer"),
+        creation_date: info_value(&document, b"CreationDate"),
+        modification_date: info_value(&document, b"ModDate"),
         pdf_version: document.version.clone(),
         encrypted: document.is_encrypted(),
         page_count: document.get_pages().len(),
+        file_size: metadata.len(),
+        language,
+        has_xmp,
     })
 }
 

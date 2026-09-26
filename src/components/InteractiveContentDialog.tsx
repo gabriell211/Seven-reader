@@ -44,7 +44,7 @@ export function InteractiveContentDialog({
   const [x, setX] = useState(0.5);
   const [y, setY] = useState(0.5);
 
-  useEffect(() => { onReload(); }, [onReload, mode]);
+  useEffect(() => { onReload(); }, [mode]);
 
   const filteredAssets = useMemo(
     () => assets.filter((asset) => mode === "3d" ? asset.kind === "3d" : asset.kind !== "3d"),

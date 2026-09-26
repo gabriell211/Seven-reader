@@ -1,4 +1,4 @@
-use crate::{error::SevenError, jobs, pdf, state::AppState};
+use crate::{error::SevenError, jobs, state::AppState};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, path::{Path, PathBuf}, process::Command};
 

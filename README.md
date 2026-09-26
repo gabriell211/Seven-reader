@@ -2868,18 +2868,18 @@ Atalhos de uma tecla devem ser opcionais.
 
 ## Windows
 
-- [ ] Instalador
-- [ ] Desinstalador
-- [ ] x64
+- [x] Instalador
+- [x] Desinstalador
+- [x] x64
 - [ ] ARM64 quando viável
-- [ ] Associação .pdf
+- [x] Associação .pdf
 - [ ] Definir como padrão
-- [ ] Open With
+- [x] Open With
 - [ ] Recent files
-- [ ] Drag and drop
-- [ ] Impressão
-- [ ] Scanner
-- [ ] WIA/TWAIN
+- [x] Drag and drop
+- [x] Impressão
+- [x] Scanner
+- [x] WIA/TWAIN
 - [ ] Windows certificate store
 - [ ] Notificações
 - [ ] Atualização
@@ -2887,16 +2887,16 @@ Atalhos de uma tecla devem ser opcionais.
 
 ## Linux
 
-- [ ] AppImage
-- [ ] DEB
-- [ ] RPM
-- [ ] x64
+- [x] AppImage
+- [x] DEB
+- [x] RPM
+- [x] x64
 - [ ] ARM64 quando viável
-- [ ] MIME application/pdf
-- [ ] Associação
-- [ ] Open With
-- [ ] CUPS
-- [ ] SANE
+- [x] MIME application/pdf
+- [x] Associação
+- [x] Open With
+- [x] CUPS
+- [x] SANE
 - [ ] Keyring
 - [ ] Notificações
 - [ ] Atualização

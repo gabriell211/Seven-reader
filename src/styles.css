@@ -1832,3 +1832,21 @@ html[data-motion="reduced"] *,html[data-motion="reduced"] *::before,html[data-mo
 .geo-location-result strong { font-size:9.5px; color:#315d46; }
 .geo-location-result small { color:#77847d; font-size:8px; }
 @media(max-width:760px){.geo-professional-grid{grid-template-columns:1fr}}
+
+.electronic-signature-modes { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+.electronic-signature-modes button { min-height:34px; }
+.signature-draw-panel,.signature-image-panel,.saved-signature-box { padding:11px; border:1px solid #dfdce7; border-radius:11px; display:grid; gap:9px; background:#faf9fd; }
+.signature-draw-head,.saved-signature-save { display:flex; justify-content:space-between; gap:10px; align-items:end; }
+.signature-draw-head>div { display:grid; gap:3px; }
+.signature-draw-head strong { font-size:9.5px; }
+.signature-draw-head small { color:#858791; font-size:8px; }
+.signature-draw-canvas { width:100%; height:150px; border:1px solid #d8d5e0; border-radius:10px; background:#fff; color:#28252f; cursor:crosshair; touch-action:none; }
+.saved-signature-save>.workflow-field { flex:1; }
+.saved-signature-list { display:grid; gap:6px; }
+.saved-signature-list>div { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px; align-items:center; }
+.saved-signature-load { min-width:0; min-height:42px; padding:7px 9px; border:1px solid #dfdde5; border-radius:9px; display:grid; grid-template-columns:24px minmax(0,1fr); gap:8px; align-items:center; text-align:left; background:#fff; cursor:pointer; }
+.saved-signature-load span { min-width:0; display:grid; gap:2px; }
+.saved-signature-load strong,.saved-signature-load small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.saved-signature-load strong { font-size:9px; }
+.saved-signature-load small { color:#888a93; font-size:7.8px; }
+@media(max-width:680px){.signature-draw-head,.saved-signature-save{align-items:stretch;flex-direction:column}.electronic-signature-modes{grid-template-columns:1fr}}

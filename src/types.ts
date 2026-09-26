@@ -194,13 +194,54 @@ export interface AccessibilityCheck {
   passed: boolean;
   severity: "error" | "warning" | "info";
   detail: string;
+  pageIndex?: number;
+  fixable: boolean;
 }
 
 export interface AccessibilityReport {
   tagged: boolean;
   language?: string;
   title?: string;
+  displayDocumentTitle: boolean;
+  tagCount: number;
+  figureCount: number;
+  figuresMissingAlt: number;
+  formFieldCount: number;
+  formFieldsMissingDescription: number;
+  pagesMissingTabOrder: number;
+  imageOnlyPages: number[];
   checks: AccessibilityCheck[];
+}
+
+export interface StructureTagInfo {
+  objectId: string;
+  parentObjectId?: string;
+  tagType: string;
+  title: string;
+  altText: string;
+  actualText: string;
+  pageIndex?: number;
+  depth: number;
+  childCount: number;
+}
+
+export interface StructureTagUpdate {
+  objectId: string;
+  tagType: string;
+  title: string;
+  altText: string;
+  actualText: string;
+}
+
+export interface AccessibilityProperties {
+  language: string;
+  title: string;
+  displayDocumentTitle: boolean;
+}
+
+export interface AutoTagResult {
+  document: DocumentSummary;
+  taggedPages: number;
 }
 
 export interface ComparePage {

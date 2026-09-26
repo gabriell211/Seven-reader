@@ -10,6 +10,7 @@ export type CapabilityKey =
   | "pdftotext"
   | "openssl"
   | "tesseract"
+  | "unpaper"
   | "web_pdf";
 
 export interface Capability {

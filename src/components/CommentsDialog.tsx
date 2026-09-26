@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import type { AnnotationInfo, AnnotationInput, AnnotationKind, StampInput } from "../types";
 import { SevenIcon } from "./SevenIcon";
 
@@ -12,6 +12,9 @@ interface CommentsDialogProps {
   onAdd: (annotation: AnnotationInput) => void;
   onStamp: (stamp: StampInput) => void;
   onDelete: (objectId: string) => void;
+  onNavigate: (pageIndex: number) => void;
+  onExportXfdf: (destination: string) => Promise<void> | void;
+  onImportXfdf: (path: string) => Promise<void> | void;
 }
 
 interface StampIdentity {
@@ -95,6 +98,9 @@ export function CommentsDialog({
   onAdd,
   onStamp,
   onDelete,
+  onNavigate,
+  onExportXfdf,
+  onImportXfdf,
 }: CommentsDialogProps) {
   const [tab, setTab] = useState<"add" | "stamps" | "list">("add");
   const [kind, setKind] = useState<AnnotationKind>("note");
@@ -115,6 +121,10 @@ export function CommentsDialog({
   const [customStampCategory, setCustomStampCategory] = useState("Personalizado");
   const [customStampText, setCustomStampText] = useState("");
   const [customStampImage, setCustomStampImage] = useState("");
+  const [listQuery, setListQuery] = useState("");
+  const [listKind, setListKind] = useState("all");
+  const [listSort, setListSort] = useState<"page-asc" | "page-desc" | "author" | "type">("page-asc");
+  const [listIndex, setListIndex] = useState(0);
 
   const stamps = useMemo(() => [...standardStamps, ...customStamps], [customStamps]);
   const selectedStamp = useMemo(
@@ -130,6 +140,29 @@ export function CommentsDialog({
     () => annotations.filter((annotation) => annotation.pageIndex === pageIndex),
     [annotations, pageIndex],
   );
+  const filteredAnnotations = useMemo(() => {
+    const query = listQuery.trim().toLocaleLowerCase("pt-BR");
+    const result = annotations.filter((annotation) => {
+      if (listKind !== "all" && annotation.kind !== listKind) return false;
+      if (!query) return true;
+      return [annotation.text, annotation.author, annotation.kind, String(annotation.pageIndex + 1)]
+        .some((value) => value.toLocaleLowerCase("pt-BR").includes(query));
+    });
+    return [...result].sort((left, right) => {
+      if (listSort === "page-desc") return right.pageIndex - left.pageIndex;
+      if (listSort === "author") return left.author.localeCompare(right.author, "pt-BR") || left.pageIndex - right.pageIndex;
+      if (listSort === "type") return left.kind.localeCompare(right.kind, "pt-BR") || left.pageIndex - right.pageIndex;
+      return left.pageIndex - right.pageIndex;
+    });
+  }, [annotations, listKind, listQuery, listSort]);
+
+  const listKinds = useMemo(
+    () => [...new Set(annotations.map((annotation) => annotation.kind))].sort(),
+    [annotations],
+  );
+
+  const activeListAnnotation = filteredAnnotations[Math.min(listIndex, Math.max(0, filteredAnnotations.length - 1))];
+
 
   const resolveStampText = (template: StampTemplate): string => {
     const now = new Date();
@@ -217,6 +250,36 @@ export function CommentsDialog({
   const remove = (annotation: AnnotationInfo) => {
     onDelete(annotation.objectId);
   };
+  const exportXfdf = async () => {
+    const destination = await save({
+      title: "Exportar comentários em XFDF",
+      defaultPath: "Seven-Reader-Comentarios.xfdf",
+      filters: [{ name: "XFDF", extensions: ["xfdf"] }],
+    });
+    if (destination) await onExportXfdf(destination);
+  };
+
+  const importXfdf = async () => {
+    const source = await open({
+      title: "Importar comentários XFDF",
+      multiple: false,
+      directory: false,
+      filters: [{ name: "XFDF", extensions: ["xfdf"] }],
+    });
+    if (typeof source === "string") {
+      await onImportXfdf(source);
+      onReload();
+    }
+  };
+
+  const navigateList = (direction: -1 | 1) => {
+    if (!filteredAnnotations.length) return;
+    const next = (listIndex + direction + filteredAnnotations.length) % filteredAnnotations.length;
+    setListIndex(next);
+    const annotation = filteredAnnotations[next];
+    if (annotation) onNavigate(annotation.pageIndex);
+  };
+
 
   return (
     <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
@@ -308,17 +371,69 @@ export function CommentsDialog({
             </>
           ) : (
             <>
+              <div className="comment-list-toolbar">
+                <label className="workflow-field comment-list-search">
+                  <span>Buscar</span>
+                  <input
+                    value={listQuery}
+                    onChange={(event) => { setListQuery(event.target.value); setListIndex(0); }}
+                    placeholder="Texto, autor, tipo ou página"
+                  />
+                </label>
+                <label className="workflow-field">
+                  <span>Filtrar</span>
+                  <select value={listKind} onChange={(event) => { setListKind(event.target.value); setListIndex(0); }}>
+                    <option value="all">Todos os tipos</option>
+                    {listKinds.map((value) => <option key={value} value={value}>{value}</option>)}
+                  </select>
+                </label>
+                <label className="workflow-field">
+                  <span>Ordenar</span>
+                  <select value={listSort} onChange={(event) => setListSort(event.target.value as typeof listSort)}>
+                    <option value="page-asc">Página crescente</option>
+                    <option value="page-desc">Página decrescente</option>
+                    <option value="author">Autor</option>
+                    <option value="type">Tipo</option>
+                  </select>
+                </label>
+              </div>
+
+              <div className="comment-transfer-bar">
+                <button className="secondary-light-button" onClick={() => void importXfdf()}><SevenIcon name="open" /> Importar XFDF</button>
+                <button className="secondary-light-button" disabled={!annotations.length} onClick={() => void exportXfdf()}><SevenIcon name="save" /> Exportar XFDF</button>
+                <span>{filteredAnnotations.length} de {annotations.length} comentário(s)</span>
+              </div>
+
               {loading && <div className="report-loading"><span className="loader-ring" /> Lendo anotações…</div>}
               {!loading && annotations.length === 0 && <div className="empty-panel">Nenhuma anotação encontrada.</div>}
-              {!loading && annotations.length > 0 && (
+              {!loading && annotations.length > 0 && filteredAnnotations.length === 0 && <div className="empty-panel">Nenhum comentário corresponde aos filtros.</div>}
+
+              {!loading && filteredAnnotations.length > 0 && (
                 <>
+                  <div className="comment-list-navigation">
+                    <button className="secondary-light-button" onClick={() => navigateList(-1)}><SevenIcon name="chevronLeft" /> Anterior</button>
+                    <div>
+                      <strong>{Math.min(listIndex + 1, filteredAnnotations.length)} de {filteredAnnotations.length}</strong>
+                      <small>{activeListAnnotation ? "Página " + (activeListAnnotation.pageIndex + 1) : ""}</small>
+                    </div>
+                    <button className="secondary-light-button" onClick={() => navigateList(1)}>Próximo <SevenIcon name="chevronRight" /></button>
+                  </div>
+
                   <div className="section-mini-title">Página atual ({currentPage.length})</div>
                   <div className="annotation-list">
-                    {annotations.map((annotation) => (
-                      <article className={annotation.pageIndex === pageIndex ? "annotation-row current" : "annotation-row"} key={annotation.objectId}>
+                    {filteredAnnotations.map((annotation, index) => (
+                      <article
+                        className={(annotation.pageIndex === pageIndex ? "annotation-row current" : "annotation-row") + (index === listIndex ? " selected" : "")}
+                        key={annotation.objectId}
+                        onClick={() => { setListIndex(index); onNavigate(annotation.pageIndex); }}
+                      >
                         <span className="annotation-glyph"><SevenIcon name="comment" /></span>
-                        <div><strong>{annotation.kind} · página {annotation.pageIndex + 1}</strong><p>{annotation.text || "Sem texto"}</p><small>{annotation.author || "Autor não informado"}</small></div>
-                        <button className="danger-quiet" onClick={() => remove(annotation)}>Remover</button>
+                        <div>
+                          <strong>{annotation.kind} · página {annotation.pageIndex + 1}</strong>
+                          <p>{annotation.text || "Sem texto"}</p>
+                          <small>{annotation.author || "Autor não informado"}</small>
+                        </div>
+                        <button className="danger-quiet" onClick={(event) => { event.stopPropagation(); remove(annotation); }}>Remover</button>
                       </article>
                     ))}
                   </div>

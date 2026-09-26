@@ -23,7 +23,7 @@ use crate::{
     signatures,
     state::{AppState, JobStatus},
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{fs, process::Command, sync::atomic::Ordering};
 use tauri::{AppHandle, State};
 use tauri_plugin_opener::OpenerExt;
@@ -4524,6 +4524,63 @@ pub async fn compare_documents(
         .map_err(ErrorPayload::from)
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PdfEncryptionOptions {
+    pub print: String,
+    pub allow_extract: bool,
+    pub allow_modify: bool,
+    pub allow_annotations: bool,
+    pub allow_forms: bool,
+    pub allow_assembly: bool,
+}
+
+impl Default for PdfEncryptionOptions {
+    fn default() -> Self {
+        Self {
+            print: "full".into(),
+            allow_extract: true,
+            allow_modify: true,
+            allow_annotations: true,
+            allow_forms: true,
+            allow_assembly: true,
+        }
+    }
+}
+
+impl PdfEncryptionOptions {
+    fn validate(&self) -> Result<(), SevenError> {
+        if !matches!(self.print.as_str(), "none" | "low" | "full") {
+            return Err(SevenError::OperationRejected(
+                "Permissão de impressão inválida".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    fn qpdf_args(&self) -> Vec<String> {
+        let yn = |value: bool| if value { "y" } else { "n" };
+        vec![
+            format!("--print={}", self.print),
+            format!("--extract={}", yn(self.allow_extract)),
+            format!("--modify-other={}", yn(self.allow_modify)),
+            format!("--annotate={}", yn(self.allow_annotations)),
+            format!("--form={}", yn(self.allow_forms)),
+            format!("--assemble={}", yn(self.allow_assembly)),
+            "--accessibility=y".into(),
+        ]
+    }
+
+    fn has_restrictions(&self) -> bool {
+        self.print != "full"
+            || !self.allow_extract
+            || !self.allow_modify
+            || !self.allow_annotations
+            || !self.allow_forms
+            || !self.allow_assembly
+    }
+}
+
 #[tauri::command]
 pub fn start_encrypt_pdf(
     app: AppHandle,
@@ -4532,22 +4589,33 @@ pub fn start_encrypt_pdf(
     output: String,
     user_password: String,
     owner_password: String,
+    options: Option<PdfEncryptionOptions>,
 ) -> CommandResult<JobStart> {
     let executable = jobs::require_executable(&["qpdf"], "qpdf").map_err(ErrorPayload::from)?;
     let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
     let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
     let user_password = jobs::validated_password(&user_password, "Senha de abertura").map_err(ErrorPayload::from)?;
     let owner_password = jobs::validated_password(&owner_password, "Senha de proprietário").map_err(ErrorPayload::from)?;
+    let options = options.unwrap_or_default();
+    options.validate().map_err(ErrorPayload::from)?;
+    if options.has_restrictions() && user_password == owner_password {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "Para aplicar permissões, use uma senha de proprietário diferente da senha de abertura".into(),
+        )));
+    }
 
-    let args = vec![
+    let mut args = vec![
         "--encrypt".into(),
         format!("--user-password={user_password}"),
         format!("--owner-password={owner_password}"),
         "--bits=256".into(),
+    ];
+    args.extend(options.qpdf_args());
+    args.extend([
         "--".into(),
         input.to_string_lossy().into_owned(),
         output.to_string_lossy().into_owned(),
-    ];
+    ]);
     Ok(jobs::start_process_job(app, &state, "encrypt", executable, args, Some(output)))
 }
 

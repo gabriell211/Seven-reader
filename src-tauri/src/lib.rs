@@ -58,6 +58,7 @@ pub fn run() {
             commands::session_merge_pdf_articles,
             commands::list_interactive_assets,
             commands::extract_interactive_asset,
+            commands::materialize_interactive_media,
             commands::list_geospatial_viewports,
             commands::resolve_geospatial_coordinate,
             commands::export_review_xfdf,

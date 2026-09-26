@@ -630,6 +630,22 @@ export interface AttachmentInfo {
   mime: string;
   sha256: string;
   objectId: string;
+  collectionPath: string;
+}
+
+export interface PortfolioFolderInfo {
+  objectId: string;
+  id: number;
+  name: string;
+  path: string;
+  description: string;
+  parentObjectId?: string;
+  depth: number;
+}
+
+export interface SessionPortfolioFolderResult {
+  document: DocumentSummary;
+  changed: number;
 }
 
 export interface LayerInfo {
@@ -765,6 +781,7 @@ export interface AdvancedPdfReport {
   layers: LayerInfo[];
   isPortfolio: boolean;
   portfolioView?: string;
+  portfolioFolders: PortfolioFolderInfo[];
   hasRichMedia: boolean;
   hasThreeD: boolean;
   hasGeospatial: boolean;

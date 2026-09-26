@@ -521,6 +521,174 @@ export function AdvancedPdfDialog({
             </div>
           </>}
 
+          {!loading && report && tab==="portfolio" && <>
+            {!report.isPortfolio && (
+              <section className="portfolio-create-box">
+                <SevenIcon name="portfolio"/>
+                <div>
+                  <strong>Criar estrutura de Portfólio PDF</strong>
+                  <small>Adiciona /Collection ao PDF atual sem alterar os arquivos incorporados existentes.</small>
+                </div>
+                <select value={portfolioView} onChange={(e)=>setPortfolioView(e.target.value as typeof portfolioView)}>
+                  <option value="details">Lista detalhada</option>
+                  <option value="tile">Blocos</option>
+                  <option value="hidden">Oculta na abertura</option>
+                </select>
+                <button className="primary-button" onClick={()=>onConfigurePortfolio(portfolioView)}><SevenIcon name="create"/> Criar portfólio</button>
+              </section>
+            )}
+
+            {report.isPortfolio && (
+              <>
+                <div className="portfolio-toolbar">
+                  <label className="workflow-field">
+                    <span>Exibição inicial</span>
+                    <select value={portfolioView} onChange={(e)=>{const value=e.target.value as typeof portfolioView;setPortfolioView(value);onSetPortfolioView(value);}}>
+                      <option value="details">Lista detalhada</option>
+                      <option value="tile">Blocos</option>
+                      <option value="hidden">Oculta</option>
+                    </select>
+                  </label>
+                  <label className="workflow-field portfolio-query">
+                    <span>Filtrar componentes nesta pasta</span>
+                    <input value={portfolioQuery} onChange={(e)=>setPortfolioQuery(e.target.value)} placeholder="Nome, descrição ou MIME"/>
+                  </label>
+                  <label className="workflow-field">
+                    <span>Ordenar</span>
+                    <select value={portfolioSort} onChange={(e)=>setPortfolioSort(e.target.value as typeof portfolioSort)}>
+                      <option value="name">Nome</option>
+                      <option value="size">Tamanho</option>
+                      <option value="type">Tipo</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="portfolio-layout">
+                  <aside className="portfolio-folders">
+                    <header><strong>Pastas internas</strong><button onClick={()=>setPortfolioSelectedFolder("/")}>Raiz</button></header>
+                    <button className={portfolioSelectedFolder==="/"?"portfolio-folder active":"portfolio-folder"} onClick={()=>setPortfolioSelectedFolder("/")}>
+                      <SevenIcon name="folder"/><span>/</span>
+                    </button>
+                    {report.portfolioFolders.filter((folder)=>folder.path!=="/").map((folder)=>{
+                      const renameValue=portfolioFolderRenames[folder.objectId]??folder.name;
+                      return (
+                        <div className={portfolioSelectedFolder===folder.path?"portfolio-folder-row active":"portfolio-folder-row"} key={folder.objectId} style={{paddingLeft:8+folder.depth*10}}>
+                          <button className="portfolio-folder-main" onClick={()=>setPortfolioSelectedFolder(folder.path)}>
+                            <SevenIcon name="folder"/><span>{folder.name}</span>
+                          </button>
+                          <input value={renameValue} onChange={(e)=>setPortfolioFolderRenames(current=>({...current,[folder.objectId]:e.target.value}))}/>
+                          <button disabled={!renameValue.trim()||renameValue===folder.name} onClick={()=>onRenamePortfolioFolder(folder.objectId,renameValue.trim())}>Renomear</button>
+                          <button className="danger-quiet" onClick={()=>void removePortfolioFolder(folder.objectId,folder.path)}>Excluir</button>
+                        </div>
+                      );
+                    })}
+                    <div className="portfolio-folder-create">
+                      <input value={portfolioFolderPath} onChange={(e)=>setPortfolioFolderPath(e.target.value)} placeholder="/Contratos/2026"/>
+                      <input value={portfolioFolderDescription} onChange={(e)=>setPortfolioFolderDescription(e.target.value)} placeholder="Descrição opcional"/>
+                      <button disabled={!portfolioFolderPath.trim()} onClick={createPortfolioFolder}><SevenIcon name="create"/> Criar pasta</button>
+                    </div>
+                    <button className="secondary-light-button" onClick={()=>void importPortfolioDirectory()}><SevenIcon name="folder"/> Importar pasta do sistema</button>
+                  </aside>
+
+                  <section className="portfolio-content">
+                    <header className="portfolio-content-head">
+                      <div><strong>{portfolioSelectedFolder}</strong><small>{portfolioItems.length} componente(s) nesta pasta</small></div>
+                      <button className="secondary-light-button" onClick={onReload}>Atualizar</button>
+                    </header>
+
+                    <section className="portfolio-add-grid">
+                      <div className="portfolio-add-card">
+                        <strong>Arquivo</strong>
+                        <button className="secondary-light-button choose-wide" onClick={()=>void choosePortfolioItem()}><SevenIcon name="open"/>{portfolioItemPath||"Selecionar arquivo"}</button>
+                        <input value={portfolioItemName} onChange={(e)=>setPortfolioItemName(e.target.value)} placeholder="Nome no portfólio"/>
+                        <input value={portfolioItemDescription} onChange={(e)=>setPortfolioItemDescription(e.target.value)} placeholder="Descrição"/>
+                        <button className="primary-button" disabled={!portfolioItemPath||!portfolioItemName.trim()} onClick={addPortfolioItem}>Adicionar</button>
+                      </div>
+
+                      <div className="portfolio-add-card">
+                        <strong>Clipboard</strong>
+                        <small>Texto e imagem entram como componentes independentes.</small>
+                        <button onClick={()=>void addClipboardTextToPortfolio()}>Adicionar texto</button>
+                        <button onClick={()=>void addClipboardImageToPortfolio()}>Adicionar imagem</button>
+                        {portfolioClipboardStatus && <small>{portfolioClipboardStatus}</small>}
+                      </div>
+
+                      <div className="portfolio-add-card">
+                        <strong>Página web</strong>
+                        <input value={portfolioWebUrl} disabled={!canWeb} onChange={(e)=>setPortfolioWebUrl(e.target.value)} placeholder="https://..."/>
+                        <input value={portfolioWebName} disabled={!canWeb} onChange={(e)=>setPortfolioWebName(e.target.value)} placeholder="Pagina-Web.pdf"/>
+                        <button disabled={!canWeb||!portfolioWebUrl.trim()||!portfolioWebName.trim()} onClick={()=>onAddPortfolioWeb(portfolioWebUrl.trim(),portfolioWebName.trim(),portfolioSelectedFolder)}>Capturar e adicionar</button>
+                        {!canWeb&&<small>Chrome, Chromium ou Edge não detectado.</small>}
+                      </div>
+
+                      <div className="portfolio-add-card">
+                        <strong>Scanner</strong>
+                        <input type="number" min={75} max={1200} value={portfolioScanDpi} disabled={!canScan} onChange={(e)=>setPortfolioScanDpi(Math.max(75,Math.min(1200,Number(e.target.value)||300)))}/>
+                        <input value={portfolioScanName} disabled={!canScan} onChange={(e)=>setPortfolioScanName(e.target.value)} placeholder="Digitalizacao.pdf"/>
+                        <button disabled={!canScan||!portfolioScanName.trim()} onClick={()=>onAddPortfolioScan(portfolioScanDpi,portfolioScanName.trim(),portfolioSelectedFolder)}>Digitalizar e adicionar</button>
+                        {!canScan&&<small>Scanner nativo não disponível neste dispositivo.</small>}
+                      </div>
+                    </section>
+
+                    <div className="portfolio-items">
+                      {portfolioItems.map((item)=>{
+                        const moveTarget=portfolioItemMoves[item.objectId]??item.collectionPath;
+                        return (
+                          <article className="portfolio-item-row" key={item.objectId}>
+                            <span className="attachment-glyph"><SevenIcon name="attachment"/></span>
+                            <div>
+                              <strong>{item.name}</strong>
+                              <small>{item.mime} · {fileSize(item.size)}</small>
+                              <span>{item.description||"Sem descrição"}</span>
+                            </div>
+                            <div className="portfolio-item-actions">
+                              <button onClick={()=>onPreviewPortfolioItem(item.objectId)}>Preview</button>
+                              <button onClick={()=>void openPortfolioExternal(item.objectId,item.name)}>Abrir externo</button>
+                              <button onClick={async()=>{const dest=await save({title:"Extrair componente",defaultPath:item.name});if(dest)onExtractAttachment(item.objectId,dest)}}>Extrair</button>
+                              <select value={moveTarget} onChange={(e)=>setPortfolioItemMoves(current=>({...current,[item.objectId]:e.target.value}))}>
+                                <option value="/">/</option>
+                                {report.portfolioFolders.filter((folder)=>folder.path!=="/").map((folder)=><option key={folder.objectId} value={folder.path}>{folder.path}</option>)}
+                              </select>
+                              <button disabled={moveTarget===item.collectionPath} onClick={()=>onMovePortfolioItem(item.objectId,moveTarget)}>Mover</button>
+                              <button className="danger-quiet" onClick={()=>onRemoveAttachment(item.objectId)}>Remover</button>
+                            </div>
+                          </article>
+                        );
+                      })}
+                      {!portfolioItems.length&&<div className="empty-panel">Nenhum componente nesta pasta.</div>}
+                    </div>
+
+                    <section className="portfolio-search-box">
+                      <div className="section-mini-title">Pesquisar dentro dos componentes compatíveis</div>
+                      <div className="inline-create-row">
+                        <label className="workflow-field"><span>Conteúdo</span><input value={portfolioContentQuery} onChange={(e)=>setPortfolioContentQuery(e.target.value)} placeholder="Termo dentro de PDF ou texto"/></label>
+                        <button className="secondary-light-button" disabled={!portfolioContentQuery.trim()||portfolioSearching} onClick={()=>onSearchPortfolioItems(portfolioContentQuery.trim())}><SevenIcon name="search"/>{portfolioSearching?"Buscando…":"Buscar"}</button>
+                      </div>
+                      <div className="portfolio-search-results">
+                        {portfolioSearchHits.map((hit)=>(
+                          <button key={hit.objectId} onClick={()=>onPreviewPortfolioItem(hit.objectId)}>
+                            <strong>{hit.name}</strong><small>{hit.collectionPath} · {hit.mime}</small><span>{hit.excerpt}</span>
+                          </button>
+                        ))}
+                        {!portfolioSearching&&portfolioContentQuery.trim()&&portfolioSearchHits.length===0&&<small>Nenhum conteúdo compatível encontrado.</small>}
+                      </div>
+                    </section>
+
+                    {portfolioPreview && (
+                      <section className="portfolio-preview">
+                        <header><div><strong>{portfolioPreview.name}</strong><small>{portfolioPreview.mime} · {fileSize(portfolioPreview.size)}</small></div><button className="icon-button" onClick={()=>onPreviewPortfolioItem("")}><SevenIcon name="close"/></button></header>
+                        {portfolioPreview.kind==="image"&&<img src={nativeAssetUrl(portfolioPreview.cachePath)} alt={portfolioPreview.name}/>}
+                        {portfolioPreview.kind==="text"&&<pre>{portfolioPreview.text||"Arquivo de texto vazio."}</pre>}
+                        {portfolioPreview.kind==="pdf"&&<button className="primary-button" onClick={()=>onOpenPortfolioPdf(portfolioPreview)}><SevenIcon name="open"/> Abrir PDF no Seven Reader</button>}
+                        {portfolioPreview.kind==="file"&&<div className="organizer-note"><SevenIcon name="shield"/><span>Preview interno indisponível para este formato. Use “Abrir externo” somente se confiar no arquivo.</span></div>}
+                      </section>
+                    )}
+                  </section>
+                </div>
+              </>
+            )}
+          </>}
+
           {!loading && report && tab==="layers" && <>
             <div className="organizer-note"><SevenIcon name="layers"/><span>Alterar visibilidade grava o estado inicial ON/OFF da OCG na sessão atual; conteúdo da layer é preservado e a ação pode ser desfeita.</span></div>
 

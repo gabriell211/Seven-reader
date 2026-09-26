@@ -4,7 +4,7 @@ use crate::{
     state::{AppState, OpenDocument},
 };
 use serde::{Deserialize, Serialize};
-use std::process::{Command, Stdio};
+use std::{collections::HashMap, process::{Command, Stdio}};
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -125,6 +125,23 @@ pub struct OcrWord {
     pub top: u32,
     pub width: u32,
     pub height: u32,
+    pub occurrence: usize,
+    pub normalized_x: f32,
+    pub normalized_y: f32,
+    pub normalized_width: f32,
+    pub normalized_height: f32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OcrReviewResult {
+    pub preview_path: String,
+    pub preview_width: u32,
+    pub preview_height: u32,
+    pub total_words: usize,
+    pub suspect_words: usize,
+    pub average_confidence: f32,
+    pub words: Vec<OcrWord>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -259,7 +276,7 @@ pub fn review_page(
     page_index: usize,
     language: &str,
     threshold: f32,
-) -> Result<Vec<OcrWord>, SevenError> {
+) -> Result<OcrReviewResult, SevenError> {
     if !(0.0..=100.0).contains(&threshold) {
         return Err(SevenError::OperationRejected(
             "Confidence threshold deve ficar entre 0 e 100".into(),
@@ -297,6 +314,9 @@ pub fn review_page(
     let text = String::from_utf8(output.stdout)
         .map_err(|error| SevenError::Operation(error.to_string()))?;
     let mut words = Vec::new();
+    let mut occurrences = HashMap::<String, usize>::new();
+    let mut total_words = 0usize;
+    let mut confidence_sum = 0.0f32;
 
     for line in text.lines().skip(1) {
         let columns = line.split('\t').collect::<Vec<_>>();
@@ -308,16 +328,40 @@ pub fn review_page(
             continue;
         }
         let confidence = columns[10].parse::<f32>().unwrap_or(-1.0);
-        if confidence < 0.0 || confidence >= threshold {
+        if confidence < 0.0 {
             continue;
         }
+
+        let occurrence = *occurrences.entry(word.to_owned()).or_insert(0);
+        if let Some(value) = occurrences.get_mut(word) {
+            *value += 1;
+        }
+        total_words += 1;
+        confidence_sum += confidence;
+
+        if confidence >= threshold {
+            continue;
+        }
+
+        let left = columns[6].parse().unwrap_or(0);
+        let top = columns[7].parse().unwrap_or(0);
+        let width = columns[8].parse().unwrap_or(0);
+        let height = columns[9].parse().unwrap_or(0);
+        let preview_width = rendered.width.max(1) as f32;
+        let preview_height = rendered.height.max(1) as f32;
+
         words.push(OcrWord {
             text: word.to_owned(),
             confidence,
-            left: columns[6].parse().unwrap_or(0),
-            top: columns[7].parse().unwrap_or(0),
-            width: columns[8].parse().unwrap_or(0),
-            height: columns[9].parse().unwrap_or(0),
+            left,
+            top,
+            width,
+            height,
+            occurrence,
+            normalized_x: left as f32 / preview_width,
+            normalized_y: top as f32 / preview_height,
+            normalized_width: width as f32 / preview_width,
+            normalized_height: height as f32 / preview_height,
         });
     }
 
@@ -326,5 +370,14 @@ pub fn review_page(
             .partial_cmp(&right.confidence)
             .unwrap_or(std::cmp::Ordering::Equal)
     });
-    Ok(words)
+    let suspect_words = words.len();
+    Ok(OcrReviewResult {
+        preview_path: rendered.cache_path,
+        preview_width: rendered.width,
+        preview_height: rendered.height,
+        total_words,
+        suspect_words,
+        average_confidence: if total_words > 0 { confidence_sum / total_words as f32 } else { 0.0 },
+        words,
+    })
 }

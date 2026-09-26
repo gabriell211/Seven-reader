@@ -1479,6 +1479,145 @@ pub fn start_delete_pages(
     ))
 }
 
+fn start_insert_pdf_source_job(
+    app: AppHandle,
+    state: &AppState,
+    input: std::path::PathBuf,
+    output: std::path::PathBuf,
+    source: std::path::PathBuf,
+    insert_after: usize,
+    kind: &str,
+) -> Result<JobStart, SevenError> {
+    let executable = jobs::require_executable(&["qpdf"], "qpdf")?;
+    let page_count = lopdf::Document::load(&input)
+        .map_err(|error| SevenError::PdfOpen(error.to_string()))?
+        .get_pages()
+        .len();
+    if insert_after > page_count {
+        return Err(SevenError::OperationRejected(format!(
+            "A posição de inserção deve ficar entre 0 e {page_count}"
+        )));
+    }
+
+    let mut args = vec![input.to_string_lossy().into_owned(), "--pages".into()];
+    if insert_after > 0 {
+        args.push(".".into());
+        args.push(format!("1-{insert_after}"));
+    }
+    args.push(source.to_string_lossy().into_owned());
+    args.push("1-z".into());
+    if insert_after < page_count {
+        args.push(".".into());
+        args.push(format!("{}-z", insert_after + 1));
+    }
+    args.push("--".into());
+    args.push(output.to_string_lossy().into_owned());
+
+    Ok(jobs::start_process_job(
+        app,
+        state,
+        kind,
+        executable,
+        args,
+        Some(output),
+    ))
+}
+
+fn transient_pdf(state: &AppState, prefix: &str) -> Result<std::path::PathBuf, SevenError> {
+    let directory = state.cache_dir.join("jobs");
+    fs::create_dir_all(&directory).map_err(|error| SevenError::Io(error.to_string()))?;
+    Ok(directory.join(format!("{prefix}-{}.pdf", uuid::Uuid::new_v4())))
+}
+
+#[tauri::command]
+pub fn start_insert_blank_pages(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: String,
+    output: String,
+    insert_after: usize,
+    page_size: String,
+    page_count: u16,
+) -> CommandResult<JobStart> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    let source = transient_pdf(&state, "blank-pages").map_err(ErrorPayload::from)?;
+    pdf::create_blank_pdf(&source, &page_size, page_count).map_err(ErrorPayload::from)?;
+    start_insert_pdf_source_job(app, &state, input, output, source, insert_after, "insert-blank-pages")
+        .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn start_insert_image_pages(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: String,
+    output: String,
+    insert_after: usize,
+    images: Vec<String>,
+    dpi: u16,
+) -> CommandResult<JobStart> {
+    if images.is_empty() || images.len() > 500 {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "Selecione entre 1 e 500 imagens".into(),
+        )));
+    }
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    let mut paths = Vec::with_capacity(images.len());
+    for image in images {
+        let path = std::path::Path::new(&image);
+        if !path.is_file() {
+            return Err(ErrorPayload::from(SevenError::NotFound(image)));
+        }
+        paths.push(fs::canonicalize(path)
+            .map_err(|error| ErrorPayload::from(SevenError::InvalidPath(error.to_string())))?);
+    }
+    let source = transient_pdf(&state, "image-pages").map_err(ErrorPayload::from)?;
+    pdf::create_pdf_from_images(&paths, &source, dpi).map_err(ErrorPayload::from)?;
+    start_insert_pdf_source_job(app, &state, input, output, source, insert_after, "insert-image-pages")
+        .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn start_insert_text_pages(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: String,
+    output: String,
+    insert_after: usize,
+    text: String,
+    page_size: String,
+    font_size: u16,
+) -> CommandResult<JobStart> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    let source = transient_pdf(&state, "text-pages").map_err(ErrorPayload::from)?;
+    pdf::create_pdf_from_text(&source, &text, &page_size, font_size).map_err(ErrorPayload::from)?;
+    start_insert_pdf_source_job(app, &state, input, output, source, insert_after, "insert-text-pages")
+        .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn start_insert_clipboard_image_pages(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: String,
+    output: String,
+    insert_after: usize,
+    rgba: Vec<u8>,
+    width: u32,
+    height: u32,
+    dpi: u16,
+) -> CommandResult<JobStart> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    let source = transient_pdf(&state, "clipboard-pages").map_err(ErrorPayload::from)?;
+    pdf::create_pdf_from_rgba(&source, rgba, width, height, dpi).map_err(ErrorPayload::from)?;
+    start_insert_pdf_source_job(app, &state, input, output, source, insert_after, "insert-clipboard-pages")
+        .map_err(ErrorPayload::from)
+}
+
 #[tauri::command]
 pub fn start_insert_pages(
     app: AppHandle,

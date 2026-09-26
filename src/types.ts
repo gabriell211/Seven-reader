@@ -100,11 +100,12 @@ export interface AdvancedSearchOptions {
   includeComments: boolean;
   includeBookmarks: boolean;
   includeForms: boolean;
+  includeAttachments: boolean;
   includeMetadata: boolean;
 }
 
 export interface AdvancedSearchHit {
-  kind: "text" | "comment" | "bookmark" | "form" | "metadata" | string;
+  kind: "text" | "comment" | "bookmark" | "form" | "attachment" | "metadata" | string;
   pageIndex?: number;
   title: string;
   excerpt: string;

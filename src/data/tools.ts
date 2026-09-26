@@ -41,10 +41,10 @@ export const tools: ToolDefinition[] = [
   { id: "layers", label: "Camadas", description: "OCGs, intenção e visibilidade inicial; edição segura do estado padrão.", icon: "layers", group: "Avançado", capability: "pdf_engine", implemented: true },
   { id: "articles", label: "Artigos PDF", description: "Inspecione threads Articles preservando sua estrutura.", icon: "bookmark", group: "Avançado", capability: "pdf_engine", implemented: true },
   { id: "catalog", label: "Índices e catálogo", description: "Índice local persistente com texto por página e pesquisa em coleções.", icon: "search", group: "Avançado", implemented: true },
-  { id: "rich-media", label: "Rich Media", description: "Detecte Rich Media/áudio/vídeo e mantenha execução automática bloqueada.", icon: "attachment", group: "Avançado", capability: "pdf_engine", implemented: true },
-  { id: "three-d", label: "3D", description: "Detecte anotações/streams 3D U3D/PRC sem ativação automática.", icon: "layers", group: "Avançado", capability: "pdf_engine", implemented: true },
+  { id: "rich-media", label: "Rich Media", description: "Inspecione streams de mídia, veja hash/tamanho e extraia assets manualmente sem autoexecução.", icon: "attachment", group: "Avançado", capability: "pdf_engine", implemented: true },
+  { id: "three-d", label: "3D", description: "Inspecione e extraia streams U3D/PRC preservando ativação 3D bloqueada por segurança.", icon: "layers", group: "Avançado", capability: "pdf_engine", implemented: true },
   { id: "shared-review", label: "Revisão compartilhada", description: "Importe e exporte comentários em XFDF interoperável com histórico Desfazer/Refazer.", icon: "comment", group: "Avançado", capability: "pdf_engine", implemented: true },
-  { id: "geospatial", label: "Geoespacial", description: "Detecte Measure/VP/GPTS/LPTS e metadados espaciais preservados.", icon: "pages", group: "Avançado", capability: "pdf_engine", implemented: true },
+  { id: "geospatial", label: "Geoespacial", description: "Leia Viewport/Measure/GPTS/LPTS, EPSG/WKT e resolva coordenadas da página.", icon: "pages", group: "Avançado", capability: "pdf_engine", implemented: true },
 ];
 
 export function canRunTool(

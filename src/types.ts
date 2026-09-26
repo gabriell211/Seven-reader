@@ -313,6 +313,12 @@ export interface OcrOptions {
   rotatePagesThreshold: number;
 }
 
+export interface OcrLanguageDetection {
+  language: string;
+  confidence: number;
+  evaluated: string[];
+}
+
 export interface OcrWord {
   text: string;
   confidence: number;

@@ -1249,20 +1249,20 @@ Além do comportamento de suspeitas:
 
 ## Texto e marcação
 
-- [ ] Nota adesiva
-- [ ] Highlight
-- [ ] Underline
-- [ ] Strikethrough
+- [x] Nota adesiva
+- [x] Highlight
+- [x] Underline
+- [x] Strikethrough
 - [ ] Inserir texto
 - [ ] Substituir texto
-- [ ] Caixa de texto
+- [x] Caixa de texto
 - [ ] Callout
 - [ ] Comentário sobre texto selecionado
 - [ ] Comentário sobre imagem selecionada
 
 ## Desenho
 
-- [ ] Lápis
+- [x] Lápis
 - [ ] Borracha
 - [ ] Linha
 - [ ] Seta
@@ -1281,7 +1281,7 @@ Além do comportamento de suspeitas:
 - [ ] Cor
 - [ ] Opacidade
 - [ ] Espessura
-- [ ] Autor
+- [x] Autor
 - [ ] Data
 - [ ] Estado
 - [ ] Bloquear comentário
@@ -1299,14 +1299,14 @@ Além do comportamento de suspeitas:
 
 ## Lista de comentários
 
-- [ ] Buscar
-- [ ] Filtrar
-- [ ] Ordenar
-- [ ] Próximo
-- [ ] Anterior
-- [ ] Exportar
+- [x] Buscar
+- [x] Filtrar
+- [x] Ordenar
+- [x] Próximo
+- [x] Anterior
+- [x] Exportar
 - [ ] Importar FDF
-- [ ] Importar XFDF
+- [x] Importar XFDF
 - [ ] Resumo imprimível
 - [ ] Verificação ortográfica em comentários
 
@@ -1314,16 +1314,16 @@ Além do comportamento de suspeitas:
 
 # Carimbos
 
-- [ ] Carimbos padrão
-- [ ] Carimbo personalizado
-- [ ] Categorias
-- [ ] Carimbo dinâmico
-- [ ] Data
-- [ ] Usuário
-- [ ] Identidade
-- [ ] Editar identidade
-- [ ] Excluir customizado
-- [ ] Reutilizar carimbo
+- [x] Carimbos padrão
+- [x] Carimbo personalizado
+- [x] Categorias
+- [x] Carimbo dinâmico
+- [x] Data
+- [x] Usuário
+- [x] Identidade
+- [x] Editar identidade
+- [x] Excluir customizado
+- [x] Reutilizar carimbo
 
 ---
 

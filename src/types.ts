@@ -48,6 +48,13 @@ export interface DocumentSummary {
 
 export type ViewMode = "single" | "continuous" | "facing" | "facing-continuous";
 
+export interface ExternalFileStatus {
+  exists: boolean;
+  changed: boolean;
+  fileSize?: number;
+  modifiedNs?: string;
+}
+
 export interface RenderResult {
   documentId: string;
   pageIndex: number;

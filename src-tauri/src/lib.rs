@@ -150,6 +150,7 @@ pub fn run() {
             commands::create_pdf_from_images,
             commands::start_ocr_advanced,
             commands::start_batch_ocr,
+            commands::detect_ocr_language,
             commands::review_ocr_page,
             commands::scan_page_image,
             commands::delete_scan_pages,

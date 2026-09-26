@@ -27,6 +27,11 @@ interface WorkspaceProps {
   tabs: DocumentSummary[];
   rendered: RenderResult | null;
   renderedPages: RenderResult[];
+  splitDocument: DocumentSummary | null;
+  splitRendered: RenderResult | null;
+  splitPage: number;
+  splitZoom: number;
+  splitOrientation: "vertical" | "horizontal";
   viewMode: ViewMode;
   canReopenClosed: boolean;
   canNavigateBack: boolean;
@@ -49,6 +54,10 @@ interface WorkspaceProps {
   canCreateWindow: boolean;
   onOpenInNewWindow: (documentId: string) => void;
   onMoveToNewWindow: (documentId: string) => void;
+  onOpenSideBySide: (documentId: string) => void;
+  onCloseSideBySide: () => void;
+  onSplitRender: (page: number, zoom: number) => void;
+  onSplitOrientationChange: (orientation: "vertical" | "horizontal") => void;
   onNavigateBack: () => void;
   onNavigateForward: () => void;
   onQuickToolsPositionChange: (position: { x: number; y: number } | null) => void;
@@ -88,6 +97,11 @@ export function DocumentWorkspace({
   tabs,
   rendered,
   renderedPages,
+  splitDocument,
+  splitRendered,
+  splitPage,
+  splitZoom,
+  splitOrientation,
   viewMode,
   canReopenClosed,
   canNavigateBack,
@@ -110,6 +124,10 @@ export function DocumentWorkspace({
   canCreateWindow,
   onOpenInNewWindow,
   onMoveToNewWindow,
+  onOpenSideBySide,
+  onCloseSideBySide,
+  onSplitRender,
+  onSplitOrientationChange,
   onNavigateBack,
   onNavigateForward,
   onQuickToolsPositionChange,
@@ -984,7 +1002,7 @@ export function DocumentWorkspace({
           </aside>
         )}
 
-        <main className="document-stage" ref={stageRef}>
+        <main className={splitDocument ? `document-stage split-view split-view--${splitOrientation}` : "document-stage"} ref={stageRef}>
           <div
             className={`document-canvas document-canvas--${viewMode}`}
             ref={canvasRef}
@@ -1170,6 +1188,45 @@ export function DocumentWorkspace({
             )}
           </div>
 
+          {splitDocument && splitRendered && (
+            <section className="secondary-document-pane">
+              <header className="secondary-pane-header">
+                <div>
+                  <span className="tab-file-icon">PDF</span>
+                  <strong title={splitDocument.path}>{splitDocument.name}</strong>
+                </div>
+                <div className="secondary-pane-actions">
+                  <button
+                    className={splitOrientation === "vertical" ? "active" : ""}
+                    onClick={() => onSplitOrientationChange("vertical")}
+                    title="Divisão vertical"
+                  >V</button>
+                  <button
+                    className={splitOrientation === "horizontal" ? "active" : ""}
+                    onClick={() => onSplitOrientationChange("horizontal")}
+                    title="Divisão horizontal"
+                  >H</button>
+                  <button onClick={onCloseSideBySide} title="Fechar painel lado a lado"><SevenIcon name="close" /></button>
+                </div>
+              </header>
+              <div className="secondary-pane-canvas">
+                <div className="rendered-page secondary-rendered-page" style={{ width: splitRendered.width }}>
+                  <img src={nativeAssetUrl(splitRendered.cachePath)} alt={`Página ${splitPage + 1} de ${splitDocument.name}`} draggable={false} />
+                  <span className="page-corner-label">{splitPage + 1}</span>
+                </div>
+              </div>
+              <footer className="secondary-pane-controls">
+                <button disabled={splitPage === 0} onClick={() => onSplitRender(splitPage - 1, splitZoom)}><SevenIcon name="chevronLeft" /></button>
+                <span>{splitPage + 1} / {splitDocument.pageCount}</span>
+                <button disabled={splitPage >= splitDocument.pageCount - 1} onClick={() => onSplitRender(splitPage + 1, splitZoom)}><SevenIcon name="chevronRight" /></button>
+                <i />
+                <button onClick={() => onSplitRender(splitPage, Math.max(25, splitZoom - 10))}><SevenIcon name="zoomOut" /></button>
+                <span>{Math.round(splitZoom)}%</span>
+                <button onClick={() => onSplitRender(splitPage, Math.min(400, splitZoom + 10))}><SevenIcon name="zoomIn" /></button>
+              </footer>
+            </section>
+          )}
+
           <div className="measurement-toolbar">
             <button className={showRulers ? "active" : ""} onClick={() => setShowRulers((value) => !value)}>Réguas</button>
             <button className={showGrid ? "active" : ""} onClick={() => setShowGrid((value) => !value)}>Grade</button>
@@ -1273,6 +1330,7 @@ export function DocumentWorkspace({
             <div className="tab-context-divider" />
             <button disabled={!canCreateWindow} onClick={() => { onOpenInNewWindow(tabMenu.id); setTabMenu(null); }}>Abrir em nova janela</button>
             <button disabled={!canCreateWindow} onClick={() => { onMoveToNewWindow(tabMenu.id); setTabMenu(null); }}>Mover para nova janela</button>
+            <button disabled={tabMenu.id === document.id} onClick={() => { onOpenSideBySide(tabMenu.id); setTabMenu(null); }}>Abrir lado a lado</button>
           </div>
         )}
 

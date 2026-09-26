@@ -1697,23 +1697,23 @@ Um retângulo visual sobre o conteúdo **não** é redação.
 
 ## Marcação
 
-- [ ] Texto
-- [ ] Imagem
-- [ ] Área
+- [x] Texto
+- [x] Imagem
+- [x] Área
 - [ ] Página
-- [ ] Várias páginas
+- [x] Várias páginas
 
 ## Buscar e redigir
 
-- [ ] Palavra
-- [ ] Frase
+- [x] Palavra
+- [x] Frase
 - [ ] Múltiplas palavras
 - [ ] Padrões
 - [ ] Regex como melhoria opcional
-- [ ] Palavra inteira
-- [ ] Parte da palavra
-- [ ] Selecionar ocorrências
-- [ ] Marcar todas
+- [x] Palavra inteira
+- [x] Parte da palavra
+- [x] Selecionar ocorrências
+- [x] Marcar todas
 
 ## Aparência
 
@@ -1739,12 +1739,12 @@ Um retângulo visual sobre o conteúdo **não** é redação.
 ## Aplicação
 
 - [ ] Preview
-- [ ] Confirmar irreversibilidade
-- [ ] Aplicar
+- [x] Confirmar irreversibilidade
+- [x] Aplicar
 - [ ] Oferecer sanitização
-- [ ] Salvar como novo arquivo por padrão
-- [ ] Verificação pós-redação
-- [ ] Garantir que texto removido não seja recuperável por busca/cópia
+- [x] Salvar como novo arquivo por padrão
+- [x] Verificação pós-redação
+- [x] Garantir que texto removido não seja recuperável por busca/cópia
 
 ---
 

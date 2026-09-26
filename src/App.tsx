@@ -24,7 +24,7 @@ import { UnsavedChangesDialog } from "./components/UnsavedChangesDialog";
 import { ActionsDialog } from "./components/ActionsDialog";
 import { PrintProductionDialog } from "./components/PrintProductionDialog";
 import { CatalogDialog } from "./components/CatalogDialog";
-import { GuidedActionsDialog, type GuidedActionKind } from "./components/GuidedActionsDialog";
+import { GuidedActionsDialog, type GuidedActionKind, type GuidedActionRunOptions } from "./components/GuidedActionsDialog";
 import { SharedReviewDialog } from "./components/SharedReviewDialog";
 import { OptimizeDialog } from "./components/OptimizeDialog";
 import { InteractiveContentDialog, type InteractiveMode } from "./components/InteractiveContentDialog";
@@ -200,6 +200,9 @@ import {
   startConvertToPdf,
   startBatchConvertToPdf,
   startBatchOcr,
+  startBatchSanitize,
+  startBatchOverlay,
+  startBatchRedactBySearch,
   startDecryptPdf,
   startEncryptPdf,
   startExportPdf,
@@ -3106,25 +3109,74 @@ export default function App() {
     kind: GuidedActionKind,
     inputs: string[],
     outputDirectory: string,
+    options: GuidedActionRunOptions,
   ) => {
     try {
-      const started =
-        kind === "ocr"
-          ? await startBatchOcr(inputs, outputDirectory, {
-              language: settings.ocrLanguage,
-              deskew: true,
-              rotatePages: true,
-              outputType: settings.ocrOutputType,
-              mode: "skip",
-              clean: false,
-              cleanFinal: false,
-              removeBackground: false,
-              optimize: 1,
-              rotatePagesThreshold: 14,
-            })
-          : kind === "optimize"
-            ? await startBatchOptimize(inputs, outputDirectory, "ebook")
-            : await startBatchConvertToPdf(inputs, outputDirectory);
+      let started: { jobId: string };
+      if (kind === "ocr") {
+        started = await startBatchOcr(inputs, outputDirectory, {
+          language: settings.ocrLanguage,
+          deskew: true,
+          rotatePages: true,
+          outputType: settings.ocrOutputType,
+          mode: "skip",
+          clean: false,
+          cleanFinal: false,
+          removeBackground: false,
+          optimize: 1,
+          rotatePagesThreshold: 14,
+        });
+      } else if (kind === "optimize") {
+        started = await startBatchOptimize(inputs, outputDirectory, "ebook");
+      } else if (kind === "convert") {
+        started = await startBatchConvertToPdf(inputs, outputDirectory);
+      } else if (kind === "sanitize") {
+        started = await startBatchSanitize(inputs, outputDirectory, options.sanitize);
+      } else if (kind === "metadata") {
+        started = await startBatchSanitize(inputs, outputDirectory, {
+          removeJavascript: false,
+          removeOpenActions: false,
+          removeEmbeddedFiles: false,
+          removeMetadata: true,
+          removeXfa: false,
+          removeAnnotations: false,
+          removeForms: false,
+          removeMultimedia: false,
+          cleanupStructure: false,
+        });
+      } else if (kind === "redact") {
+        started = await startBatchRedactBySearch(
+          inputs,
+          outputDirectory,
+          options.query.trim(),
+          options.matchCase,
+          options.wholeWord,
+        );
+      } else {
+        const overlayKind =
+          kind === "watermark" ? "watermark" :
+          kind === "header" ? "header" :
+          kind === "footer" ? "footer" :
+          "bates";
+        started = await startBatchOverlay(inputs, outputDirectory, {
+          kind: overlayKind,
+          text: overlayKind === "bates" ? "" : options.text,
+          prefix: options.prefix,
+          suffix: options.suffix,
+          startNumber: options.startNumber,
+          digits: options.digits,
+          fontSize: overlayKind === "watermark" ? 42 : 10,
+          pageStart: 0,
+          parity: "all",
+          position: overlayKind === "watermark" ? "center" : "center",
+          marginX: 36,
+          marginY: 24,
+          rotation: overlayKind === "watermark" ? 45 : 0,
+          opacity: overlayKind === "watermark" ? 0.24 : 0.92,
+          imageScale: 1,
+        });
+      }
+
       setGuidedActionsOpen(false);
       setNotice(`Ação guiada iniciada · ${inputs.length} arquivo(s) · job ${started.jobId.slice(0, 8)}`);
     } catch (error) {
@@ -4008,7 +4060,7 @@ export default function App() {
       {interactiveMode && document && <InteractiveContentDialog mode={interactiveMode} pageIndex={page} assets={interactiveAssets} viewports={geospatialViewports} coordinate={geospatialCoordinate} location={geospatialLocation} measurement={geospatialMeasurement} loading={interactiveLoading} onClose={() => setInteractiveMode(null)} onReload={() => void reloadInteractiveContent()} onExtract={(objectId, destination) => void runExtractInteractiveAsset(objectId, destination)} onOpenMedia={(asset) => void runOpenInteractiveMedia(asset)} onResolve={(pageIndex, normalizedX, normalizedY) => void runResolveGeospatial(pageIndex, normalizedX, normalizedY)} onLocate={(pageIndex, first, second) => void runLocateGeospatial(pageIndex, first, second)} onMeasure={(pageIndex, kind, points) => { if (!document) return; void measureGeospatial(document.id, pageIndex, kind, points).then((result) => { setGeospatialMeasurement(result); setNotice(`${kind === "area" ? "Área" : kind === "perimeter" ? "Perímetro" : "Distância"}: ${result.value.toFixed(3)} ${result.unit}`); }).catch((error) => setNotice(errorMessage(error))); }} />}
       {optimizeOpen && document && <OptimizeDialog documentPath={document.activePath} audit={optimizationAudit} loading={optimizationAuditLoading} onClose={() => setOptimizeOpen(false)} onAudit={() => void reloadOptimizationAudit()} onRun={(output, options) => void runOptimizeAdvanced(output, options)} />}
       {sharedReviewOpen && document && <SharedReviewDialog documentPath={document.activePath} lastReport={reviewTransferReport} onClose={() => setSharedReviewOpen(false)} onExport={(destination) => void runExportReview(destination)} onImport={(xfdf) => void runImportReview(xfdf)} />}
-      {guidedActionsOpen && <GuidedActionsDialog onClose={() => setGuidedActionsOpen(false)} onRun={(kind, inputs, outputDirectory) => void runGuidedAction(kind, inputs, outputDirectory)} />}
+      {guidedActionsOpen && <GuidedActionsDialog onClose={() => setGuidedActionsOpen(false)} onRun={(kind, inputs, outputDirectory, options) => void runGuidedAction(kind, inputs, outputDirectory, options)} />}
       {catalogOpen && <CatalogDialog catalogs={catalogs} hits={catalogHits} loading={catalogLoading} onClose={() => setCatalogOpen(false)} onReload={() => void reloadCatalogs()} onBuild={(name, inputs) => void runBuildCatalog(name, inputs)} onSearch={(id, query, matchCase) => void runCatalogSearch(id, query, matchCase)} onDelete={(id) => void runDeleteCatalog(id)} onOpenHit={(path, pageIndex) => { setCatalogOpen(false); void openPath(path, { page: pageIndex, zoom: settings.defaultZoom }); }} />}
       {settingsOpen && <SettingsDialog settings={settings} onClose={() => setSettingsOpen(false)} onChange={setSettings} />}
       {printProductionOpen && document && (

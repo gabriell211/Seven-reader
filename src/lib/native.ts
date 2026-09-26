@@ -43,6 +43,7 @@ import type {
   PdfActionInfo,
   PrintPreflightReport,
   PageBoxUpdate,
+  PageGeometryUpdate,
   RedactionArea,
   RedactionReport,
   ReviewTransferReport,
@@ -921,6 +922,13 @@ export async function listPdfActions(path: string): Promise<PdfActionInfo[]> {
 
 export async function getPrintPreflight(path: string): Promise<PrintPreflightReport> {
   return invoke<PrintPreflightReport>("get_print_preflight", { path });
+}
+
+export async function sessionSetPageGeometry(
+  documentId: string,
+  update: PageGeometryUpdate,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_set_page_geometry", { documentId, update });
 }
 
 export async function sessionSetPageBoxes(

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { BrandMark } from "./BrandMark";
 import { SevenIcon } from "./SevenIcon";
 import { canRunTool, tools } from "../data/tools";
-import type { Capabilities, JobStatus, RecentDocument, ToolId } from "../types";
+import type { Capabilities, DocumentSummary, JobStatus, RecentDocument, ToolId } from "../types";
 
 interface HomeProps {
   native: boolean;
@@ -10,6 +10,10 @@ interface HomeProps {
   recents: RecentDocument[];
   recentTools: ToolId[];
   taskHistory: JobStatus[];
+  openDocuments: DocumentSummary[];
+  activeDocumentId: string | null;
+  onResumeDocument: (documentId: string) => void;
+  onCloseOpenDocument: (documentId: string) => void;
   onOpen: () => void;
   onOpenFolder: () => void;
   lastSessionPath: string | null;
@@ -39,6 +43,10 @@ export function Home({
   recents,
   recentTools,
   taskHistory,
+  openDocuments,
+  activeDocumentId,
+  onResumeDocument,
+  onCloseOpenDocument,
   onOpen,
   onOpenFolder,
   lastSessionPath,
@@ -88,6 +96,20 @@ export function Home({
             <span className="eyebrow">SEVEN READER</span>
             <h1>Seu PDF, do começo ao fim.</h1>
             <p>Leitura rápida, processamento local e fluxos profissionais com capacidades verificadas em runtime.</p>
+            {openDocuments.length > 0 && (
+              <div className="home-resume-strip">
+                <div>
+                  <span>DOCUMENTOS ABERTOS</span>
+                  <strong>{openDocuments.length} {openDocuments.length === 1 ? "documento" : "documentos"} na sessão</strong>
+                </div>
+                <button
+                  className="resume-document-button"
+                  onClick={() => onResumeDocument(activeDocumentId ?? openDocuments[0].id)}
+                >
+                  <SevenIcon name="chevronRight" /> Voltar ao documento
+                </button>
+              </div>
+            )}
             <div className="hero-actions">
               <button className="primary-button" onClick={onOpen} disabled={!native}>
                 <SevenIcon name="open" /> Abrir PDF
@@ -129,11 +151,11 @@ export function Home({
                   key={item.id}
                   disabled={!enabled}
                   onClick={() => enabled && onTool(item.id)}
-                  title={enabled ? item.label : "Ainda não disponível com implementação real neste ambiente"}
+                  title={enabled ? item.label : "Dependência necessária não disponível neste ambiente"}
                 >
                   <span className="quick-icon"><SevenIcon name={item.icon} /></span>
                   <span>{item.label}</span>
-                  {!enabled && <small className="tool-state">Em implementação</small>}
+                  {!enabled && <small className="tool-state">Indisponível neste ambiente</small>}
                 </button>
               );
             })}
@@ -154,7 +176,7 @@ export function Home({
             {visibleRecents.length === 0 ? (
               <button className="empty-recent" onClick={onOpen} disabled={!native}>
                 <span className="empty-icon"><SevenIcon name="recent" /></span>
-                <strong>Nenhum documento recente</strong>
+                <strong>{libraryView === "recent" ? "Nenhum documento recente" : libraryView === "pinned" ? "Nenhum documento fixado" : "Nenhum favorito"}</strong>
                 <span>Abra um PDF para começar. O histórico permanece somente neste dispositivo.</span>
               </button>
             ) : (
@@ -212,6 +234,30 @@ export function Home({
             </div>
           </aside>
         </section>
+
+        {openDocuments.length > 0 && (
+          <section className="open-documents-panel">
+            <div className="section-heading section-heading--compact">
+              <div><span className="eyebrow">SESSÃO ATUAL</span><h2>Documentos abertos</h2></div>
+            </div>
+            <div className="open-document-list">
+              {openDocuments.map((item) => (
+                <div className={item.id === activeDocumentId ? "open-document-row active" : "open-document-row"} key={item.id}>
+                  <button className="open-document-resume" onClick={() => onResumeDocument(item.id)} title={item.path}>
+                    <span className="file-tile">PDF</span>
+                    <span>
+                      <strong>{item.name}{item.dirty ? " •" : ""}</strong>
+                      <small>{item.dirty ? "Alterações não salvas · " : ""}{item.pageCount} página(s)</small>
+                    </span>
+                  </button>
+                  <button className="open-document-close" onClick={() => onCloseOpenDocument(item.id)} title="Fechar documento" aria-label={`Fechar ${item.name}`}>
+                    <SevenIcon name="close" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className="home-activity-grid">
           <div className="activity-panel">
@@ -273,7 +319,7 @@ export function Home({
                   <span className="tool-card-icon"><SevenIcon name={tool.icon} /></span>
                   <span className="tool-card-copy">
                     <strong>{tool.label}</strong>
-                    <small>{enabled ? tool.description : "Visível, mas bloqueada até existir implementação real"}</small>
+                    <small>{enabled ? tool.description : "Dependência local necessária não disponível neste ambiente"}</small>
                   </span>
                   <SevenIcon name="chevronRight" className="tool-chevron" />
                 </button>

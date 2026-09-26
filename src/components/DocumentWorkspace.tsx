@@ -45,6 +45,9 @@ interface WorkspaceProps {
   onCloseOtherTabs: (documentId: string) => void;
   onReopenClosed: () => void;
   onReorderTabs: (sourceId: string, targetId: string) => void;
+  canCreateWindow: boolean;
+  onOpenInNewWindow: (documentId: string) => void;
+  onMoveToNewWindow: (documentId: string) => void;
   onNavigateBack: () => void;
   onNavigateForward: () => void;
   onQuickToolsPositionChange: (position: { x: number; y: number } | null) => void;
@@ -101,6 +104,9 @@ export function DocumentWorkspace({
   onCloseOtherTabs,
   onReopenClosed,
   onReorderTabs,
+  canCreateWindow,
+  onOpenInNewWindow,
+  onMoveToNewWindow,
   onNavigateBack,
   onNavigateForward,
   onQuickToolsPositionChange,
@@ -146,6 +152,7 @@ export function DocumentWorkspace({
   const [tabMenu, setTabMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const stageRef = useRef<HTMLElement>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef<HTMLDivElement>(null);
   const [inkPoints, setInkPoints] = useState<Array<[number, number]>>([]);
   const [inkWidth, setInkWidth] = useState(2.5);
@@ -176,6 +183,7 @@ export function DocumentWorkspace({
   const [reflowLoading, setReflowLoading] = useState(false);
   const [dynamicScale, setDynamicScale] = useState(1);
   const dynamicZoomRef = useRef<{ pointerId: number; startY: number; startZoom: number; previewZoom: number } | null>(null);
+  const panRef = useRef<{ pointerId: number; startX: number; startY: number; scrollLeft: number; scrollTop: number } | null>(null);
 
   useEffect(() => {
     const focus = () => searchRef.current?.focus();
@@ -365,11 +373,11 @@ export function DocumentWorkspace({
     if (scrollFrameRef.current !== null) cancelAnimationFrame(scrollFrameRef.current);
     scrollFrameRef.current = requestAnimationFrame(() => {
       scrollFrameRef.current = null;
-      const stage = stageRef.current;
-      if (!stage) return;
-      const stageRect = stage.getBoundingClientRect();
-      const centerY = stageRect.top + stageRect.height / 2;
-      const pages = Array.from(stage.querySelectorAll<HTMLElement>("[data-page-index]"));
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const canvasRect = canvas.getBoundingClientRect();
+      const centerY = canvasRect.top + canvasRect.height / 2;
+      const pages = Array.from(canvas.querySelectorAll<HTMLElement>("[data-page-index]"));
       let best: { page: number; distance: number } | null = null;
       for (const element of pages) {
         const rect = element.getBoundingClientRect();
@@ -383,6 +391,38 @@ export function DocumentWorkspace({
         onVisiblePage(best.page);
       }
     });
+  };
+
+  const beginPan = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (viewerTool !== "hand") return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    panRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      scrollLeft: canvas.scrollLeft,
+      scrollTop: canvas.scrollTop,
+    };
+    event.currentTarget.classList.add("is-panning");
+  };
+
+  const movePan = (event: React.PointerEvent<HTMLDivElement>) => {
+    const pan = panRef.current;
+    const canvas = canvasRef.current;
+    if (viewerTool !== "hand" || !pan || !canvas || pan.pointerId !== event.pointerId) return;
+    canvas.scrollLeft = pan.scrollLeft - (event.clientX - pan.startX);
+    canvas.scrollTop = pan.scrollTop - (event.clientY - pan.startY);
+  };
+
+  const finishPan = (event: React.PointerEvent<HTMLDivElement>) => {
+    const pan = panRef.current;
+    if (!pan || pan.pointerId !== event.pointerId) return;
+    panRef.current = null;
+    event.currentTarget.classList.remove("is-panning");
+    try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* already released */ }
   };
 
   const beginToolbarDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -921,8 +961,16 @@ export function DocumentWorkspace({
           </aside>
         )}
 
-        <main className="document-stage" ref={stageRef} onScroll={handleStageScroll}>
-          <div className={`document-canvas document-canvas--${viewMode}`}>
+        <main className="document-stage" ref={stageRef}>
+          <div
+            className={`document-canvas document-canvas--${viewMode}`}
+            ref={canvasRef}
+            onScroll={handleStageScroll}
+            onPointerDown={beginPan}
+            onPointerMove={movePan}
+            onPointerUp={finishPan}
+            onPointerCancel={finishPan}
+          >
             {reflowEnabled ? (
               <article className="reflow-view">
                 <header><span>Página {page + 1}</span><strong>Reflow de texto</strong></header>
@@ -1199,6 +1247,9 @@ export function DocumentWorkspace({
             <button onClick={() => { onCloseTab(tabMenu.id); setTabMenu(null); }}>Fechar aba</button>
             <button disabled={tabs.length <= 1} onClick={() => { onCloseOtherTabs(tabMenu.id); setTabMenu(null); }}>Fechar outras</button>
             <button disabled={!canReopenClosed} onClick={() => { onReopenClosed(); setTabMenu(null); }}>Reabrir aba fechada</button>
+            <div className="tab-context-divider" />
+            <button disabled={!canCreateWindow} onClick={() => { onOpenInNewWindow(tabMenu.id); setTabMenu(null); }}>Abrir em nova janela</button>
+            <button disabled={!canCreateWindow} onClick={() => { onMoveToNewWindow(tabMenu.id); setTabMenu(null); }}>Mover para nova janela</button>
           </div>
         )}
 

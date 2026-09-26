@@ -49,6 +49,9 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_capabilities,
+            commands::start_watch_folder,
+            commands::stop_watch_folder,
+            commands::list_watch_folders,
             commands::list_pdf_articles,
             commands::session_add_pdf_article_box,
             commands::session_update_pdf_article,

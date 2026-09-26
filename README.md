@@ -884,8 +884,8 @@ Opções:
 - [x] Adicionar arquivos abertos
 - [ ] Expandir arquivo para ver páginas
 - [x] Reordenar arquivos
-- [ ] Reordenar páginas
-- [ ] Remover página
+- [x] Reordenar páginas
+- [x] Remover página
 - [x] Remover arquivo
 - [ ] Preview
 - [x] Combinar

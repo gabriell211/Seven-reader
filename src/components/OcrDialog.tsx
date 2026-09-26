@@ -37,13 +37,57 @@ export function OcrDialog({
   const [outputType, setOutputType] = useState<OcrOptions["outputType"]>("auto");
   const [mode, setMode] = useState<OcrOptions["mode"]>("skip");
   const [threshold, setThreshold] = useState(80);
+  const [pageScope, setPageScope] = useState<"all" | "current" | "range">("all");
+  const [pageRange, setPageRange] = useState("");
+  const [clean, setClean] = useState(false);
+  const [cleanFinal, setCleanFinal] = useState(false);
+  const [removeBackground, setRemoveBackground] = useState(false);
+  const [oversampleEnabled, setOversampleEnabled] = useState(false);
+  const [oversample, setOversample] = useState(300);
+  const [optimize, setOptimize] = useState<0 | 1 | 2 | 3>(1);
+  const [rotatePagesThreshold, setRotatePagesThreshold] = useState(14);
+  const [sidecarEnabled, setSidecarEnabled] = useState(false);
   const [scanDpi, setScanDpi] = useState(300);
+
+  const buildOptions = (sidecar?: string): OcrOptions => ({
+    language,
+    deskew,
+    rotatePages,
+    outputType,
+    mode,
+    sidecar,
+    pageRange:
+      pageScope === "current" ? String(pageIndex + 1)
+        : pageScope === "range" ? pageRange.trim() || undefined
+          : undefined,
+    clean,
+    cleanFinal,
+    removeBackground,
+    oversample: oversampleEnabled ? oversample : undefined,
+    optimize,
+    rotatePagesThreshold,
+  });
 
   const runOcr = async () => {
     if (!documentPath) return;
-    const output = await save({ title: "Salvar PDF com OCR", defaultPath: documentPath.replace(/\.pdf$/i, "-ocr.pdf"), filters: [{ name: "Documento PDF", extensions: ["pdf"] }] });
+    const output = await save({
+      title: "Salvar PDF com OCR",
+      defaultPath: documentPath.replace(/\.pdf$/i, "-ocr.pdf"),
+      filters: [{ name: "Documento PDF", extensions: ["pdf"] }],
+    });
     if (!output) return;
-    onRunOcr(output, { language, deskew, rotatePages, outputType, mode });
+
+    let sidecar: string | undefined;
+    if (sidecarEnabled) {
+      const selected = await save({
+        title: "Salvar texto reconhecido",
+        defaultPath: documentPath.replace(/\.pdf$/i, "-ocr.txt"),
+        filters: [{ name: "Texto", extensions: ["txt"] }],
+      });
+      if (!selected) return;
+      sidecar = selected;
+    }
+    onRunOcr(output, buildOptions(sidecar));
   };
 
   const runBatchOcr = async () => {
@@ -57,7 +101,7 @@ export function OcrDialog({
     if (!inputs.length) return;
     const outputDirectory = await open({ title: "Pasta de saída do OCR", directory: true, multiple: false });
     if (typeof outputDirectory !== "string") return;
-    onRunBatchOcr(inputs, outputDirectory, { language, deskew, rotatePages, outputType, mode });
+    onRunBatchOcr(inputs, outputDirectory, { ...buildOptions(), pageRange: undefined, sidecar: undefined });
   };
 
   const scan = async () => {
@@ -82,8 +126,43 @@ export function OcrDialog({
                 <label className="workflow-field"><span>Tipo de saída</span><select value={outputType} onChange={(event) => setOutputType(event.target.value as OcrOptions["outputType"])}><option value="auto">Automático / PDF-A quando seguro</option><option value="pdf">PDF normal</option><option value="pdfa">PDF/A-2b</option><option value="pdfa-1">PDF/A-1b</option><option value="pdfa-2">PDF/A-2b explícito</option><option value="pdfa-3">PDF/A-3b</option></select></label>
                 <label className="workflow-field"><span>Texto existente</span><select value={mode} onChange={(event) => setMode(event.target.value as OcrOptions["mode"])}><option value="skip">Pular páginas com texto</option><option value="redo">Refazer camada OCR</option><option value="force">Forçar OCR completo</option></select></label>
               </div>
-              <label className="toggle-row"><input type="checkbox" checked={deskew} onChange={(event) => setDeskew(event.target.checked)} /><span><strong>Corrigir inclinação</strong><small>Deskew antes do reconhecimento.</small></span></label>
-              <label className="toggle-row"><input type="checkbox" checked={rotatePages} onChange={(event) => setRotatePages(event.target.checked)} /><span><strong>Detectar rotação</strong><small>Corrige orientação automaticamente.</small></span></label>
+              <section className="ocr-section">
+                <div className="section-mini-title">Páginas</div>
+                <div className="segmented">
+                  <button className={pageScope === "all" ? "active" : ""} onClick={() => setPageScope("all")}>Documento inteiro</button>
+                  <button className={pageScope === "current" ? "active" : ""} onClick={() => setPageScope("current")}>Página {pageIndex + 1}</button>
+                  <button className={pageScope === "range" ? "active" : ""} onClick={() => setPageScope("range")}>Intervalo</button>
+                </div>
+                {pageScope === "range" && (
+                  <label className="workflow-field">
+                    <span>Intervalo</span>
+                    <input value={pageRange} onChange={(event) => setPageRange(event.target.value)} placeholder="1-5,8,11-14" spellCheck={false} />
+                    <small>Use páginas e intervalos separados por vírgula.</small>
+                  </label>
+                )}
+              </section>
+
+              <section className="ocr-section">
+                <div className="section-mini-title">Pré-processamento</div>
+                <label className="toggle-row"><input type="checkbox" checked={deskew} onChange={(event) => setDeskew(event.target.checked)} /><span><strong>Corrigir inclinação</strong><small>Deskew antes do reconhecimento.</small></span></label>
+                <label className="toggle-row"><input type="checkbox" checked={rotatePages} onChange={(event) => setRotatePages(event.target.checked)} /><span><strong>Detectar rotação</strong><small>Corrige orientação automaticamente.</small></span></label>
+                {rotatePages && (
+                  <label className="workflow-field"><span>Confiança para rotação</span><div className="range-row"><input type="range" min={0} max={100} step={1} value={rotatePagesThreshold} onChange={(event) => setRotatePagesThreshold(Number(event.target.value))} /><strong>{rotatePagesThreshold}</strong></div></label>
+                )}
+                <label className="toggle-row"><input type="checkbox" checked={clean} disabled={!capabilities?.unpaper.available} onChange={(event) => setClean(event.target.checked)} /><span><strong>Despeckle / limpar para OCR</strong><small>Usa unpaper somente na imagem enviada ao OCR.</small></span></label>
+                <label className="toggle-row"><input type="checkbox" checked={cleanFinal} disabled={!capabilities?.unpaper.available} onChange={(event) => setCleanFinal(event.target.checked)} /><span><strong>Aplicar limpeza ao PDF final</strong><small>Usa unpaper também na imagem final; requer revisão visual.</small></span></label>
+                {!capabilities?.unpaper.available && <small className="dependency-note">unpaper não detectado; limpeza/despeckle permanece desabilitada.</small>}
+                <label className="toggle-row"><input type="checkbox" checked={removeBackground} onChange={(event) => setRemoveBackground(event.target.checked)} /><span><strong>Remover fundo</strong><small>Útil em scans com papel manchado; pode afetar fotografias coloridas.</small></span></label>
+                <label className="toggle-row"><input type="checkbox" checked={oversampleEnabled} onChange={(event) => setOversampleEnabled(event.target.checked)} /><span><strong>Oversample antes do OCR</strong><small>Aumenta a resolução usada pelo reconhecedor.</small></span></label>
+                {oversampleEnabled && <label className="workflow-field"><span>Oversample</span><div className="range-row"><input type="range" min={72} max={1200} step={12} value={oversample} onChange={(event) => setOversample(Number(event.target.value))} /><strong>{oversample} DPI</strong></div></label>}
+              </section>
+
+              <section className="ocr-section">
+                <div className="section-mini-title">Saída e otimização</div>
+                <label className="workflow-field"><span>Nível de otimização</span><select value={optimize} onChange={(event) => setOptimize(Number(event.target.value) as 0 | 1 | 2 | 3)}><option value={0}>0 · sem otimização</option><option value={1}>1 · lossless padrão</option><option value={2}>2 · maior compactação</option><option value={3}>3 · compactação agressiva</option></select></label>
+                <label className="toggle-row"><input type="checkbox" checked={sidecarEnabled} onChange={(event) => setSidecarEnabled(event.target.checked)} /><span><strong>Gerar TXT sidecar</strong><small>Salva o texto reconhecido separadamente no OCR deste PDF.</small></span></label>
+              </section>
+
               <div className="workflow-submit-group">
                 <button className="secondary-light-button" disabled={!capabilities?.ocr.available} onClick={() => void runBatchOcr()}><SevenIcon name="pages" /> OCR em vários arquivos</button>
                 <button className="primary-button" disabled={!capabilities?.ocr.available || !documentPath} onClick={() => void runOcr()}><SevenIcon name="ocr" /> Executar neste PDF</button>

@@ -4,6 +4,7 @@ import type {
   CatalogHit,
   CatalogSummary,
   DocumentSummary,
+  ExternalFileStatus,
   DuplicateFieldRequest,
   AccessibilityReport,
   AdvancedPdfReport,
@@ -124,6 +125,18 @@ export async function restoreDocumentSession(
     workingPath,
     password: password ?? null,
   });
+}
+
+export async function getExternalFileStatus(
+  documentId: string,
+): Promise<ExternalFileStatus> {
+  return invoke<ExternalFileStatus>("get_external_file_status", { documentId });
+}
+
+export async function reloadDocumentFromSource(
+  documentId: string,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("reload_document_from_source", { documentId });
 }
 
 export async function closeDocument(documentId: string): Promise<void> {

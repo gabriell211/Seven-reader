@@ -741,6 +741,47 @@ pub fn start(
                                             last_error: error.to_string(),
                                         },
                                     );
+                                } else if quarantine_enabled {
+                                    if let Some(directory) = quarantine.as_deref() {
+                                        match move_to_quarantine(
+                                            &path,
+                                            directory,
+                                            &id,
+                                            &error.to_string(),
+                                            retry.attempt.saturating_add(1),
+                                        ) {
+                                            Ok(target) => {
+                                                known.remove(&path);
+                                                retries.remove(&path);
+                                                converted.remove(&path);
+                                                let _ = app_thread.emit(
+                                                    "seven://watch-folder",
+                                                    WatchFolderEvent {
+                                                        watcher_id: id.clone(),
+                                                        state: "quarantined".into(),
+                                                        path: Some(target.to_string_lossy().into_owned()),
+                                                        detail: format!(
+                                                            "Falhou antes de iniciar o retry final e foi movido para quarentena · {error}",
+                                                        ),
+                                                    },
+                                                );
+                                            }
+                                            Err(quarantine_error) => {
+                                                converted.insert(path.clone(), (size, modified));
+                                                let _ = app_thread.emit(
+                                                    "seven://watch-folder",
+                                                    WatchFolderEvent {
+                                                        watcher_id: id.clone(),
+                                                        state: "quarantine-error".into(),
+                                                        path: Some(path.to_string_lossy().into_owned()),
+                                                        detail: format!(
+                                                            "Retry final falhou e a quarentena também falhou: {quarantine_error}",
+                                                        ),
+                                                    },
+                                                );
+                                            }
+                                        }
+                                    }
                                 } else {
                                     converted.insert(path.clone(), (size, modified));
                                     let _ = app_thread.emit(

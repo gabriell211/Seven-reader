@@ -67,6 +67,7 @@ import type {
   TextPlacement,
   TextSelectionResult,
   SearchHit,
+  StampInput,
 } from "../types";
 
 declare global {
@@ -237,6 +238,13 @@ export async function sessionDeleteAnnotation(
   objectId: string,
 ): Promise<DocumentSummary> {
   return invoke<DocumentSummary>("session_delete_annotation", { documentId, objectId });
+}
+
+export async function sessionAddStamp(
+  documentId: string,
+  stamp: StampInput,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_add_stamp", { documentId, stamp });
 }
 
 export async function sessionAddInk(

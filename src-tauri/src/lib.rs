@@ -6,6 +6,7 @@ mod capabilities;
 mod catalog;
 mod commands;
 mod compare;
+mod conversion;
 mod document_ops;
 mod editing;
 mod error;

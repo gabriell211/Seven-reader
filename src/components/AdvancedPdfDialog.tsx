@@ -3,7 +3,7 @@ import { confirm, open, save } from "@tauri-apps/plugin-dialog";
 import type { AdvancedPdfReport, BookmarkInfo, BookmarkUpdate, LayerPropertiesUpdate } from "../types";
 import { SevenIcon } from "./SevenIcon";
 
-type AdvancedTab = "overview" | "bookmarks" | "attachments" | "layers";
+type AdvancedTab = "overview" | "bookmarks" | "attachments" | "layers" | "portfolio";
 
 interface AdvancedPdfDialogProps {
   pageIndex: number;
@@ -24,6 +24,13 @@ interface AdvancedPdfDialogProps {
   onUpdateAttachment: (objectId: string, name: string, description: string) => void;
   onRemoveAttachment: (objectId: string) => void;
   onExtractAttachment: (objectId: string, destination: string) => void;
+  onAddPortfolioItem: (filePath: string, displayName: string, description: string, folderPath: string) => void;
+  onConfigurePortfolio: (view: "details" | "tile" | "hidden") => void;
+  onSetPortfolioView: (view: "details" | "tile" | "hidden") => void;
+  onCreatePortfolioFolder: (path: string, description: string) => void;
+  onMovePortfolioItem: (objectId: string, folderPath: string) => void;
+  onRenamePortfolioFolder: (folderId: string, newName: string) => void;
+  onRemovePortfolioFolder: (folderId: string) => void;
   onLayerVisibility: (objectId: string, visible: boolean) => void;
   onImportLayer: (imagePath: string, name: string, x: number, y: number, width: number, height: number, visible: boolean, locked: boolean) => void;
   onReorderLayer: (objectId: string, direction: "up" | "down") => void;
@@ -60,6 +67,13 @@ export function AdvancedPdfDialog({
   onUpdateAttachment,
   onRemoveAttachment,
   onExtractAttachment,
+  onAddPortfolioItem,
+  onConfigurePortfolio,
+  onSetPortfolioView,
+  onCreatePortfolioFolder,
+  onMovePortfolioItem,
+  onRenamePortfolioFolder,
+  onRemovePortfolioFolder,
   onLayerVisibility,
   onImportLayer,
   onReorderLayer,
@@ -94,8 +108,25 @@ export function AdvancedPdfDialog({
   const [layerLocked, setLayerLocked] = useState(false);
   const [mergeSourceId, setMergeSourceId] = useState("");
   const [mergeTargetId, setMergeTargetId] = useState("");
+  const [portfolioView, setPortfolioView] = useState<"details" | "tile" | "hidden">("details");
+  const [portfolioFolderPath, setPortfolioFolderPath] = useState("");
+  const [portfolioFolderDescription, setPortfolioFolderDescription] = useState("");
+  const [portfolioFolderRenames, setPortfolioFolderRenames] = useState<Record<string,string>>({});
+  const [portfolioSelectedFolder, setPortfolioSelectedFolder] = useState("/");
+  const [portfolioItemPath, setPortfolioItemPath] = useState("");
+  const [portfolioItemName, setPortfolioItemName] = useState("");
+  const [portfolioItemDescription, setPortfolioItemDescription] = useState("");
+  const [portfolioItemMoves, setPortfolioItemMoves] = useState<Record<string,string>>({});
+  const [portfolioQuery, setPortfolioQuery] = useState("");
+  const [portfolioSort, setPortfolioSort] = useState<"name" | "size" | "type">("name");
 
   useEffect(() => { onReload(); }, [onReload]);
+  useEffect(() => {
+    const view = report?.portfolioView;
+    if (view === "T") setPortfolioView("tile");
+    else if (view === "H") setPortfolioView("hidden");
+    else setPortfolioView("details");
+  }, [report?.portfolioView]);
 
   const activeWarnings = useMemo(() => {
     if (!report) return [];
@@ -194,6 +225,67 @@ export function AdvancedPdfDialog({
     if (accepted) onFlattenLayers();
   };
 
+  const choosePortfolioItem = async () => {
+    const path = await open({
+      title: "Selecionar componente para o portfólio",
+      multiple: false,
+      directory: false,
+    });
+    if (typeof path === "string") {
+      setPortfolioItemPath(path);
+      setPortfolioItemName(path.split(/[\\/]/).pop() || "componente");
+    }
+  };
+
+  const createPortfolioFolder = () => {
+    if (!portfolioFolderPath.trim()) return;
+    onCreatePortfolioFolder(portfolioFolderPath.trim(), portfolioFolderDescription.trim());
+    setPortfolioFolderPath("");
+    setPortfolioFolderDescription("");
+  };
+
+  const addPortfolioItem = () => {
+    if (!portfolioItemPath || !portfolioItemName.trim()) return;
+    onAddPortfolioItem(
+      portfolioItemPath,
+      portfolioItemName.trim(),
+      portfolioItemDescription.trim(),
+      portfolioSelectedFolder,
+    );
+    setPortfolioItemPath("");
+    setPortfolioItemName("");
+    setPortfolioItemDescription("");
+  };
+
+  const removePortfolioFolder = async (folderId: string, path: string) => {
+    const accepted = await confirm(
+      `Remover "${path}" também exclui do portfólio todos os componentes e subpastas dentro dela nesta revisão. A operação pode ser desfeita enquanto a sessão estiver aberta.`,
+      { title: "Remover pasta do portfólio", kind: "warning" },
+    );
+    if (accepted) {
+      if (portfolioSelectedFolder === path || portfolioSelectedFolder.startsWith(path + "/")) {
+        setPortfolioSelectedFolder("/");
+      }
+      onRemovePortfolioFolder(folderId);
+    }
+  };
+
+  const portfolioItems = useMemo(() => {
+    if (!report) return [];
+    const query = portfolioQuery.trim().toLocaleLowerCase();
+    const filtered = report.attachments.filter((item) => {
+      if (item.collectionPath !== portfolioSelectedFolder) return false;
+      if (!query) return true;
+      return [item.name, item.description, item.mime]
+        .some((value) => value.toLocaleLowerCase().includes(query));
+    });
+    return filtered.sort((left, right) => {
+      if (portfolioSort === "size") return (right.size ?? 0) - (left.size ?? 0);
+      if (portfolioSort === "type") return left.mime.localeCompare(right.mime) || left.name.localeCompare(right.name);
+      return left.name.localeCompare(right.name);
+    });
+  }, [report, portfolioQuery, portfolioSelectedFolder, portfolioSort]);
+
   const addBookmark = () => {
     onAddBookmark(bookmarkTitle, pageIndex);
   };
@@ -213,6 +305,7 @@ export function AdvancedPdfDialog({
           <button className={tab==="overview"?"active":""} onClick={()=>setTab("overview")}>Visão geral</button>
           <button className={tab==="bookmarks"?"active":""} onClick={()=>setTab("bookmarks")}>Marcadores</button>
           <button className={tab==="attachments"?"active":""} onClick={()=>setTab("attachments")}>Anexos</button>
+          <button className={tab==="portfolio"?"active":""} onClick={()=>setTab("portfolio")}>Portfólio</button>
           <button className={tab==="layers"?"active":""} onClick={()=>setTab("layers")}>Camadas</button>
         </div>
         <div className="workflow-body">

@@ -367,6 +367,52 @@ pub fn resolve_geospatial_coordinate(
 }
 
 #[tauri::command]
+pub fn locate_geospatial_coordinate(
+    state: State<'_, AppState>,
+    document_id: String,
+    page_index: usize,
+    first: f64,
+    second: f64,
+) -> CommandResult<interactive::GeospatialLocation> {
+    let document = state
+        .documents
+        .lock()
+        .get(&document_id)
+        .cloned()
+        .ok_or_else(|| ErrorPayload::from(SevenError::DocumentNotOpen))?;
+    interactive::locate_geospatial_coordinate(
+        document.active_path(),
+        page_index,
+        first,
+        second,
+    )
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn measure_geospatial(
+    state: State<'_, AppState>,
+    document_id: String,
+    page_index: usize,
+    kind: String,
+    normalized_points: Vec<[f64; 2]>,
+) -> CommandResult<interactive::GeospatialMeasurementResult> {
+    let document = state
+        .documents
+        .lock()
+        .get(&document_id)
+        .cloned()
+        .ok_or_else(|| ErrorPayload::from(SevenError::DocumentNotOpen))?;
+    interactive::measure_geospatial(
+        document.active_path(),
+        page_index,
+        &kind,
+        normalized_points,
+    )
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn get_capabilities(state: State<'_, AppState>) -> capabilities::Capabilities {
     capabilities::detect(&state)
 }

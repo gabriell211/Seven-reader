@@ -40,6 +40,8 @@ import {
   cancelJob,
   closeDocument,
   compareDocuments,
+  compareDocumentsAdvanced,
+  exportCompareReportPdf,
   createPdfFromImages,
   createPdfFromClipboardImage,
   createPdfFromText,
@@ -204,6 +206,7 @@ import type {
   CatalogHit,
   CatalogSummary,
   CompareReport,
+  CompareOptions,
   DocumentMetadata,
   DuplicateFieldRequest,
   DocumentSummary,
@@ -3183,15 +3186,33 @@ export default function App() {
     }
   };
 
-  const runCompare = async (other: string) => {
+  const runCompare = async (other: string, options: CompareOptions, swap: boolean) => {
     if (!document) return;
     try {
       setReportLoading(true);
-      setCompareReport(await compareDocuments(document.activePath, other));
+      const left = swap ? other : document.activePath;
+      const right = swap ? document.activePath : other;
+      setCompareReport(await compareDocumentsAdvanced(left, right, options));
     } catch (error) {
       setNotice(errorMessage(error));
     } finally {
       setReportLoading(false);
+    }
+  };
+
+  const runExportCompareReport = async (
+    destination: string,
+    other: string,
+    swap: boolean,
+  ) => {
+    if (!document || !compareReport) return;
+    try {
+      const leftName = swap ? other : document.name;
+      const rightName = swap ? document.name : other;
+      await exportCompareReportPdf(destination, leftName, rightName, compareReport);
+      setNotice("Relatório PDF de comparação exportado.");
+    } catch (error) {
+      setNotice(errorMessage(error));
     }
   };
 
@@ -3464,7 +3485,8 @@ export default function App() {
           onReadAloud={() => void readCurrentPageAloud()}
           onPauseResumeReadAloud={pauseResumeReadAloud}
           onStopReadAloud={stopReadAloud}
-          onCompare={(other) => void runCompare(other)}
+          onCompare={(other, options, swap) => void runCompare(other, options, swap)}
+          onExportCompare={(destination, other, swap) => void runExportCompareReport(destination, other, swap)}
         />
       )}
       {createDialogOpen && (

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type { Capabilities, OcrOptions, OcrWord } from "../types";
+import type { Capabilities, OcrOptions, OcrWord, ScannedPage } from "../types";
+import { nativeAssetUrl } from "../lib/native";
 import { SevenIcon } from "./SevenIcon";
 
 interface OcrDialogProps {
@@ -14,7 +15,9 @@ interface OcrDialogProps {
   onRunOcr: (output: string, options: OcrOptions) => void;
   onRunBatchOcr: (inputs: string[], outputDirectory: string, options: OcrOptions) => void;
   onReview: (language: string, threshold: number) => void;
-  onScan: (output: string, dpi: number) => void;
+  onScanPage: (dpi: number, colorMode: "color" | "gray" | "lineart") => Promise<ScannedPage>;
+  onDeleteScanPages: (inputs: string[]) => Promise<void> | void;
+  onFinalizeScan: (inputs: string[], output: string, dpi: number, options?: OcrOptions) => Promise<void> | void;
 }
 
 export function OcrDialog({
@@ -28,7 +31,9 @@ export function OcrDialog({
   onRunOcr,
   onRunBatchOcr,
   onReview,
-  onScan,
+  onScanPage,
+  onDeleteScanPages,
+  onFinalizeScan,
 }: OcrDialogProps) {
   const [tab, setTab] = useState<"ocr" | "review" | "scan">("ocr");
   const [language, setLanguage] = useState("por+eng");
@@ -48,6 +53,11 @@ export function OcrDialog({
   const [rotatePagesThreshold, setRotatePagesThreshold] = useState(14);
   const [sidecarEnabled, setSidecarEnabled] = useState(false);
   const [scanDpi, setScanDpi] = useState(300);
+  const [scanColorMode, setScanColorMode] = useState<"color" | "gray" | "lineart">("color");
+  const [scanPages, setScanPages] = useState<ScannedPage[]>([]);
+  const [scanBusy, setScanBusy] = useState(false);
+  const [scanError, setScanError] = useState("");
+  const [scanOcrAfter, setScanOcrAfter] = useState(true);
 
   const buildOptions = (sidecar?: string): OcrOptions => ({
     language,
@@ -104,15 +114,76 @@ export function OcrDialog({
     onRunBatchOcr(inputs, outputDirectory, { ...buildOptions(), pageRange: undefined, sidecar: undefined });
   };
 
-  const scan = async () => {
-    const output = await save({ title: "Salvar digitalização", defaultPath: "Digitalizacao-Seven.pdf", filters: [{ name: "Documento PDF", extensions: ["pdf"] }] });
-    if (output) onScan(output, scanDpi);
+  const captureScan = async () => {
+    try {
+      setScanBusy(true);
+      setScanError("");
+      const captured = await onScanPage(scanDpi, scanColorMode);
+      setScanPages((current) => [...current, captured]);
+    } catch {
+      setScanError("A captura não foi concluída. Verifique o scanner/driver e tente novamente.");
+    } finally {
+      setScanBusy(false);
+    }
+  };
+
+  const removeScanPage = async (index: number) => {
+    const page = scanPages[index];
+    if (!page) return;
+    await onDeleteScanPages([page.cachePath]);
+    setScanPages((current) => current.filter((_, currentIndex) => currentIndex !== index));
+  };
+
+  const moveScanPage = (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= scanPages.length) return;
+    setScanPages((current) => {
+      const next = [...current];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
+
+  const finishScan = async () => {
+    if (!scanPages.length) return;
+    const output = await save({
+      title: "Salvar digitalização",
+      defaultPath: "Digitalizacao-Seven.pdf",
+      filters: [{ name: "Documento PDF", extensions: ["pdf"] }],
+    });
+    if (!output) return;
+    try {
+      setScanBusy(true);
+      setScanError("");
+      const options = scanOcrAfter
+        ? { ...buildOptions(), pageRange: undefined, sidecar: undefined }
+        : undefined;
+      await onFinalizeScan(
+        scanPages.map((page) => page.cachePath),
+        output,
+        scanDpi,
+        options,
+      );
+      setScanPages([]);
+    } catch {
+      setScanError("Não foi possível finalizar a digitalização.");
+    } finally {
+      setScanBusy(false);
+    }
+  };
+
+  const closeDialog = async () => {
+    if (scanPages.length) {
+      await onDeleteScanPages(scanPages.map((page) => page.cachePath));
+      setScanPages([]);
+    }
+    onClose();
   };
 
   return (
-    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && void closeDialog()}>
       <section className="workflow-dialog ocr-dialog" role="dialog" aria-modal="true">
-        <header className="organizer-head"><div><span className="eyebrow">DIGITALIZAR E OCR</span><h2>Reconhecimento local</h2><p>OCR tradicional, camada de texto pesquisável e revisão de confiança.</p></div><button className="icon-button" onClick={onClose}><SevenIcon name="close" /></button></header>
+        <header className="organizer-head"><div><span className="eyebrow">DIGITALIZAR E OCR</span><h2>Reconhecimento local</h2><p>OCR tradicional, camada de texto pesquisável e revisão de confiança.</p></div><button className="icon-button" onClick={() => void closeDialog()}><SevenIcon name="close" /></button></header>
         <div className="workflow-tabs">
           <button className={tab === "ocr" ? "active" : ""} onClick={() => setTab("ocr")}>OCR</button>
           <button className={tab === "review" ? "active" : ""} onClick={() => setTab("review")}>Revisar suspeitas</button>
@@ -180,9 +251,58 @@ export function OcrDialog({
           )}
           {tab === "scan" && (
             <>
-              <label className="workflow-field"><span>Resolução do scanner</span><div className="range-row"><input type="range" min={75} max={600} step={25} value={scanDpi} onChange={(event) => setScanDpi(Number(event.target.value))} /><strong>{scanDpi} DPI</strong></div></label>
-              <div className="organizer-note"><SevenIcon name="scan" /><span>Linux usa SANE/scanimage. Windows usa WIA quando o driver do scanner está disponível. A captura é local.</span></div>
-              <button className="primary-button workflow-submit" disabled={!capabilities?.scanner.available} onClick={() => void scan()}><SevenIcon name="scan" /> Digitalizar uma página</button>
+              <div className="two-column-fields">
+                <label className="workflow-field">
+                  <span>Resolução do scanner</span>
+                  <div className="range-row"><input type="range" min={75} max={600} step={25} value={scanDpi} onChange={(event) => setScanDpi(Number(event.target.value))} /><strong>{scanDpi} DPI</strong></div>
+                </label>
+                <label className="workflow-field">
+                  <span>Modo de cor</span>
+                  <select value={scanColorMode} onChange={(event) => setScanColorMode(event.target.value as typeof scanColorMode)}>
+                    <option value="color">Colorido</option>
+                    <option value="gray">Escala de cinza</option>
+                    <option value="lineart">Preto e branco / Lineart</option>
+                  </select>
+                </label>
+              </div>
+
+              <label className="toggle-row">
+                <input type="checkbox" checked={scanOcrAfter} disabled={!capabilities?.ocr.available} onChange={(event) => setScanOcrAfter(event.target.checked)} />
+                <span><strong>Aplicar OCR após finalizar</strong><small>Usa as opções configuradas na aba OCR e gera camada pesquisável.</small></span>
+              </label>
+
+              <div className="organizer-note"><SevenIcon name="scan" /><span>Linux usa SANE/scanimage. Windows usa WIA. Cada captura fica no cache isolado até você finalizar ou fechar esta janela.</span></div>
+
+              <button className="primary-button choose-wide" disabled={!capabilities?.scanner.available || scanBusy} onClick={() => void captureScan()}>
+                <SevenIcon name="scan" /> {scanBusy ? "Digitalizando…" : scanPages.length ? "Digitalizar mais uma página" : "Digitalizar primeira página"}
+              </button>
+
+              {scanError && <div className="dependency-note">{scanError}</div>}
+
+              {scanPages.length > 0 && (
+                <>
+                  <div className="section-mini-title">Páginas capturadas ({scanPages.length})</div>
+                  <div className="scan-page-list">
+                    {scanPages.map((scanPage, index) => (
+                      <article className="scan-page-row" key={scanPage.cachePath}>
+                        <img src={nativeAssetUrl(scanPage.cachePath)} alt={`Digitalização ${index + 1}`} />
+                        <div>
+                          <strong>Página {index + 1}</strong>
+                          <small>{scanPage.width} × {scanPage.height} px · {scanDpi} DPI</small>
+                        </div>
+                        <div className="scan-page-actions">
+                          <button disabled={index === 0 || scanBusy} onClick={() => moveScanPage(index, -1)} title="Mover para cima">↑</button>
+                          <button disabled={index === scanPages.length - 1 || scanBusy} onClick={() => moveScanPage(index, 1)} title="Mover para baixo">↓</button>
+                          <button className="danger-quiet" disabled={scanBusy} onClick={() => void removeScanPage(index)}>Remover</button>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                  <button className="primary-button workflow-submit" disabled={scanBusy} onClick={() => void finishScan()}>
+                    <SevenIcon name={scanOcrAfter ? "ocr" : "save"} /> {scanOcrAfter ? "Finalizar e aplicar OCR" : "Finalizar PDF"}
+                  </button>
+                </>
+              )}
             </>
           )}
         </div>

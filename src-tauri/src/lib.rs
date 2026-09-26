@@ -237,6 +237,7 @@ pub fn run() {
             commands::list_pdf_actions,
             commands::get_document_metadata,
             commands::update_document_metadata,
+            commands::analyze_sanitization,
             commands::sanitize_document,
             commands::list_accessibility_tags,
             commands::session_update_accessibility_properties,

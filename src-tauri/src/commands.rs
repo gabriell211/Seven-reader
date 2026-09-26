@@ -2556,6 +2556,231 @@ pub fn start_combine_documents(
         },
     ))
 }
+#[derive(Clone)]
+enum CombineInputKind {
+    Pdf,
+    Office,
+    Image,
+}
+
+#[derive(Clone)]
+struct CombineInput {
+    source: std::path::PathBuf,
+    kind: CombineInputKind,
+    name: String,
+    converted: Option<std::path::PathBuf>,
+}
+
+#[tauri::command]
+pub fn start_combine_mixed_documents(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    inputs: Vec<String>,
+    output: String,
+) -> CommandResult<JobStart> {
+    if inputs.len() < 2 || inputs.len() > 100 {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "Selecione entre 2 e 100 arquivos para combinar".into(),
+        )));
+    }
+
+    let qpdf = jobs::require_executable(&["qpdf"], "qpdf").map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    let temp_root = state
+        .cache_dir
+        .join("jobs")
+        .join(format!("combine-mixed-{}", uuid::Uuid::new_v4()));
+    fs::create_dir_all(&temp_root)
+        .map_err(|error| ErrorPayload::from(SevenError::Io(error.to_string())))?;
+
+    let mut prepared = Vec::with_capacity(inputs.len());
+    let mut office_required = false;
+
+    for (index, raw) in inputs.into_iter().enumerate() {
+        let path = std::path::PathBuf::from(&raw);
+        if !path.is_file() {
+            let _ = fs::remove_dir_all(&temp_root);
+            return Err(ErrorPayload::from(SevenError::NotFound(raw)));
+        }
+        let canonical = fs::canonicalize(&path)
+            .map_err(|error| ErrorPayload::from(SevenError::InvalidPath(error.to_string())))?;
+        let extension = canonical
+            .extension()
+            .and_then(|value| value.to_str())
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        let name = canonical
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("arquivo")
+            .to_owned();
+
+        let (kind, converted) = if extension == "pdf" {
+            pdf::validate_pdf_path(canonical.to_string_lossy().as_ref()).map_err(ErrorPayload::from)?;
+            (CombineInputKind::Pdf, None)
+        } else if matches!(
+            extension.as_str(),
+            "doc" | "docx" | "xls" | "xlsx" | "ppt" | "pptx"
+                | "odt" | "ods" | "odp" | "rtf" | "txt" | "html" | "htm"
+        ) {
+            office_required = true;
+            let item_dir = temp_root.join(format!("{index:03}-office"));
+            fs::create_dir_all(&item_dir)
+                .map_err(|error| ErrorPayload::from(SevenError::Io(error.to_string())))?;
+            let stem = canonical.file_stem().and_then(|value| value.to_str()).unwrap_or("documento");
+            (CombineInputKind::Office, Some(item_dir.join(format!("{stem}.pdf"))))
+        } else if matches!(
+            extension.as_str(),
+            "png" | "jpg" | "jpeg" | "tif" | "tiff" | "bmp" | "webp"
+        ) {
+            let item_dir = temp_root.join(format!("{index:03}-image"));
+            fs::create_dir_all(&item_dir)
+                .map_err(|error| ErrorPayload::from(SevenError::Io(error.to_string())))?;
+            (CombineInputKind::Image, Some(item_dir.join("imagem.pdf")))
+        } else {
+            let _ = fs::remove_dir_all(&temp_root);
+            return Err(ErrorPayload::from(SevenError::UnsupportedFormat(extension)));
+        };
+
+        prepared.push(CombineInput {
+            source: canonical,
+            kind,
+            name,
+            converted,
+        });
+    }
+
+    let libreoffice = if office_required {
+        Some(
+            jobs::require_executable(&["soffice", "libreoffice"], "LibreOffice")
+                .map_err(ErrorPayload::from)?,
+        )
+    } else {
+        None
+    };
+
+    let total_inputs = prepared.len();
+    let mut labels = prepared
+        .iter()
+        .enumerate()
+        .map(|(index, item)| format!("Preparando {} de {} · {}", index + 1, total_inputs, item.name))
+        .collect::<Vec<_>>();
+    labels.push("Combinando PDFs preparados".into());
+
+    let batch_items = prepared.clone();
+    let batch_output = output.clone();
+    let batch_qpdf = qpdf.clone();
+    let batch_libreoffice = libreoffice.clone();
+    let mut converted = Vec::<std::path::PathBuf>::with_capacity(total_inputs);
+
+    Ok(jobs::start_rust_batch_job_with_cleanup(
+        app,
+        &state,
+        "combine-mixed",
+        labels,
+        Some(output),
+        vec![temp_root],
+        move |index| {
+            if index < total_inputs {
+                let item = &batch_items[index];
+                match item.kind {
+                    CombineInputKind::Pdf => {
+                        converted.push(item.source.clone());
+                    }
+                    CombineInputKind::Image => {
+                        let destination = item.converted.as_ref().ok_or_else(|| {
+                            SevenError::Operation("Destino intermediário da imagem ausente".into())
+                        })?;
+                        pdf::create_pdf_from_images(&[item.source.clone()], destination, 150)?;
+                        converted.push(destination.clone());
+                    }
+                    CombineInputKind::Office => {
+                        let destination = item.converted.as_ref().ok_or_else(|| {
+                            SevenError::Operation("Destino intermediário do documento ausente".into())
+                        })?;
+                        let directory = destination.parent().ok_or_else(|| {
+                            SevenError::InvalidPath(destination.to_string_lossy().into_owned())
+                        })?;
+                        let executable = batch_libreoffice.as_ref().ok_or_else(|| {
+                            SevenError::CapabilityUnavailable("LibreOffice".into())
+                        })?;
+                        let status = Command::new(executable)
+                            .args([
+                                "--headless",
+                                "--convert-to",
+                                "pdf",
+                                "--outdir",
+                                directory.to_string_lossy().as_ref(),
+                                item.source.to_string_lossy().as_ref(),
+                            ])
+                            .status()
+                            .map_err(|error| SevenError::Operation(error.to_string()))?;
+                        if !status.success() {
+                            return Err(SevenError::Operation(format!(
+                                "LibreOffice falhou ao converter {} (código {:?})",
+                                item.name,
+                                status.code()
+                            )));
+                        }
+                        pdf::validate_pdf_path(destination.to_string_lossy().as_ref())?;
+                        converted.push(destination.clone());
+                    }
+                }
+                return Ok(());
+            }
+
+            if converted.len() != total_inputs {
+                return Err(SevenError::Operation(
+                    "Nem todas as entradas foram preparadas para combinação".into(),
+                ));
+            }
+
+            let base = converted[0].clone();
+            let mut offsets = Vec::new();
+            let mut page_offset = lopdf::Document::load(&base)
+                .map_err(|error| SevenError::PdfOpen(error.to_string()))?
+                .get_pages()
+                .len();
+
+            for source in converted.iter().skip(1) {
+                offsets.push((source.clone(), page_offset));
+                page_offset += lopdf::Document::load(source)
+                    .map_err(|error| SevenError::PdfOpen(error.to_string()))?
+                    .get_pages()
+                    .len();
+            }
+
+            let mut args = vec![
+                base.to_string_lossy().into_owned(),
+                "--pages".into(),
+                ".".into(),
+                "1-z".into(),
+            ];
+            for source in converted.iter().skip(1) {
+                args.push(source.to_string_lossy().into_owned());
+                args.push("1-z".into());
+            }
+            args.push("--".into());
+            args.push(batch_output.to_string_lossy().into_owned());
+
+            let status = Command::new(&batch_qpdf)
+                .args(args)
+                .status()
+                .map_err(|error| SevenError::Operation(error.to_string()))?;
+            if !status.success() {
+                return Err(SevenError::Operation(format!(
+                    "qpdf falhou ao combinar os documentos (código {:?})",
+                    status.code()
+                )));
+            }
+
+            advanced::append_bookmarks_from_sources(&batch_output, &offsets)?;
+            pdf::validate_pdf_path(batch_output.to_string_lossy().as_ref())?;
+            Ok(())
+        },
+    ))
+}
+
 #[tauri::command]
 pub fn start_split_pages(
     app: AppHandle,

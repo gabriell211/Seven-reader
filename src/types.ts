@@ -933,9 +933,15 @@ export interface PrintOptions {
   pageSet: "all" | "odd" | "even";
   reverse: boolean;
   duplex: "printer" | "simplex" | "long" | "short";
+  manualPass: "none" | "front" | "back";
+  nUp: 1 | 2 | 4 | 6 | 9 | 16;
+  nUpLayout: "lrtb" | "lrbt" | "rltb" | "rlbt" | "tblr" | "tbrl" | "btlr" | "btrl";
   orientation: "auto" | "portrait" | "landscape";
   paperSize: "printer" | "a4" | "letter" | "legal";
   scaling: "fit" | "actual";
+  colorMode: "auto" | "color" | "grayscale";
+  printAsImage: boolean;
+  rasterDpi: number;
   printAnnotations: boolean;
   printForms: boolean;
 }

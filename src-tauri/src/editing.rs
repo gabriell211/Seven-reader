@@ -580,6 +580,97 @@ fn replace_in_object(object: &mut Object, find: &str, replacement: &str) -> usiz
     }
 }
 
+fn replace_nth_in_object(
+    object: &mut Object,
+    find: &str,
+    replacement: &str,
+    target_occurrence: usize,
+    seen: &mut usize,
+) -> bool {
+    let Object::String(bytes, _) = object else { return false };
+    let current = String::from_utf8_lossy(bytes).into_owned();
+    for (start, _) in current.match_indices(find) {
+        if *seen == target_occurrence {
+            let end = start + find.len();
+            let mut updated = String::with_capacity(
+                current.len().saturating_sub(find.len()) + replacement.len(),
+            );
+            updated.push_str(&current[..start]);
+            updated.push_str(replacement);
+            updated.push_str(&current[end..]);
+            *bytes = updated.into_bytes();
+            return true;
+        }
+        *seen += 1;
+    }
+    false
+}
+
+pub fn replace_text_occurrence(
+    input: &Path,
+    output: &Path,
+    find: &str,
+    replacement: &str,
+    page_index: usize,
+    occurrence: usize,
+) -> Result<(), SevenError> {
+    if find.is_empty() || find.chars().count() > 1_000 || replacement.chars().count() > 4_000 {
+        return Err(SevenError::OperationRejected("Correção OCR inválida".into()));
+    }
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let target = page_id(&document, page_index)?;
+    let data = document.get_page_content(target);
+    if data.len() > MAX_PAGE_CONTENT {
+        return Err(SevenError::OperationRejected(
+            "Página excede o limite seguro de edição".into(),
+        ));
+    }
+    let mut content = Content::decode(&data)
+        .map_err(|error| SevenError::Operation(format!("Content stream: {error}")))?;
+    let mut seen = 0usize;
+    let mut changed = false;
+
+    'operations: for operation in &mut content.operations {
+        match operation.operator.as_str() {
+            "Tj" | "'" | "\"" => {
+                if let Some(object) = operation.operands.last_mut() {
+                    if replace_nth_in_object(object, find, replacement, occurrence, &mut seen) {
+                        changed = true;
+                        break 'operations;
+                    }
+                }
+            }
+            "TJ" => {
+                if let Some(Object::Array(values)) = operation.operands.first_mut() {
+                    for value in values {
+                        if replace_nth_in_object(value, find, replacement, occurrence, &mut seen) {
+                            changed = true;
+                            break 'operations;
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if !changed {
+        return Err(SevenError::OperationRejected(
+            "A ocorrência OCR selecionada não está em operadores Tj/TJ editáveis. O Seven não alterou o PDF.".into(),
+        ));
+    }
+
+    let encoded = content.encode().map_err(|error| SevenError::Operation(error.to_string()))?;
+    let stream_id = document.add_object(Stream::new(Dictionary::new(), encoded));
+    document
+        .get_object_mut(target)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .set("Contents", stream_id);
+    atomic_save(document, output)
+}
+
 pub fn replace_text(
     input: &Path,
     output: &Path,

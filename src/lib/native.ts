@@ -12,6 +12,10 @@ import type {
   StructureTagInfo,
   StructureTagUpdate,
   AdvancedPdfReport,
+  ArticleInfo,
+  ArticleMetadataUpdate,
+  NewArticleBox,
+  ArticleBoxUpdate,
   AdvancedSearchHit,
   AdvancedSearchOptions,
   AnnotationInfo,
@@ -130,6 +134,61 @@ export async function sessionImportReviewXfdf(
   xfdf: string,
 ): Promise<SessionReviewImportResult> {
   return invoke<SessionReviewImportResult>("session_import_review_xfdf", { documentId, xfdf });
+}
+
+export async function listPdfArticles(documentId: string): Promise<ArticleInfo[]> {
+  return invoke<ArticleInfo[]>("list_pdf_articles", { documentId });
+}
+
+export async function sessionAddPdfArticleBox(
+  documentId: string,
+  request: NewArticleBox,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_add_pdf_article_box", { documentId, request });
+}
+
+export async function sessionUpdatePdfArticle(
+  documentId: string,
+  update: ArticleMetadataUpdate,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_update_pdf_article", { documentId, update });
+}
+
+export async function sessionUpdatePdfArticleBox(
+  documentId: string,
+  update: ArticleBoxUpdate,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_update_pdf_article_box", { documentId, update });
+}
+
+export async function sessionMovePdfArticleBox(
+  documentId: string,
+  objectId: string,
+  direction: "up" | "down" | "first" | "last",
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_move_pdf_article_box", { documentId, objectId, direction });
+}
+
+export async function sessionDeletePdfArticleBox(
+  documentId: string,
+  objectId: string,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_delete_pdf_article_box", { documentId, objectId });
+}
+
+export async function sessionDeletePdfArticle(
+  documentId: string,
+  objectId: string,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_delete_pdf_article", { documentId, objectId });
+}
+
+export async function sessionMergePdfArticles(
+  documentId: string,
+  targetId: string,
+  sourceId: string,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_merge_pdf_articles", { documentId, targetId, sourceId });
 }
 
 export async function listInteractiveAssets(

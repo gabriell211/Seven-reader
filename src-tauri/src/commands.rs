@@ -593,6 +593,19 @@ pub fn session_delete_annotation(
 }
 
 #[tauri::command]
+pub fn session_add_stamp(
+    state: State<'_, AppState>,
+    document_id: String,
+    stamp: annotations::StampInput,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "stamp", move |input, output| {
+        annotations::add_stamp(input, output, stamp)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn session_add_ink(
     state: State<'_, AppState>,
     document_id: String,

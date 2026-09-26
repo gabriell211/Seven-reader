@@ -850,7 +850,7 @@ export function DocumentWorkspace({
       <div className="workspace-body">
         {externalFileStatus?.changed && (
           <div className={externalFileStatus.exists ? "external-change-banner" : "external-change-banner danger"}>
-            <SevenIcon name={externalFileStatus.exists ? "history" : "warning"} />
+            <SevenIcon name={externalFileStatus.exists ? "history" : "shield"} />
             <div>
               <strong>{externalFileStatus.exists ? "Arquivo alterado fora do Seven Reader" : "Arquivo original não está mais no disco"}</strong>
               <span>

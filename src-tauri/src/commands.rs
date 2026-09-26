@@ -1,4 +1,5 @@
 use crate::{
+    accessibility,
     advanced,
     annotations,
     capabilities,
@@ -3598,6 +3599,92 @@ pub fn sanitize_document(
     let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
     let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
     document_ops::sanitize_document(&input, &output, options).map_err(ErrorPayload::from)
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutoTagResult {
+    pub document: pdf::DocumentSummary,
+    pub tagged_pages: usize,
+}
+
+#[tauri::command]
+pub fn list_accessibility_tags(
+    state: State<'_, AppState>,
+    document_id: String,
+) -> CommandResult<Vec<accessibility::StructureTagInfo>> {
+    let document = state
+        .documents
+        .lock()
+        .get(&document_id)
+        .cloned()
+        .ok_or_else(|| ErrorPayload::from(SevenError::DocumentNotOpen))?;
+    accessibility::list_tags(document.active_path()).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_update_accessibility_properties(
+    state: State<'_, AppState>,
+    document_id: String,
+    properties: accessibility::AccessibilityProperties,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "accessibility-properties", move |input, output| {
+        accessibility::update_properties(input, output, properties)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_update_structure_tag(
+    state: State<'_, AppState>,
+    document_id: String,
+    update: accessibility::StructureTagUpdate,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "structure-tag", move |input, output| {
+        accessibility::update_tag(input, output, update)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_delete_structure_tag(
+    state: State<'_, AppState>,
+    document_id: String,
+    object_id: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "delete-structure-tag", move |input, output| {
+        accessibility::delete_tag(input, output, &object_id)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_move_structure_tag(
+    state: State<'_, AppState>,
+    document_id: String,
+    object_id: String,
+    direction: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "move-structure-tag", move |input, output| {
+        accessibility::move_tag(input, output, &object_id, &direction)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_auto_tag_basic(
+    state: State<'_, AppState>,
+    document_id: String,
+) -> CommandResult<AutoTagResult> {
+    session::apply_revision(&state, &document_id, "auto-tag-basic", move |input, output| {
+        accessibility::auto_tag_basic(input, output)
+    })
+    .map(|(document, tagged_pages)| AutoTagResult { document, tagged_pages })
+    .map_err(ErrorPayload::from)
 }
 
 #[tauri::command]

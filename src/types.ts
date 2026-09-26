@@ -293,6 +293,13 @@ export interface OcrOptions {
   outputType: "auto" | "pdf" | "pdfa" | "pdfa-1" | "pdfa-2" | "pdfa-3";
   mode: "skip" | "redo" | "force";
   sidecar?: string;
+  pageRange?: string;
+  clean: boolean;
+  cleanFinal: boolean;
+  removeBackground: boolean;
+  oversample?: number;
+  optimize: 0 | 1 | 2 | 3;
+  rotatePagesThreshold: number;
 }
 
 export interface OcrWord {

@@ -1143,8 +1143,8 @@ Opcional para desktop profissional:
 
 ## Entrada
 
-- [ ] Detectar scanners
-- [ ] Scanner padrão
+- [x] Detectar scanners
+- [x] Scanner padrão
 - [x] WIA no Windows quando aplicável
 - [ ] TWAIN quando aplicável
 - [x] SANE no Linux quando aplicável

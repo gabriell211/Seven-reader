@@ -216,6 +216,7 @@ export function DocumentWorkspace({
   const [pageInput, setPageInput] = useState(String(page + 1));
   const [draggedTab, setDraggedTab] = useState<string | null>(null);
   const [tabMenu, setTabMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [pageMenu, setPageMenu] = useState<{ x: number; y: number } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const stageRef = useRef<HTMLElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -356,15 +357,15 @@ export function DocumentWorkspace({
 
 
   useEffect(() => {
-    if (!tabMenu) return;
-    const close = () => setTabMenu(null);
+    if (!tabMenu && !pageMenu) return;
+    const close = () => { setTabMenu(null); setPageMenu(null); };
     window.addEventListener("click", close);
     window.addEventListener("blur", close);
     return () => {
       window.removeEventListener("click", close);
       window.removeEventListener("blur", close);
     };
-  }, [tabMenu]);
+  }, [tabMenu, pageMenu]);
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
@@ -913,6 +914,20 @@ export function DocumentWorkspace({
         setSelectedText("");
       }
     }
+  };
+
+  const openPageContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setTabMenu(null);
+    setPageMenu({ x: event.clientX, y: event.clientY });
+  };
+
+  const applySelectionMarkup = (kind: "highlight" | "underline" | "strikeout") => {
+    if (!selectionRect || selectionRect.width < 0.002 || selectionRect.height < 0.002) return;
+    onMarkup(kind, selectionRect);
+    clearSelection();
+    setPageMenu(null);
   };
 
   const selectWholePage = () => {
@@ -1477,6 +1492,7 @@ export function DocumentWorkspace({
                       width: result.width,
                       transform: `translate(-50%,-50%) rotate(${visualRotation}deg) scale(${dynamicScale})`,
                     }}
+                    onContextMenu={openPageContextMenu}
                     onPointerDown={(event) => {
                       addMeasurementPoint(event);
                       beginDynamicZoom(event);
@@ -1841,6 +1857,29 @@ export function DocumentWorkspace({
             <button aria-label="Aumentar zoom" onClick={() => changeZoom(10)}><SevenIcon name="zoomIn" /></button>
           </div>
         </main>
+
+        {pageMenu && (
+          <div className="page-context-menu" style={{ left: pageMenu.x, top: pageMenu.y }} onClick={(event) => event.stopPropagation()}>
+            <button disabled={!selectionRect || !selectedText || selectionBusy} onClick={() => { void copySelectedText(); setPageMenu(null); }}>
+              <SevenIcon name="text" /><span>Copiar texto</span><kbd>Ctrl+C</kbd>
+            </button>
+            <button disabled={!selectionRect || selectionBusy} onClick={() => { void copySelectionImage(); setPageMenu(null); }}>
+              <SevenIcon name="open" /><span>Copiar seleção como imagem</span>
+            </button>
+            <i />
+            <button disabled={!selectionRect} onClick={() => applySelectionMarkup("highlight")}><SevenIcon name="highlight" /><span>Destacar</span></button>
+            <button disabled={!selectionRect} onClick={() => applySelectionMarkup("underline")}><SevenIcon name="highlight" /><span>Sublinhar</span></button>
+            <button disabled={!selectionRect} onClick={() => applySelectionMarkup("strikeout")}><SevenIcon name="redact" /><span>Tachar</span></button>
+            <button onClick={() => { setPageMenu(null); onTool("comment"); }}><SevenIcon name="comment" /><span>Adicionar comentário</span></button>
+            <i />
+            <button onClick={() => { setPageMenu(null); onTool("edit"); }}><SevenIcon name="edit" /><span>Editar PDF</span></button>
+            <button disabled={!selectionRect} onClick={() => { setPageMenu(null); onTool("redact"); }}><SevenIcon name="redact" /><span>Redigir seleção</span></button>
+            <button onClick={() => { setPageMenu(null); onPrint(selectionRect ?? undefined); }}><SevenIcon name="print" /><span>{selectionRect ? "Imprimir seleção" : "Imprimir…"}</span><kbd>Ctrl+P</kbd></button>
+            <i />
+            <button onClick={() => { selectWholePage(); setPageMenu(null); }}><SevenIcon name="pages" /><span>Selecionar página inteira</span></button>
+            <button disabled={!selectionRect} onClick={() => { clearSelection(); setPageMenu(null); }}><SevenIcon name="close" /><span>Limpar seleção</span></button>
+          </div>
+        )}
 
         {tabMenu && (
           <div className="tab-context-menu" style={{ left: tabMenu.x, top: tabMenu.y }} onClick={(event) => event.stopPropagation()}>

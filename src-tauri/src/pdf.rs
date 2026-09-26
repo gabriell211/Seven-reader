@@ -47,6 +47,13 @@ pub struct SearchHit {
     pub occurrences: usize,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchOccurrence {
+    pub page_index: usize,
+    pub rects: Vec<NormalizedRect>,
+}
+
 #[derive(Debug, Clone, serde::Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NormalizedRect {
@@ -307,6 +314,73 @@ pub fn search_document(
     Ok(hits)
 }
 
+
+pub fn search_document_occurrences(
+    state: &AppState,
+    document: &OpenDocument,
+    query: &str,
+    match_case: bool,
+    whole_word: bool,
+) -> Result<Vec<SearchOccurrence>, SevenError> {
+    let needle = query.trim();
+    if needle.is_empty() {
+        return Ok(Vec::new());
+    }
+    if needle.chars().count() > 512 {
+        return Err(SevenError::OperationRejected("Pesquisa excede 512 caracteres".into()));
+    }
+
+    let pdfium = bind_pdfium(&state.resource_dir).map_err(SevenError::PdfEngineUnavailable)?;
+    let pdf = pdfium
+        .load_pdf_from_file(document.active_path(), document.password.as_deref())
+        .map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let options = PdfSearchOptions::new()
+        .match_case(match_case)
+        .match_whole_word(whole_word);
+    let mut output = Vec::new();
+
+    'pages: for (page_index, page) in pdf.pages().iter().enumerate() {
+        let width = page.width().value.max(1.0);
+        let height = page.height().value.max(1.0);
+        let text = page
+            .text()
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+        let search = text
+            .search(needle, &options)
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+
+        while let Some(segments) = search.find_next() {
+            let mut rects = Vec::new();
+            for segment in segments.iter() {
+                let bounds = segment.bounds();
+                let left = bounds.left().value;
+                let right = bounds.right().value;
+                let bottom = bounds.bottom().value;
+                let top = bounds.top().value;
+                let x = (left / width).clamp(0.0, 1.0);
+                let y = (1.0 - top / height).clamp(0.0, 1.0);
+                let rect_width = ((right - left) / width).max(0.0).min(1.0 - x);
+                let rect_height = ((top - bottom) / height).max(0.0).min(1.0 - y);
+                if rect_width > 0.0 && rect_height > 0.0 {
+                    rects.push(NormalizedRect {
+                        x,
+                        y,
+                        width: rect_width,
+                        height: rect_height,
+                    });
+                }
+            }
+            if !rects.is_empty() {
+                output.push(SearchOccurrence { page_index, rects });
+            }
+            if output.len() >= 10_000 {
+                break 'pages;
+            }
+        }
+    }
+
+    Ok(output)
+}
 
 pub fn extract_text_in_rect(
     state: &AppState,

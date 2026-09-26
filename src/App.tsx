@@ -104,6 +104,7 @@ import {
   sessionDeleteFormFieldAction,
   sessionDuplicateFormField,
   sessionSetPageTabOrder,
+  sessionTransferPages,
   exportFormData,
   sessionImportFormData,
   sessionResetForm,
@@ -882,6 +883,61 @@ export default function App() {
   const closeSideBySide = () => {
     setSplitDocumentId(null);
     setSplitRendered(null);
+  };
+
+  const runPageTransferBetweenOpenDocuments = async (
+    sourceDocumentId: string,
+    targetDocumentId: string,
+    pageRange: string,
+    insertAfter: number,
+    movePages: boolean,
+  ) => {
+    try {
+      const result = await sessionTransferPages(
+        sourceDocumentId,
+        targetDocumentId,
+        pageRange,
+        insertAfter,
+        movePages,
+      );
+      setOpenTabs((current) => current.map((tab) => {
+        if (tab.id === result.target.id) return result.target;
+        if (result.source && tab.id === result.source.id) return result.source;
+        return tab;
+      }));
+
+      const currentSummary =
+        document?.id === result.target.id
+          ? result.target
+          : result.source && document?.id === result.source.id
+            ? result.source
+            : null;
+      if (currentSummary) {
+        const nextPage = Math.min(page, Math.max(0, currentSummary.pageCount - 1));
+        setDocument(currentSummary);
+        setPage(nextPage);
+        await renderDocumentWindow(currentSummary, nextPage, zoom);
+      }
+
+      const splitSummary =
+        splitDocumentId === result.target.id
+          ? result.target
+          : result.source && splitDocumentId === result.source.id
+            ? result.source
+            : null;
+      if (splitSummary) {
+        const nextPage = Math.min(splitPage, Math.max(0, splitSummary.pageCount - 1));
+        await renderSplitDocument(splitSummary, nextPage, splitZoom);
+      }
+
+      setNotice(
+        movePages
+          ? "Páginas movidas entre os documentos. Os dois PDFs podem ser desfeitos."
+          : "Páginas copiadas para o documento de destino.",
+      );
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
   };
 
   const selectTab = async (summary: DocumentSummary) => {
@@ -3055,6 +3111,8 @@ export default function App() {
           onCloseSideBySide={closeSideBySide}
           onSplitRender={(nextPage, nextZoom) => splitDocument && void renderSplitDocument(splitDocument, nextPage, nextZoom)}
           onSplitOrientationChange={setSplitOrientation}
+          onTransferPages={(sourceId, targetId, range, insertAfter, movePages) =>
+            void runPageTransferBetweenOpenDocuments(sourceId, targetId, range, insertAfter, movePages)}
           onNavigateBack={() => void navigateHistory(-1)}
           onNavigateForward={() => void navigateHistory(1)}
           onQuickToolsPositionChange={(position) => setSettings((current) => ({ ...current, quickToolsPosition: position }))}

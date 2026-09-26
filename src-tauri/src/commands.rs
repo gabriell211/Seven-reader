@@ -2,6 +2,7 @@ use crate::{
     accessibility,
     advanced,
     annotations,
+    articles,
     capabilities,
     catalog,
     compare,
@@ -155,6 +156,113 @@ pub fn session_import_review_xfdf(
         |input, output| shared_review::import_xfdf(input, output, &path),
     ).map_err(ErrorPayload::from)?;
     Ok(SessionReviewImportResult { document, report })
+}
+
+#[tauri::command]
+pub fn list_pdf_articles(
+    state: State<'_, AppState>,
+    document_id: String,
+) -> CommandResult<Vec<articles::ArticleInfo>> {
+    let document = state
+        .documents
+        .lock()
+        .get(&document_id)
+        .cloned()
+        .ok_or_else(|| ErrorPayload::from(SevenError::DocumentNotOpen))?;
+    articles::list_articles(document.active_path()).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_add_pdf_article_box(
+    state: State<'_, AppState>,
+    document_id: String,
+    request: articles::NewArticleBox,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "article-box", move |input, output| {
+        articles::add_article_box(input, output, request)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_update_pdf_article(
+    state: State<'_, AppState>,
+    document_id: String,
+    update: articles::ArticleMetadataUpdate,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "article-metadata", move |input, output| {
+        articles::update_article_metadata(input, output, update)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_update_pdf_article_box(
+    state: State<'_, AppState>,
+    document_id: String,
+    update: articles::ArticleBoxUpdate,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "article-box-update", move |input, output| {
+        articles::update_article_box(input, output, update)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_move_pdf_article_box(
+    state: State<'_, AppState>,
+    document_id: String,
+    object_id: String,
+    direction: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "article-box-order", move |input, output| {
+        articles::move_article_box(input, output, &object_id, &direction)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_delete_pdf_article_box(
+    state: State<'_, AppState>,
+    document_id: String,
+    object_id: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "article-box-delete", move |input, output| {
+        articles::delete_article_box(input, output, &object_id)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_delete_pdf_article(
+    state: State<'_, AppState>,
+    document_id: String,
+    object_id: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "article-delete", move |input, output| {
+        articles::delete_article(input, output, &object_id)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_merge_pdf_articles(
+    state: State<'_, AppState>,
+    document_id: String,
+    target_id: String,
+    source_id: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "article-merge", move |input, output| {
+        articles::merge_articles(input, output, &target_id, &source_id)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
 }
 
 #[tauri::command]

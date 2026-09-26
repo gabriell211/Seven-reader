@@ -3753,6 +3753,193 @@ pub fn start_ocr(
     Ok(jobs::start_process_job(app, &state, "ocr", executable, args, Some(output)))
 }
 
+fn prepare_batch_pdf_outputs(
+    inputs: Vec<String>,
+    output_directory: String,
+    suffix: &str,
+) -> CommandResult<(std::path::PathBuf, Vec<(std::path::PathBuf, std::path::PathBuf, String)>)> {
+    if inputs.is_empty() || inputs.len() > 200 {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "Selecione entre 1 e 200 PDFs para o lote".into(),
+        )));
+    }
+    let output_directory = jobs::validated_directory(&output_directory).map_err(ErrorPayload::from)?;
+    let mut items = Vec::with_capacity(inputs.len());
+    let mut reserved = std::collections::HashSet::new();
+
+    for input in inputs {
+        let canonical = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+        let stem = canonical
+            .file_stem()
+            .and_then(|value| value.to_str())
+            .unwrap_or("documento");
+        let name = canonical
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("documento.pdf")
+            .to_owned();
+
+        let mut candidate = output_directory.join(format!("{stem}-{suffix}.pdf"));
+        let mut index = 2usize;
+        while candidate.exists()
+            || !reserved.insert(candidate.to_string_lossy().to_ascii_lowercase())
+        {
+            candidate = output_directory.join(format!("{stem}-{suffix}-{index}.pdf"));
+            index += 1;
+        }
+        items.push((canonical, candidate, name));
+    }
+
+    Ok((output_directory, items))
+}
+
+#[tauri::command]
+pub fn start_batch_sanitize_pdf(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    inputs: Vec<String>,
+    output_directory: String,
+    options: document_ops::SanitizeOptions,
+) -> CommandResult<JobStart> {
+    let any = options.remove_javascript
+        || options.remove_open_actions
+        || options.remove_embedded_files
+        || options.remove_metadata
+        || options.remove_xfa
+        || options.remove_annotations
+        || options.remove_forms
+        || options.remove_multimedia
+        || options.cleanup_structure;
+    if !any {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "Selecione ao menos uma categoria para sanitizar".into(),
+        )));
+    }
+
+    let (output_directory, items) =
+        prepare_batch_pdf_outputs(inputs, output_directory, "sanitizado")?;
+    let labels = items
+        .iter()
+        .enumerate()
+        .map(|(index, (_, _, name))| format!("Sanitizando {} de {} · {name}", index + 1, items.len()))
+        .collect::<Vec<_>>();
+    let batch_items = items.clone();
+    let batch_options = options.clone();
+
+    Ok(jobs::start_rust_batch_job(
+        app,
+        &state,
+        "batch-sanitize",
+        labels,
+        Some(output_directory),
+        move |index| {
+            let (input, output, _) = &batch_items[index];
+            document_ops::sanitize_document(input, output, batch_options.clone()).map(|_| ())
+        },
+    ))
+}
+
+#[tauri::command]
+pub fn start_batch_overlay_pdf(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    inputs: Vec<String>,
+    output_directory: String,
+    options: editing::OverlayTextOptions,
+) -> CommandResult<JobStart> {
+    if !matches!(options.kind.as_str(), "header" | "footer" | "watermark" | "bates" | "page-number") {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "Tipo de overlay em lote não suportado".into(),
+        )));
+    }
+    let suffix = match options.kind.as_str() {
+        "header" => "cabecalho",
+        "footer" => "rodape",
+        "watermark" => "marca-dagua",
+        "bates" => "bates",
+        _ => "numerado",
+    };
+    let (output_directory, items) =
+        prepare_batch_pdf_outputs(inputs, output_directory, suffix)?;
+    let labels = items
+        .iter()
+        .enumerate()
+        .map(|(index, (_, _, name))| format!("Aplicando {} {} de {} · {name}", options.kind, index + 1, items.len()))
+        .collect::<Vec<_>>();
+    let batch_items = items.clone();
+    let batch_options = options.clone();
+
+    Ok(jobs::start_rust_batch_job(
+        app,
+        &state,
+        "batch-overlay",
+        labels,
+        Some(output_directory),
+        move |index| {
+            let (input, output, _) = &batch_items[index];
+            editing::add_overlay_text(input, output, batch_options.clone())
+        },
+    ))
+}
+
+#[tauri::command]
+pub fn start_batch_redact_by_search(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    inputs: Vec<String>,
+    output_directory: String,
+    query: String,
+    match_case: bool,
+    whole_word: bool,
+) -> CommandResult<JobStart> {
+    let query = query.trim().to_owned();
+    if query.is_empty() || query.chars().count() > 1024 {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "Texto de busca deve ter entre 1 e 1024 caracteres".into(),
+        )));
+    }
+
+    let (output_directory, items) =
+        prepare_batch_pdf_outputs(inputs, output_directory, "redigido")?;
+    let labels = items
+        .iter()
+        .enumerate()
+        .map(|(index, (_, _, name))| format!("Redigindo {} de {} · {name}", index + 1, items.len()))
+        .collect::<Vec<_>>();
+    let batch_items = items.clone();
+    let state_snapshot = AppState {
+        documents: state.documents.clone(),
+        jobs: state.jobs.clone(),
+        watch_folders: state.watch_folders.clone(),
+        cache_dir: state.cache_dir.clone(),
+        resource_dir: state.resource_dir.clone(),
+    };
+
+    Ok(jobs::start_rust_batch_job(
+        app,
+        &state,
+        "batch-redact",
+        labels,
+        Some(output_directory),
+        move |index| {
+            let (input, output, _) = &batch_items[index];
+            let areas = redaction::find_text_matches(
+                &state_snapshot,
+                input,
+                &query,
+                match_case,
+                whole_word,
+            )?;
+            if areas.is_empty() {
+                fs::copy(input, output).map_err(|error| SevenError::Io(error.to_string()))?;
+                pdf::validate_pdf_path(output.to_string_lossy().as_ref())?;
+                return Ok(());
+            }
+            redaction::apply_redactions(&state_snapshot, input, output, &areas).map(|_| ())
+        },
+    ))
+}
+
 #[tauri::command]
 pub fn start_batch_optimize_pdf(
     app: AppHandle,

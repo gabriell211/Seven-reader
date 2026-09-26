@@ -78,6 +78,7 @@ import type {
   TextPlacement,
   TextSelectionResult,
   SearchHit,
+  SearchOccurrence,
   StampInput,
 } from "../types";
 
@@ -195,6 +196,20 @@ export async function renderPages(
 
 export async function searchDocument(documentId: string, query: string): Promise<SearchHit[]> {
   return invoke<SearchHit[]>("search_document", { documentId, query });
+}
+
+export async function searchDocumentOccurrences(
+  documentId: string,
+  query: string,
+  matchCase = false,
+  wholeWord = false,
+): Promise<SearchOccurrence[]> {
+  return invoke<SearchOccurrence[]>("search_document_occurrences", {
+    documentId,
+    query,
+    matchCase,
+    wholeWord,
+  });
 }
 
 export async function searchDocumentAdvanced(

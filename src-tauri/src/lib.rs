@@ -225,6 +225,8 @@ pub fn run() {
             commands::start_print_document,
             commands::reveal_in_file_manager,
             commands::get_job_status,
+            commands::pause_job,
+            commands::resume_job,
             commands::cancel_job,
         ])
         .run(tauri::generate_context!())

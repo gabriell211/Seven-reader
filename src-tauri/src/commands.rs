@@ -2960,6 +2960,33 @@ pub fn start_batch_ocr(
 }
 
 #[tauri::command]
+pub async fn detect_ocr_language(
+    state: State<'_, AppState>,
+    document_id: String,
+    page_index: usize,
+    candidates: Vec<String>,
+) -> CommandResult<ocr::OcrLanguageDetection> {
+    let document = state
+        .documents
+        .lock()
+        .get(&document_id)
+        .cloned()
+        .ok_or_else(|| ErrorPayload::from(SevenError::DocumentNotOpen))?;
+    let snapshot = AppState {
+        documents: state.documents.clone(),
+        jobs: state.jobs.clone(),
+        cache_dir: state.cache_dir.clone(),
+        resource_dir: state.resource_dir.clone(),
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        ocr::detect_language(&snapshot, &document, page_index, candidates)
+    })
+    .await
+    .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub async fn review_ocr_page(
     state: State<'_, AppState>,
     document_id: String,

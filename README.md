@@ -2622,11 +2622,11 @@ Toda operação pesada deve gerar um `job_id`.
 - [x] Bates
 - [x] Redação por busca
 - [ ] Combinar
-- [ ] Dividir
-- [ ] Extrair
-- [ ] Renomear
-- [ ] Validar PDF/A
-- [ ] Preflight
+- [x] Dividir
+- [x] Extrair
+- [x] Renomear
+- [x] Validar PDF/A
+- [x] Preflight
 - [ ] Assinar quando política permitir
 
 ---

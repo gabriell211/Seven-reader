@@ -52,6 +52,8 @@ pub fn run() {
             commands::start_watch_folder,
             commands::stop_watch_folder,
             commands::list_watch_folders,
+            commands::import_conversion_presets,
+            commands::export_conversion_presets,
             commands::list_pdf_articles,
             commands::session_add_pdf_article_box,
             commands::session_update_pdf_article,

@@ -59,6 +59,7 @@ import type {
   SanitizeReport,
   SessionFormFillResult,
   SessionFlattenLayersResult,
+  SessionPortfolioFolderResult,
   SessionReplaceTextResult,
   TextPlacement,
   TextSelectionResult,
@@ -593,6 +594,59 @@ export async function sessionRemovePdfAttachment(
 ): Promise<DocumentSummary> {
   return invoke<DocumentSummary>("session_remove_pdf_attachment", {
     documentId, objectId,
+  });
+}
+
+export async function sessionConfigurePdfPortfolio(
+  documentId: string,
+  view: "details" | "tile" | "hidden",
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_configure_pdf_portfolio", { documentId, view });
+}
+
+export async function sessionSetPdfPortfolioView(
+  documentId: string,
+  view: "details" | "tile" | "hidden",
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_set_pdf_portfolio_view", { documentId, view });
+}
+
+export async function sessionCreatePdfPortfolioFolder(
+  documentId: string,
+  path: string,
+  description: string,
+): Promise<SessionPortfolioFolderResult> {
+  return invoke<SessionPortfolioFolderResult>("session_create_pdf_portfolio_folder", {
+    documentId, path, description,
+  });
+}
+
+export async function sessionMovePdfPortfolioItem(
+  documentId: string,
+  objectId: string,
+  folderPath: string,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_move_pdf_portfolio_item", {
+    documentId, objectId, folderPath,
+  });
+}
+
+export async function sessionRenamePdfPortfolioFolder(
+  documentId: string,
+  folderId: string,
+  newName: string,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_rename_pdf_portfolio_folder", {
+    documentId, folderId, newName,
+  });
+}
+
+export async function sessionRemovePdfPortfolioFolder(
+  documentId: string,
+  folderId: string,
+): Promise<SessionPortfolioFolderResult> {
+  return invoke<SessionPortfolioFolderResult>("session_remove_pdf_portfolio_folder", {
+    documentId, folderId,
   });
 }
 

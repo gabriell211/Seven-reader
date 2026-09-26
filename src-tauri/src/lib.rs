@@ -4,6 +4,7 @@ mod annotations;
 mod capabilities;
 mod catalog;
 mod commands;
+mod compare;
 mod document_ops;
 mod editing;
 mod error;
@@ -205,6 +206,8 @@ pub fn run() {
             commands::session_move_structure_tag,
             commands::session_auto_tag_basic,
             commands::get_accessibility_report,
+            commands::compare_documents_advanced,
+            commands::export_compare_report_pdf,
             commands::compare_documents,
             commands::start_encrypt_pdf,
             commands::start_decrypt_pdf,

@@ -251,6 +251,7 @@ import type {
   PageLabelOptions,
   NamedDestinationInfo,
   NewFormField,
+  NormalizedRect,
   OcrOptions,
   OcrReviewResult,
   OptimizationAudit,
@@ -447,7 +448,7 @@ export default function App() {
   const [printOpen, setPrintOpen] = useState(false);
   const [printers, setPrinters] = useState<PrinterInfo[]>([]);
   const [printersLoading, setPrintersLoading] = useState(false);
-  const [printSelection, setPrintSelection] = useState<import("./types").NormalizedRect | null>(null);
+  const [printSelection, setPrintSelection] = useState<NormalizedRect | null>(null);
   const [printProductionOpen, setPrintProductionOpen] = useState(false);
   const [printPreflight, setPrintPreflight] = useState<PrintPreflightReport | null>(null);
   const [printPreflightLoading, setPrintPreflightLoading] = useState(false);
@@ -626,7 +627,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [document, page, zoom, openTabs, closedTabs]);
+  }, [document, page, zoom, openTabs, closedTabs, printSelection]);
 
   useEffect(() => {
     if (!native || !openTabs.length) return;
@@ -3570,7 +3571,7 @@ export default function App() {
     }
   };
 
-  const openPrintDialog = (selection?: import("./types").NormalizedRect) => {
+  const openPrintDialog = (selection?: NormalizedRect) => {
     if (!document) return;
     setPrintSelection(selection ?? printSelection ?? null);
     setPrintOpen(true);

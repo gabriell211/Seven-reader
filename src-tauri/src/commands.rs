@@ -2707,6 +2707,21 @@ pub fn create_form_field(
 }
 
 #[tauri::command]
+pub fn get_page_preflight(
+    state: State<'_, AppState>,
+    document_id: String,
+    page_index: usize,
+) -> CommandResult<print_production::PagePreflight> {
+    let document = state
+        .documents
+        .lock()
+        .get(&document_id)
+        .cloned()
+        .ok_or_else(|| ErrorPayload::from(SevenError::DocumentNotOpen))?;
+    print_production::page_preflight(document.active_path(), page_index).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn get_print_preflight(path: String) -> CommandResult<print_production::PrintPreflightReport> {
     let input = pdf::validate_pdf_path(&path).map_err(ErrorPayload::from)?;
     print_production::preflight(&input).map_err(ErrorPayload::from)

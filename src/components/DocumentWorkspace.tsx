@@ -8,6 +8,8 @@ import type {
   Capabilities,
   InkAnnotationInput,
   JobStatus,
+  MeasurementInfo,
+  MeasurementInput,
   NormalizedRect,
   PagePreflight,
   DocumentSummary,
@@ -19,6 +21,7 @@ import type {
 } from "../types";
 import { cropPageSelection, extractTextInRect, getPagePreflight, nativeAssetUrl } from "../lib/native";
 import { writeImage, writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { save } from "@tauri-apps/plugin-dialog";
 import { ProtectedViewBanner } from "./ProtectedViewBanner";
 import type { QuickToolId, SidePanelId } from "../lib/settings";
 
@@ -41,6 +44,8 @@ interface WorkspaceProps {
   quickToolsPosition: { x: number; y: number } | null;
   sidePanels: SidePanelId[];
   taskHistory: JobStatus[];
+  measurements: MeasurementInfo[];
+  measurementActivation: number;
   searchHits: SearchHit[];
   advancedSearchHits: AdvancedSearchHit[];
   page: number;
@@ -80,6 +85,9 @@ interface WorkspaceProps {
   onSearch: (query: string) => void;
   onInk: (ink: InkAnnotationInput) => void;
   onMarkup: (kind: "highlight" | "underline" | "strikeout", rect: NormalizedRect) => void;
+  onMeasurement: (measurement: MeasurementInput) => void;
+  onReloadMeasurements: () => void;
+  onExportMeasurements: (destination: string) => void;
   onAdvancedSearch: (options: AdvancedSearchOptions) => void;
   onTool: (tool: ToolId) => void;
   onSettings: () => void;
@@ -118,6 +126,8 @@ export function DocumentWorkspace({
   quickToolsPosition,
   sidePanels,
   taskHistory,
+  measurements,
+  measurementActivation,
   searchHits,
   advancedSearchHits,
   page,
@@ -151,6 +161,9 @@ export function DocumentWorkspace({
   onSearch,
   onInk,
   onMarkup,
+  onMeasurement,
+  onReloadMeasurements,
+  onExportMeasurements,
   onAdvancedSearch,
   onTool,
   onSettings,
@@ -196,7 +209,7 @@ export function DocumentWorkspace({
   const drawingRef = useRef(false);
   const visiblePageRef = useRef(page);
   const scrollFrameRef = useRef<number | null>(null);
-  const [viewerTool, setViewerTool] = useState<"select" | "hand" | "draw" | "highlight" | "underline" | "strikeout" | "zoom-area" | "dynamic-zoom">("select");
+  const [viewerTool, setViewerTool] = useState<"select" | "hand" | "draw" | "highlight" | "underline" | "strikeout" | "zoom-area" | "dynamic-zoom" | "measure">("select");
   const [visualRotation, setVisualRotation] = useState<0 | 90 | 180 | 270>(0);
   const [immersiveMode, setImmersiveMode] = useState<"normal" | "reading" | "presentation">("normal");
   const [pageGeometry, setPageGeometry] = useState<PagePreflight | null>(null);
@@ -216,6 +229,18 @@ export function DocumentWorkspace({
   const [transferRange, setTransferRange] = useState("");
   const [transferInsertAfter, setTransferInsertAfter] = useState(0);
   const [dynamicScale, setDynamicScale] = useState(1);
+  const [measurementOpen, setMeasurementOpen] = useState(false);
+  const [measurementKind, setMeasurementKind] = useState<"distance" | "perimeter" | "area">("distance");
+  const [measurementPoints, setMeasurementPoints] = useState<Array<[number, number]>>([]);
+  const [measurementUnit, setMeasurementUnit] = useState("mm");
+  const [pointsPerUnit, setPointsPerUnit] = useState(72 / 25.4);
+  const [measurementLabel, setMeasurementLabel] = useState("");
+  const [measurementComment, setMeasurementComment] = useState("");
+  const [measurementAuthor, setMeasurementAuthor] = useState("Seven Reader");
+  const [measurementLineWidth, setMeasurementLineWidth] = useState(1.5);
+  const [calibrating, setCalibrating] = useState(false);
+  const [calibrationPoints, setCalibrationPoints] = useState<Array<[number, number]>>([]);
+  const [calibrationKnown, setCalibrationKnown] = useState(100);
   const dynamicZoomRef = useRef<{ pointerId: number; startY: number; startZoom: number; previewZoom: number } | null>(null);
   const panRef = useRef<{ pointerId: number; startX: number; startY: number; scrollLeft: number; scrollTop: number } | null>(null);
 
@@ -232,6 +257,26 @@ export function DocumentWorkspace({
     setSelectedText("");
   }, [page]);
   useEffect(() => setToolbarPosition(quickToolsPosition), [quickToolsPosition]);
+  useEffect(() => {
+    if (measurementActivation <= 0) return;
+    setMeasurementOpen(true);
+    setViewerTool("measure");
+    setMeasurementPoints([]);
+    onReloadMeasurements();
+  }, [measurementActivation]);
+  useEffect(() => {
+    const key = `seven-reader:measure-scale:${document.path}:${page}`;
+    try {
+      const saved = JSON.parse(localStorage.getItem(key) ?? "null");
+      if (saved && typeof saved.unit === "string" && typeof saved.pointsPerUnit === "number" && saved.pointsPerUnit > 0) {
+        setMeasurementUnit(saved.unit);
+        setPointsPerUnit(saved.pointsPerUnit);
+        return;
+      }
+    } catch { /* use physical default */ }
+    setMeasurementUnit("mm");
+    setPointsPerUnit(72 / 25.4);
+  }, [document.path, page]);
   useEffect(() => {
     let active = true;
     void getPagePreflight(document.id, page)
@@ -594,6 +639,110 @@ export function DocumentWorkspace({
       ];
     }
     return point;
+  };
+
+  const defaultPointsPerUnit = (unit: string): number => {
+    if (unit === "pt") return 1;
+    if (unit === "in") return 72;
+    if (unit === "ft") return 72 * 12;
+    if (unit === "cm") return 72 / 2.54;
+    if (unit === "m") return 72 / 0.0254;
+    return 72 / 25.4;
+  };
+
+  const persistMeasurementScale = (unit: string, scale: number) => {
+    setMeasurementUnit(unit);
+    setPointsPerUnit(scale);
+    localStorage.setItem(
+      `seven-reader:measure-scale:${document.path}:${page}`,
+      JSON.stringify({ unit, pointsPerUnit: scale }),
+    );
+  };
+
+  const pointDistancePt = (a: [number, number], b: [number, number]): number => {
+    if (!pageGeometry) return 0;
+    const dx = (b[0] - a[0]) * pageGeometry.widthPt;
+    const dy = (b[1] - a[1]) * pageGeometry.heightPt;
+    return Math.hypot(dx, dy);
+  };
+
+  const currentMeasurementValue = useMemo(() => {
+    if (!pageGeometry || measurementPoints.length < 2) return 0;
+    const pts = measurementPoints.map(([x, y]) => [x * pageGeometry.widthPt, y * pageGeometry.heightPt] as [number, number]);
+    if (measurementKind === "distance") {
+      return pointDistancePt(measurementPoints[0], measurementPoints[1]) / pointsPerUnit;
+    }
+    if (measurementKind === "perimeter") {
+      let sum = 0;
+      for (let index = 1; index < pts.length; index += 1) {
+        sum += Math.hypot(pts[index][0] - pts[index - 1][0], pts[index][1] - pts[index - 1][1]);
+      }
+      if (pts.length >= 3) sum += Math.hypot(pts[0][0] - pts.at(-1)![0], pts[0][1] - pts.at(-1)![1]);
+      return sum / pointsPerUnit;
+    }
+    if (pts.length < 3) return 0;
+    let twiceArea = 0;
+    for (let index = 0; index < pts.length; index += 1) {
+      const next = (index + 1) % pts.length;
+      twiceArea += pts[index][0] * pts[next][1] - pts[next][0] * pts[index][1];
+    }
+    return Math.abs(twiceArea) / 2 / (pointsPerUnit * pointsPerUnit);
+  }, [measurementPoints, measurementKind, pageGeometry, pointsPerUnit]);
+
+  const addMeasurementPoint = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (viewerTool !== "measure") return;
+    const point = normalizedPoint(event.clientX, event.clientY);
+    if (!point) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (calibrating) {
+      setCalibrationPoints((current) => current.length >= 2 ? [point] : [...current, point]);
+      return;
+    }
+    setMeasurementPoints((current) => {
+      if (measurementKind === "distance") return current.length >= 2 ? [point] : [...current, point];
+      return current.length >= 10_000 ? current : [...current, point];
+    });
+  };
+
+  const applyCalibration = () => {
+    if (calibrationPoints.length !== 2 || calibrationKnown <= 0) return;
+    const distancePt = pointDistancePt(calibrationPoints[0], calibrationPoints[1]);
+    if (distancePt <= 0) return;
+    persistMeasurementScale(measurementUnit, distancePt / calibrationKnown);
+    setCalibrating(false);
+    setCalibrationPoints([]);
+  };
+
+  const changeMeasurementUnit = (unit: string) => {
+    persistMeasurementScale(unit, defaultPointsPerUnit(unit));
+    setCalibrationPoints([]);
+  };
+
+  const finishMeasurement = () => {
+    const minimum = measurementKind === "distance" ? 2 : 3;
+    if (measurementPoints.length < minimum) return;
+    onMeasurement({
+      pageIndex: page,
+      kind: measurementKind,
+      points: measurementPoints,
+      pointsPerUnit,
+      unit: measurementUnit,
+      label: measurementLabel,
+      comment: measurementComment,
+      author: measurementAuthor,
+      lineWidth: measurementLineWidth,
+    });
+    setMeasurementPoints([]);
+  };
+
+  const exportMeasurementCsv = async () => {
+    const destination = await save({
+      title: "Exportar medições",
+      defaultPath: document.name.replace(/\.pdf$/i, "-medicoes.csv"),
+      filters: [{ name: "CSV", extensions: ["csv"] }],
+    });
+    if (destination) onExportMeasurements(destination);
   };
 
   const updateCursorPoint = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -1107,6 +1256,7 @@ export function DocumentWorkspace({
                       transform: `translate(-50%,-50%) rotate(${visualRotation}deg) scale(${dynamicScale})`,
                     }}
                     onPointerDown={(event) => {
+                      addMeasurementPoint(event);
                       beginDynamicZoom(event);
                       beginInk(event);
                       beginSelection(event);
@@ -1187,6 +1337,20 @@ export function DocumentWorkspace({
                         <button onClick={clearSelection} aria-label="Limpar seleção"><SevenIcon name="close" /></button>
                         <small>{selectionBusy ? "Lendo seleção…" : selectedText ? `${selectedText.trim().length} caracteres` : "Sem texto na área"}</small>
                       </div>
+                    )}
+                    {viewerTool === "measure" && (measurementPoints.length > 0 || calibrationPoints.length > 0) && (
+                      <svg className="measurement-preview" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
+                        {(() => {
+                          const points = calibrating ? calibrationPoints : measurementPoints;
+                          const path = points.map(([x, y]) => `${(x * 1000).toFixed(2)},${(y * 1000).toFixed(2)}`).join(" ");
+                          return measurementKind === "area" && !calibrating
+                            ? <polygon points={path} fill="currentColor" fillOpacity="0.14" stroke="currentColor" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+                            : <polyline points={path} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />;
+                        })()}
+                        {(calibrating ? calibrationPoints : measurementPoints).map(([x, y], index) => (
+                          <circle key={index} cx={x * 1000} cy={y * 1000} r="5" fill="currentColor" vectorEffect="non-scaling-stroke" />
+                        ))}
+                      </svg>
                     )}
                     {viewerTool === "draw" && inkPoints.length > 0 && (
                       <svg className="ink-preview" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
@@ -1285,7 +1449,65 @@ export function DocumentWorkspace({
             </section>
           )}
 
+          {measurementOpen && (
+            <aside className="measurement-panel" onPointerDown={(event) => event.stopPropagation()}>
+              <header>
+                <div><span className="eyebrow">MEDIÇÃO</span><strong>Escala da página {page + 1}</strong></div>
+                <button onClick={() => { setMeasurementOpen(false); setViewerTool("select"); setMeasurementPoints([]); setCalibrationPoints([]); }}><SevenIcon name="close" /></button>
+              </header>
+
+              <div className="measurement-kind-tabs">
+                {(["distance", "perimeter", "area"] as const).map((kind) => (
+                  <button key={kind} className={measurementKind === kind ? "active" : ""} onClick={() => { setMeasurementKind(kind); setMeasurementPoints([]); }}>
+                    {kind === "distance" ? "Distância" : kind === "perimeter" ? "Perímetro" : "Área"}
+                  </button>
+                ))}
+              </div>
+
+              <div className="measurement-scale-row">
+                <label><span>Unidade</span><select value={measurementUnit} onChange={(event) => changeMeasurementUnit(event.target.value)}><option value="mm">mm</option><option value="cm">cm</option><option value="m">m</option><option value="in">in</option><option value="ft">ft</option><option value="pt">pt</option></select></label>
+                <label><span>pt / unidade</span><input type="number" min={0.000001} step="any" value={Number(pointsPerUnit.toFixed(6))} onChange={(event) => persistMeasurementScale(measurementUnit, Math.max(0.000001, Number(event.target.value) || 1))} /></label>
+              </div>
+
+              <section className="measurement-calibration">
+                <button className={calibrating ? "active" : ""} onClick={() => { setCalibrating(!calibrating); setCalibrationPoints([]); setMeasurementPoints([]); }}>
+                  {calibrating ? "Calibrando…" : "Calibrar escala"}
+                </button>
+                <label><span>Distância conhecida</span><input type="number" min={0.000001} step="any" value={calibrationKnown} onChange={(event) => setCalibrationKnown(Math.max(0.000001, Number(event.target.value) || 1))} /></label>
+                <button disabled={calibrationPoints.length !== 2} onClick={applyCalibration}>Aplicar</button>
+                <small>{calibrating ? `Clique em 2 pontos na página · ${calibrationPoints.length}/2` : `1 ${measurementUnit} = ${pointsPerUnit.toFixed(4)} pt`}</small>
+              </section>
+
+              {!calibrating && (
+                <>
+                  <div className="measurement-result">
+                    <strong>{currentMeasurementValue.toFixed(3)} {measurementUnit}{measurementKind === "area" ? "²" : ""}</strong>
+                    <small>{measurementPoints.length} ponto(s) · {snapGrid ? "snap ativo" : "snap livre"}</small>
+                  </div>
+                  <div className="two-column-fields">
+                    <label className="workflow-field"><span>Label</span><input value={measurementLabel} onChange={(event) => setMeasurementLabel(event.target.value)} placeholder="Opcional" /></label>
+                    <label className="workflow-field"><span>Autor</span><input value={measurementAuthor} onChange={(event) => setMeasurementAuthor(event.target.value)} /></label>
+                  </div>
+                  <label className="workflow-field"><span>Comentário</span><textarea rows={2} value={measurementComment} onChange={(event) => setMeasurementComment(event.target.value)} /></label>
+                  <label className="workflow-field"><span>Espessura</span><input type="range" min={0.5} max={8} step={0.5} value={measurementLineWidth} onChange={(event) => setMeasurementLineWidth(Number(event.target.value))} /><small>{measurementLineWidth.toFixed(1)} pt</small></label>
+                  <div className="measurement-actions">
+                    <button disabled={!measurementPoints.length} onClick={() => setMeasurementPoints((current) => current.slice(0, -1))}>Desfazer ponto</button>
+                    <button disabled={!measurementPoints.length} onClick={() => setMeasurementPoints([])}>Limpar</button>
+                    <button className="primary-button" disabled={measurementPoints.length < (measurementKind === "distance" ? 2 : 3)} onClick={finishMeasurement}>Gravar medição</button>
+                  </div>
+                </>
+              )}
+
+              <footer>
+                <span>{measurements.length} medição(ões) no documento</span>
+                <button onClick={onReloadMeasurements}>Atualizar</button>
+                <button disabled={!measurements.length} onClick={() => void exportMeasurementCsv()}>Exportar CSV</button>
+              </footer>
+            </aside>
+          )}
+
           <div className="measurement-toolbar">
+            <button className={measurementOpen ? "active" : ""} onClick={() => { setMeasurementOpen((value) => !value); setViewerTool(measurementOpen ? "select" : "measure"); setMeasurementPoints([]); setCalibrationPoints([]); if (!measurementOpen) onReloadMeasurements(); }}>Medir</button>
             <button className={showRulers ? "active" : ""} onClick={() => setShowRulers((value) => !value)}>Réguas</button>
             <button className={showGrid ? "active" : ""} onClick={() => setShowGrid((value) => !value)}>Grade</button>
             <button className={snapGrid ? "active" : ""} disabled={!showGrid} onClick={() => setSnapGrid((value) => !value)}>Snap</button>

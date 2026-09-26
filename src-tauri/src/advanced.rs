@@ -714,6 +714,247 @@ fn resolved_text(document: &Document, object: &Object, max_chars: usize) -> Stri
     value.chars().take(max_chars).collect()
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PageActionInput {
+    pub page_index: usize,
+    pub trigger: String,
+    pub action_type: String,
+    pub target: String,
+    pub target_page: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActionExecution {
+    pub action_type: String,
+    pub target: String,
+    pub page_index: Option<usize>,
+    pub blocked: bool,
+    pub reason: Option<String>,
+}
+
+fn parse_object_id(value: &str) -> Result<ObjectId, SevenError> {
+    let (object, generation) = value
+        .split_once(':')
+        .ok_or_else(|| SevenError::OperationRejected("ID de objeto inválido".into()))?;
+    Ok((
+        object.parse::<u32>().map_err(|_| SevenError::OperationRejected("ID de objeto inválido".into()))?,
+        generation.parse::<u16>().map_err(|_| SevenError::OperationRejected("ID de objeto inválido".into()))?,
+    ))
+}
+
+fn page_action_dictionary(
+    document: &Document,
+    action_type: &str,
+    target: &str,
+    target_page: Option<usize>,
+) -> Result<Dictionary, SevenError> {
+    match action_type {
+        "uri" => {
+            let target = target.trim();
+            if target.len() > 4096 || !(target.starts_with("https://") || target.starts_with("http://")) {
+                return Err(SevenError::OperationRejected("A URI deve usar HTTP ou HTTPS".into()));
+            }
+            Ok(dictionary! { "S" => "URI", "URI" => Object::string_literal(target) })
+        }
+        "goto" => {
+            let page_index = target_page.ok_or_else(|| SevenError::OperationRejected("Página de destino ausente".into()))?;
+            let page_id = document
+                .get_pages()
+                .get(&((page_index + 1) as u32))
+                .copied()
+                .ok_or_else(|| SevenError::OperationRejected("Página de destino não existe".into()))?;
+            Ok(dictionary! {
+                "S" => "GoTo",
+                "D" => vec![page_id.into(), Object::Name(b"Fit".to_vec())],
+            })
+        }
+        "named" => {
+            let target = target.trim();
+            if target.is_empty() || target.chars().count() > 512 {
+                return Err(SevenError::OperationRejected("Destino nomeado inválido".into()));
+            }
+            Ok(dictionary! { "S" => "GoTo", "D" => Object::string_literal(target) })
+        }
+        "reset" => Ok(dictionary! { "S" => "ResetForm" }),
+        "submit" => {
+            let target = target.trim();
+            if target.len() > 4096 || !(target.starts_with("https://") || target.starts_with("http://")) {
+                return Err(SevenError::OperationRejected("SubmitForm deve usar HTTP ou HTTPS".into()));
+            }
+            Ok(dictionary! { "S" => "SubmitForm", "F" => Object::string_literal(target), "Flags" => 4i64 })
+        }
+        "javascript" => {
+            if target.chars().count() > 100_000 {
+                return Err(SevenError::OperationRejected("JavaScript excede 100.000 caracteres".into()));
+            }
+            Ok(dictionary! { "S" => "JavaScript", "JS" => Object::string_literal(target) })
+        }
+        _ => Err(SevenError::OperationRejected("Tipo de ação de página não suportado".into())),
+    }
+}
+
+pub fn set_page_action(
+    input: &Path,
+    output: &Path,
+    request: PageActionInput,
+) -> Result<(), SevenError> {
+    let trigger = match request.trigger.as_str() {
+        "open" => "O",
+        "close" => "C",
+        _ => return Err(SevenError::OperationRejected("Gatilho deve ser open ou close".into())),
+    };
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let page_id = document
+        .get_pages()
+        .get(&((request.page_index + 1) as u32))
+        .copied()
+        .ok_or_else(|| SevenError::OperationRejected("Página não existe".into()))?;
+    let action = page_action_dictionary(&document, &request.action_type, &request.target, request.target_page)?;
+    let action_id = document.add_object(action);
+
+    let existing = document
+        .get_object(page_id)
+        .ok()
+        .and_then(|object| object.as_dict().ok())
+        .and_then(|page| page.get(b"AA").ok())
+        .cloned();
+    let mut aa = match existing {
+        Some(Object::Dictionary(dictionary)) => dictionary,
+        Some(Object::Reference(id)) => document
+            .get_object(id)
+            .ok()
+            .and_then(|object| object.as_dict().ok())
+            .cloned()
+            .unwrap_or_default(),
+        _ => Dictionary::new(),
+    };
+    aa.set(trigger, action_id);
+    document
+        .get_object_mut(page_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .set("AA", aa);
+    atomic_save(document, output)
+}
+
+pub fn remove_page_action(
+    input: &Path,
+    output: &Path,
+    page_index: usize,
+    trigger: &str,
+) -> Result<(), SevenError> {
+    let key = match trigger {
+        "open" => b"O".as_slice(),
+        "close" => b"C".as_slice(),
+        _ => return Err(SevenError::OperationRejected("Gatilho deve ser open ou close".into())),
+    };
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let page_id = document
+        .get_pages()
+        .get(&((page_index + 1) as u32))
+        .copied()
+        .ok_or_else(|| SevenError::OperationRejected("Página não existe".into()))?;
+    let existing = document
+        .get_object(page_id)
+        .ok()
+        .and_then(|object| object.as_dict().ok())
+        .and_then(|page| page.get(b"AA").ok())
+        .cloned()
+        .ok_or_else(|| SevenError::OperationRejected("Página não possui ações adicionais".into()))?;
+    let mut aa = match existing {
+        Object::Dictionary(dictionary) => dictionary,
+        Object::Reference(id) => document
+            .get_object(id)
+            .ok()
+            .and_then(|object| object.as_dict().ok())
+            .cloned()
+            .ok_or_else(|| SevenError::OperationRejected("Dicionário /AA inválido".into()))?,
+        _ => return Err(SevenError::OperationRejected("Dicionário /AA inválido".into())),
+    };
+    if aa.remove(key).is_none() {
+        return Err(SevenError::OperationRejected("Ação não existe neste gatilho".into()));
+    }
+    let page = document
+        .get_object_mut(page_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    if aa.is_empty() {
+        page.remove(b"AA");
+    } else {
+        page.set("AA", aa);
+    }
+    atomic_save(document, output)
+}
+
+pub fn resolve_action(path: &Path, object_id: &str) -> Result<ActionExecution, SevenError> {
+    let id = parse_object_id(object_id)?;
+    let document = Document::load(path).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let action = document
+        .get_object(id)
+        .map_err(|_| SevenError::OperationRejected("Ação não encontrada".into()))?
+        .as_dict()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    let action_type = action
+        .get(b"S")
+        .ok()
+        .and_then(|value| value.as_name().ok())
+        .map(|value| String::from_utf8_lossy(value).into_owned())
+        .unwrap_or_else(|| "Unknown".into());
+
+    let mut result = ActionExecution {
+        action_type: action_type.clone(),
+        target: String::new(),
+        page_index: None,
+        blocked: false,
+        reason: None,
+    };
+    match action_type.as_str() {
+        "URI" => {
+            result.target = action.get(b"URI").ok().map(object_text).unwrap_or_default();
+            if !(result.target.starts_with("https://") || result.target.starts_with("http://")) {
+                result.blocked = true;
+                result.reason = Some("Somente HTTP/HTTPS é permitido".into());
+            }
+        }
+        "GoTo" => {
+            if let Ok(destination) = action.get(b"D") {
+                match destination {
+                    Object::Array(values) => {
+                        if let Some(page_id) = values.first().and_then(|value| value.as_reference().ok()) {
+                            result.page_index = document
+                                .get_pages()
+                                .into_iter()
+                                .find_map(|(number, id)| (id == page_id).then_some(number.saturating_sub(1) as usize));
+                        }
+                    }
+                    Object::Name(_) | Object::String(_, _) => result.target = object_text(destination),
+                    _ => {}
+                }
+            }
+        }
+        "Named" => result.target = action.get(b"N").ok().map(object_text).unwrap_or_default(),
+        "ResetForm" => {}
+        "JavaScript" | "Launch" | "ImportData" => {
+            result.blocked = true;
+            result.reason = Some(format!("{action_type} é bloqueada pela política segura do Seven Reader"));
+        }
+        "SubmitForm" => {
+            result.target = action.get(b"F").ok().map(object_text).unwrap_or_default();
+            result.blocked = true;
+            result.reason = Some("SubmitForm exige confirmação e revisão explícita dos dados antes do envio".into());
+        }
+        other => {
+            result.blocked = true;
+            result.reason = Some(format!("Execução de {other} ainda não é autorizada"));
+        }
+    }
+    Ok(result)
+}
+
 pub fn list_actions(path: &Path) -> Result<Vec<PdfActionInfo>, SevenError> {
     let document = Document::load(path).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
     let open_action = document

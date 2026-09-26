@@ -2712,7 +2712,7 @@ export default function App() {
       setRedactionLoading(true);
       const report = await applyRedactions(document.activePath, output, areas);
       setRedactionOpen(false);
-      setNotice(`${report.areasApplied} área(s) redigida(s); ${report.objectsRemoved} objeto(s) removido(s).`);
+      setNotice(`${report.areasApplied} área(s) redigida(s); ${report.objectsRemoved} objeto(s) removido(s); verificação pós-redação ${report.verificationPassed ? "aprovada" : "falhou"}${report.verifiedAreas ? ` em ${report.verifiedAreas} ocorrência(s) textual(is)` : ""}.`);
       await openPath(output);
     } catch (error) {
       setNotice(errorMessage(error));

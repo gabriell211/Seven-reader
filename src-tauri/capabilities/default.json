@@ -3,7 +3,8 @@
   "identifier": "desktop-default",
   "description": "Minimal permissions required by Seven Reader desktop shell.",
   "windows": [
-    "main"
+    "main",
+    "document-*"
   ],
   "permissions": [
     "core:default",

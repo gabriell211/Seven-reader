@@ -91,6 +91,7 @@ interface WorkspaceProps {
   onAdvancedSearch: (options: AdvancedSearchOptions) => void;
   onTool: (tool: ToolId) => void;
   onSettings: () => void;
+  onHelp: () => void;
   externalFileStatus: ExternalFileStatus | null;
   onReloadExternal: () => void;
   protectedView: boolean;
@@ -167,6 +168,7 @@ export function DocumentWorkspace({
   onAdvancedSearch,
   onTool,
   onSettings,
+  onHelp,
   externalFileStatus,
   onReloadExternal,
   protectedView,
@@ -175,6 +177,7 @@ export function DocumentWorkspace({
   onTrustLocation,
 }: WorkspaceProps) {
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [mainMenu, setMainMenu] = useState<"file" | "edit" | "view" | "help" | null>(null);
   const [leftPanel, setLeftPanel] = useState<"thumbs" | "search" | "tasks" | null>("thumbs");
   const [search, setSearch] = useState("");
   const [advancedSearch, setAdvancedSearch] = useState(false);
@@ -1023,6 +1026,72 @@ export function DocumentWorkspace({
         </label>
         <button className="icon-button" aria-label="Configurações" onClick={onSettings}><SevenIcon name="settings" /></button>
       </header>
+
+      <nav className="workspace-menubar" aria-label="Menu principal" onClick={(event) => event.stopPropagation()}>
+        <div className="app-menu-root">
+          <button className={mainMenu === "file" ? "active" : ""} onClick={() => setMainMenu(mainMenu === "file" ? null : "file")}>Arquivo</button>
+          {mainMenu === "file" && (
+            <div className="app-menu-dropdown">
+              <button onClick={() => { setMainMenu(null); onOpen(); }}><span>Abrir…</span><kbd>Ctrl+O</kbd></button>
+              <button disabled={!document.dirty} onClick={() => { setMainMenu(null); onSave(); }}><span>Salvar</span><kbd>Ctrl+S</kbd></button>
+              <button onClick={() => { setMainMenu(null); onSaveAs(); }}><span>Salvar como…</span><kbd>Ctrl+Shift+S</kbd></button>
+              <i />
+              <button disabled={!capabilities?.printing?.available} onClick={() => { setMainMenu(null); onPrint(); }}><span>Imprimir…</span><kbd>Ctrl+P</kbd></button>
+              <button disabled={!canCreateWindow} onClick={() => { setMainMenu(null); onOpenInNewWindow(document.id); }}><span>Abrir em nova janela</span></button>
+              <i />
+              <button onClick={() => { setMainMenu(null); onCloseTab(document.id); }}><span>Fechar documento</span><kbd>Ctrl+W</kbd></button>
+            </div>
+          )}
+        </div>
+
+        <div className="app-menu-root">
+          <button className={mainMenu === "edit" ? "active" : ""} onClick={() => setMainMenu(mainMenu === "edit" ? null : "edit")}>Editar</button>
+          {mainMenu === "edit" && (
+            <div className="app-menu-dropdown">
+              <button disabled={!document.canUndo} onClick={() => { setMainMenu(null); onUndo(); }}><span>Desfazer</span><kbd>Ctrl+Z</kbd></button>
+              <button disabled={!document.canRedo} onClick={() => { setMainMenu(null); onRedo(); }}><span>Refazer</span><kbd>Ctrl+Y</kbd></button>
+              <i />
+              <button onClick={() => { setMainMenu(null); onTool("edit"); }}><span>Editar PDF</span></button>
+              <button onClick={() => { setMainMenu(null); onTool("comment"); }}><span>Comentários e marcações</span></button>
+              <button onClick={() => { setMainMenu(null); onTool("forms"); }}><span>Preparar formulário</span></button>
+              <button onClick={() => { setMainMenu(null); onTool("fill-sign"); }}><span>Preencher e assinar</span></button>
+            </div>
+          )}
+        </div>
+
+        <div className="app-menu-root">
+          <button className={mainMenu === "view" ? "active" : ""} onClick={() => setMainMenu(mainMenu === "view" ? null : "view")}>Exibir</button>
+          {mainMenu === "view" && (
+            <div className="app-menu-dropdown app-menu-dropdown--wide">
+              <button onClick={() => { setMainMenu(null); fitView("page"); }}><span>Ajustar página</span></button>
+              <button onClick={() => { setMainMenu(null); fitView("width"); }}><span>Ajustar largura</span></button>
+              <button onClick={() => { setMainMenu(null); fitView("actual"); }}><span>Tamanho real</span><kbd>Ctrl+0</kbd></button>
+              <i />
+              <button className={viewMode === "single" ? "checked" : ""} onClick={() => { setMainMenu(null); onViewModeChange("single"); }}><span>Página única</span></button>
+              <button className={viewMode === "continuous" ? "checked" : ""} onClick={() => { setMainMenu(null); onViewModeChange("continuous"); }}><span>Rolagem contínua</span></button>
+              <button className={viewMode === "facing" ? "checked" : ""} onClick={() => { setMainMenu(null); onViewModeChange("facing"); }}><span>Duas páginas</span></button>
+              <button className={viewMode === "facing-continuous" ? "checked" : ""} onClick={() => { setMainMenu(null); onViewModeChange("facing-continuous"); }}><span>Duas páginas contínuas</span></button>
+              <i />
+              <button onClick={() => { setMainMenu(null); toggleReading(); }}><span>{immersiveMode === "reading" ? "Sair do modo leitura" : "Modo leitura"}</span></button>
+              <button onClick={() => { setMainMenu(null); void togglePresentation(); }}><span>{immersiveMode === "presentation" ? "Sair da apresentação" : "Apresentação"}</span></button>
+              <button onClick={() => { setMainMenu(null); void toggleFullscreen(); }}><span>Tela cheia</span></button>
+            </div>
+          )}
+        </div>
+
+        <button className="app-menu-direct" onClick={onSettings}>Preferências</button>
+        <button className="app-menu-direct" onClick={() => onTool("properties")}>Propriedades</button>
+
+        <div className="app-menu-root">
+          <button className={mainMenu === "help" ? "active" : ""} onClick={() => setMainMenu(mainMenu === "help" ? null : "help")}>Ajuda</button>
+          {mainMenu === "help" && (
+            <div className="app-menu-dropdown app-menu-dropdown--right">
+              <button onClick={() => { setMainMenu(null); onHelp(); }}><span>Documentação do Seven Reader</span><kbd>F1</kbd></button>
+              <button onClick={() => { setMainMenu(null); onTool("accessibility"); }}><span>Verificação de acessibilidade</span></button>
+            </div>
+          )}
+        </div>
+      </nav>
 
       <nav className="global-bar" aria-label="Ferramentas do documento">
         <button className={toolsOpen ? "global-action active" : "global-action"} onClick={() => setToolsOpen(!toolsOpen)}>

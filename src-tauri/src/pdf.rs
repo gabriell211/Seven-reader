@@ -159,6 +159,27 @@ pub fn inspect(path: &Path, password: Option<String>) -> Result<OpenDocument, Se
     })
 }
 
+pub fn refresh_document_facts(
+    document: &mut OpenDocument,
+    path: &Path,
+) -> Result<(), SevenError> {
+    let parsed = Document::load(path).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    document.page_count = parsed.get_pages().len();
+    document.pdf_version = Some(parsed.version.clone());
+    document.encrypted = parsed.is_encrypted();
+    document.has_forms = parsed
+        .catalog()
+        .ok()
+        .and_then(|catalog| catalog.get(b"AcroForm").ok())
+        .is_some();
+    document.has_signatures = parsed.objects.values().any(|object| {
+        let Ok(dictionary) = object.as_dict() else { return false };
+        let Ok(field_type) = dictionary.get(b"FT") else { return false };
+        matches!(field_type, Object::Name(name) if name.as_slice() == b"Sig")
+    });
+    Ok(())
+}
+
 pub fn summary(document: &OpenDocument) -> DocumentSummary {
     DocumentSummary {
         id: document.id.clone(),

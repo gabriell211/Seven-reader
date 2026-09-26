@@ -1068,7 +1068,8 @@ pub fn configure_portfolio(
     view: &str,
 ) -> Result<(), SevenError> {
     let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
-    ensure_collection_id(&mut document, view)?;
+    let collection_id = ensure_collection_id(&mut document, view)?;
+    ensure_portfolio_root_folder(&mut document, collection_id)?;
     atomic_save(document, output)
 }
 
@@ -1249,8 +1250,12 @@ pub fn move_attachment_to_portfolio_folder(
     let spec_id = parse_id(object_id)?;
     let root_id = portfolio_root_folder_id(&document)
         .ok_or_else(|| SevenError::OperationRejected("Portfólio não possui árvore de folders".into()))?;
-    let normalized = if folder_path.trim().is_empty() { "/" } else { folder_path.trim() };
-    if resolve_portfolio_folder_path(&document, root_id, normalized).is_none() {
+    let normalized = if folder_path.trim().trim_matches('/').is_empty() {
+        "/".to_owned()
+    } else {
+        format!("/{}", folder_path.trim().trim_matches('/'))
+    };
+    if resolve_portfolio_folder_path(&document, root_id, &normalized).is_none() {
         return Err(SevenError::OperationRejected("Pasta de portfólio não encontrada".into()));
     }
     let (node_id, key_index) = find_attachment_name_entry(&document, spec_id)

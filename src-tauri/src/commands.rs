@@ -3391,6 +3391,101 @@ pub struct ScanFinalizeResult {
     pub job_id: Option<String>,
 }
 
+#[cfg(target_os = "linux")]
+fn list_scanners_blocking() -> Result<Vec<ScannerInfo>, SevenError> {
+    let scanner = jobs::require_executable(&["scanimage"], "SANE/scanimage")?;
+    let output = std::process::Command::new(scanner)
+        .args(["-f", "%d\t%v %m\t%t\n"])
+        .stdin(std::process::Stdio::null())
+        .output()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    if !output.status.success() {
+        return Err(SevenError::Operation(format!(
+            "scanimage encerrou com código {:?}",
+            output.status.code()
+        )));
+    }
+
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut scanners = Vec::new();
+    for (index, line) in text.lines().enumerate() {
+        let mut parts = line.splitn(3, '\t');
+        let id = parts.next().unwrap_or_default().trim();
+        if id.is_empty() {
+            continue;
+        }
+        let name = parts.next().unwrap_or(id).trim();
+        let kind = parts.next().unwrap_or_default().trim();
+        scanners.push(ScannerInfo {
+            id: id.to_owned(),
+            name: if kind.is_empty() { name.to_owned() } else { format!("{name} · {kind}") },
+            backend: "sane".into(),
+            is_default: index == 0,
+        });
+    }
+    Ok(scanners)
+}
+
+#[cfg(target_os = "windows")]
+fn list_scanners_blocking() -> Result<Vec<ScannerInfo>, SevenError> {
+    let powershell = jobs::require_executable(&["powershell"], "Windows PowerShell/WIA")?;
+    let script = "$ErrorActionPreference='Stop'; $manager=New-Object -ComObject WIA.DeviceManager; $items=@($manager.DeviceInfos | Where-Object {$_.Type -eq 1} | ForEach-Object { $name=$_.DeviceID; try {$name=$_.Properties.Item('Name').Value} catch {}; [PSCustomObject]@{id=$_.DeviceID;name=$name} }); $items | ConvertTo-Json -Compress";
+    let output = std::process::Command::new(powershell)
+        .args(["-NoProfile", "-STA", "-Command", script])
+        .stdin(std::process::Stdio::null())
+        .output()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+        return Err(SevenError::Operation(if stderr.is_empty() {
+            format!("WIA encerrou com código {:?}", output.status.code())
+        } else {
+            stderr
+        }));
+    }
+
+    let raw = String::from_utf8(output.stdout)
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    if raw.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+    let value: serde_json::Value = serde_json::from_str(raw.trim())
+        .map_err(|error| SevenError::Operation(format!("Resposta WIA inválida: {error}")))?;
+    let values = match value {
+        serde_json::Value::Array(items) => items,
+        item => vec![item],
+    };
+    let mut scanners = Vec::new();
+    for (index, item) in values.into_iter().enumerate() {
+        let id = item.get("id").and_then(serde_json::Value::as_str).unwrap_or_default().trim();
+        if id.is_empty() {
+            continue;
+        }
+        let name = item.get("name").and_then(serde_json::Value::as_str).unwrap_or(id).trim();
+        scanners.push(ScannerInfo {
+            id: id.to_owned(),
+            name: name.to_owned(),
+            backend: "wia".into(),
+            is_default: index == 0,
+        });
+    }
+    Ok(scanners)
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
+fn list_scanners_blocking() -> Result<Vec<ScannerInfo>, SevenError> {
+    Err(SevenError::CapabilityUnavailable(
+        "Enumeração de scanners ainda não disponível neste sistema operacional".into(),
+    ))
+}
+
+#[tauri::command]
+pub async fn list_scanners() -> CommandResult<Vec<ScannerInfo>> {
+    tauri::async_runtime::spawn_blocking(list_scanners_blocking)
+        .await
+        .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
+        .map_err(ErrorPayload::from)
+}
 fn validate_scan_mode(mode: &str) -> Result<&'static str, SevenError> {
     match mode {
         "color" => Ok("Color"),

@@ -81,6 +81,7 @@ import {
   deleteAnnotation,
   findRedactionMatches,
   applyRedactions,
+  detectOcrLanguage,
   reviewOcrPage,
   sanitizeDocument,
   scanPageImage,
@@ -2978,6 +2979,16 @@ export default function App() {
     }
   };
 
+  const detectCurrentOcrLanguage = async (candidates: string[]) => {
+    if (!document) throw new Error("Abra um PDF para detectar o idioma.");
+    try {
+      return await detectOcrLanguage(document.id, page, candidates);
+    } catch (error) {
+      setNotice(errorMessage(error));
+      throw error;
+    }
+  };
+
   const reviewCurrentOcrPage = async (language: string, threshold: number) => {
     if (!document) return;
     try {
@@ -3642,6 +3653,7 @@ export default function App() {
           onRunOcr={(output, options) => void runAdvancedOcr(output, options)}
           onRunBatchOcr={(inputs, outputDirectory, options) => void runBatchOcr(inputs, outputDirectory, options)}
           onReview={(language, threshold) => void reviewCurrentOcrPage(language, threshold)}
+          onDetectLanguage={(candidates) => detectCurrentOcrLanguage(candidates)}
           onScanPage={(dpi, colorMode) => captureScanPage(dpi, colorMode)}
           onDeleteScanPages={(inputs) => discardScanPages(inputs)}
           onFinalizeScan={(inputs, output, dpi, options) => finishScanSession(inputs, output, dpi, options)}

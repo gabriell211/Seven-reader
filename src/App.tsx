@@ -335,6 +335,7 @@ export default function App() {
   const [leavingSplash, setLeavingSplash] = useState(false);
   const [capabilities, setCapabilities] = useState<Capabilities | null>(native ? emptyCapabilities : null);
   const [document, setDocument] = useState<DocumentSummary | null>(null);
+  const [homeVisible, setHomeVisible] = useState(false);
   const [openTabs, setOpenTabs] = useState<DocumentSummary[]>([]);
   const [tabViews, setTabViews] = useState<Record<string, { page: number; zoom: number }>>({});
   const [closedTabs, setClosedTabs] = useState<Array<{ path: string; page: number; zoom: number }>>([]);
@@ -686,6 +687,7 @@ export default function App() {
     const nextPage = Math.max(0, Math.min(summary.pageCount - 1, saved.page));
     const nextZoom = Math.max(25, Math.min(400, saved.zoom));
     setDocument(summary);
+    setHomeVisible(false);
     setExternalFileStatus(null);
     setPage(nextPage);
     setZoom(nextZoom);
@@ -866,6 +868,15 @@ export default function App() {
     child.once("tauri://error", (event) => {
       setNotice(`Não foi possível criar a nova janela: ${String(event.payload)}`);
     });
+  };
+
+  const resumeOpenDocument = async (documentId: string) => {
+    const tab = openTabs.find((item) => item.id === documentId);
+    if (!tab) return;
+    setHomeVisible(false);
+    if (document?.id !== tab.id) {
+      await selectTab(tab);
+    }
   };
 
   const choosePdf = async () => {
@@ -3650,7 +3661,7 @@ export default function App() {
 
   if (splash) return <SplashScreen leaving={leavingSplash} />;
 
-  if (document) {
+  if (document && !homeVisible) {
     return (
       <>
         <DocumentWorkspace
@@ -3678,7 +3689,7 @@ export default function App() {
           advancedSearchHits={advancedSearchHits}
           page={page}
           zoom={zoom}
-          onHome={() => void closeCurrent()}
+          onHome={() => setHomeVisible(true)}
           onSelectTab={(tab) => void selectTab(tab)}
           onCloseTab={(documentId) => void closeTab(documentId)}
           onCloseOtherTabs={(documentId) => void closeOtherTabs(documentId)}
@@ -3735,6 +3746,10 @@ export default function App() {
         recents={recents}
         recentTools={recentTools}
         taskHistory={taskHistory}
+        openDocuments={openTabs}
+        activeDocumentId={document?.id ?? null}
+        onResumeDocument={(documentId) => void resumeOpenDocument(documentId)}
+        onCloseOpenDocument={(documentId) => void closeTab(documentId)}
         onOpen={() => void choosePdf()}
         onOpenFolder={() => void chooseFolder()}
         lastSessionPath={localStorage.getItem("seven-reader:last-document")}

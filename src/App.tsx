@@ -77,6 +77,9 @@ import {
   sessionDeleteAnnotation,
   sessionAddInk,
   sessionAddMarkup,
+  sessionAddMeasurement,
+  listMeasurements,
+  exportMeasurements,
   sessionAddStamp,
   sessionEditAddText,
   sessionEditReplaceText,
@@ -208,6 +211,8 @@ import type {
   LinkInfo,
   LinkUpdate,
   ManagedElementInfo,
+  MeasurementInfo,
+  MeasurementInput,
   PageLabelOptions,
   NamedDestinationInfo,
   NewFormField,
@@ -354,6 +359,8 @@ export default function App() {
   const [ocrSuspects, setOcrSuspects] = useState<OcrWord[]>([]);
   const [ocrReviewLoading, setOcrReviewLoading] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
+  const [measurements, setMeasurements] = useState<MeasurementInfo[]>([]);
+  const [measurementActivation, setMeasurementActivation] = useState(0);
   const [annotations, setAnnotations] = useState<AnnotationInfo[]>([]);
   const [annotationsLoading, setAnnotationsLoading] = useState(false);
   const [formsOpen, setFormsOpen] = useState(false);
@@ -1516,6 +1523,20 @@ export default function App() {
         }
         setSignatureValidation(null);
         setSignatureTab(tool === "certificates" ? "digital" : "electronic");
+        return;
+      }
+
+      if (tool === "measure") {
+        if (!document) {
+          setNotice("Abra um PDF para medir.");
+          return;
+        }
+        try {
+          setMeasurements(await listMeasurements(document.id));
+        } catch {
+          setMeasurements([]);
+        }
+        setMeasurementActivation((current) => current + 1);
         return;
       }
 
@@ -3378,6 +3399,8 @@ export default function App() {
           quickToolsPosition={settings.quickToolsPosition}
           sidePanels={settings.sidePanels}
           taskHistory={taskHistory}
+          measurements={measurements}
+          measurementActivation={measurementActivation}
           searchHits={searchHits}
           advancedSearchHits={advancedSearchHits}
           page={page}
@@ -3412,6 +3435,9 @@ export default function App() {
           onSearch={(query) => void runSearch(query)}
           onInk={(ink) => void runInkAnnotation(ink)}
           onMarkup={(kind, rect) => void runMarkupAnnotation(kind, rect)}
+          onMeasurement={(measurement) => void runMeasurement(measurement)}
+          onReloadMeasurements={() => void reloadMeasurements()}
+          onExportMeasurements={(destination) => void runExportMeasurements(destination)}
           onAdvancedSearch={(options) => void runAdvancedSearch(options)}
           onTool={(tool) => void selectTool(tool)}
           onSettings={() => setSettingsOpen(true)}

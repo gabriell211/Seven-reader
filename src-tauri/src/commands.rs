@@ -2600,7 +2600,7 @@ pub fn start_combine_mixed_documents(
 
     for (index, raw) in inputs.into_iter().enumerate() {
         if raw.starts_with("https://") || raw.starts_with("http://") {
-            if raw.len() > 4096 || raw.contains(['\r', '\n', '\0']) {
+            if raw.len() > 4096 || raw.chars().any(|ch| matches!(ch, '\r' | '\n' | '\0')) {
                 let _ = fs::remove_dir_all(&temp_root);
                 return Err(ErrorPayload::from(SevenError::OperationRejected(
                     "URL inválida para combinação".into(),

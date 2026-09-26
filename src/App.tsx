@@ -290,6 +290,7 @@ import type {
   PortfolioSearchHit,
   PageBoxUpdate,
   PageGeometryUpdate,
+  PdfEncryptionOptions,
   RecentDocument,
   RedactionArea,
   ReviewTransferReport,
@@ -3653,10 +3654,15 @@ export default function App() {
     }
   };
 
-  const runEncrypt = async (output: string, userPassword: string, ownerPassword: string) => {
+  const runEncrypt = async (
+    output: string,
+    userPassword: string,
+    ownerPassword: string,
+    options: PdfEncryptionOptions,
+  ) => {
     if (!document) return;
     try {
-      const started = await startEncryptPdf(document.activePath, output, userPassword, ownerPassword);
+      const started = await startEncryptPdf(document.activePath, output, userPassword, ownerPassword, options);
       setSecurityMode(null);
       setNotice(`Criptografia iniciada · job ${started.jobId.slice(0, 8)}`);
     } catch (error) {
@@ -4146,7 +4152,7 @@ export default function App() {
           mode={securityMode}
           currentPdf={document.activePath}
           onClose={() => setSecurityMode(null)}
-          onEncrypt={(output, userPassword, ownerPassword) => void runEncrypt(output, userPassword, ownerPassword)}
+          onEncrypt={(output, userPassword, ownerPassword, options) => void runEncrypt(output, userPassword, ownerPassword, options)}
           onDecrypt={(output, password) => void runDecrypt(output, password)}
           onSanitize={(output, options) => void runSanitize(output, options)}
         />

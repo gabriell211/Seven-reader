@@ -7,6 +7,10 @@ import type {
   ExternalFileStatus,
   DuplicateFieldRequest,
   AccessibilityReport,
+  AccessibilityProperties,
+  AutoTagResult,
+  StructureTagInfo,
+  StructureTagUpdate,
   AdvancedPdfReport,
   AdvancedSearchHit,
   AdvancedSearchOptions,
@@ -1333,6 +1337,47 @@ export async function sanitizeDocument(
   options: SanitizeOptions,
 ): Promise<SanitizeReport> {
   return invoke<SanitizeReport>("sanitize_document", { input, output, options });
+}
+
+export async function listAccessibilityTags(
+  documentId: string,
+): Promise<StructureTagInfo[]> {
+  return invoke<StructureTagInfo[]>("list_accessibility_tags", { documentId });
+}
+
+export async function sessionUpdateAccessibilityProperties(
+  documentId: string,
+  properties: AccessibilityProperties,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_update_accessibility_properties", { documentId, properties });
+}
+
+export async function sessionUpdateStructureTag(
+  documentId: string,
+  update: StructureTagUpdate,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_update_structure_tag", { documentId, update });
+}
+
+export async function sessionDeleteStructureTag(
+  documentId: string,
+  objectId: string,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_delete_structure_tag", { documentId, objectId });
+}
+
+export async function sessionMoveStructureTag(
+  documentId: string,
+  objectId: string,
+  direction: "up" | "down",
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_move_structure_tag", { documentId, objectId, direction });
+}
+
+export async function sessionAutoTagBasic(
+  documentId: string,
+): Promise<AutoTagResult> {
+  return invoke<AutoTagResult>("session_auto_tag_basic", { documentId });
 }
 
 export async function getAccessibilityReport(path: string): Promise<AccessibilityReport> {

@@ -1752,25 +1752,25 @@ Um retângulo visual sobre o conteúdo **não** é redação.
 
 ## Remover tudo
 
-- [ ] Metadados
-- [ ] Comentários
-- [ ] Anexos
-- [ ] Scripts
+- [x] Metadados
+- [x] Comentários
+- [x] Anexos
+- [x] Scripts
 - [ ] Hidden text
 - [ ] Hidden layers
-- [ ] Embedded content
-- [ ] Form data
-- [ ] Links/actions perigosos
+- [x] Embedded content
+- [x] Form data
+- [x] Links/actions perigosos
 - [ ] Informações privadas
 - [ ] Objetos não exibidos
 
 ## Remoção seletiva
 
-- [ ] Analisar conteúdo oculto
-- [ ] Mostrar categorias encontradas
-- [ ] Selecionar categorias
-- [ ] Remover selecionadas
-- [ ] Relatório final
+- [x] Analisar conteúdo oculto
+- [x] Mostrar categorias encontradas
+- [x] Selecionar categorias
+- [x] Remover selecionadas
+- [x] Relatório final
 
 ---
 

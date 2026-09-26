@@ -77,6 +77,8 @@ import {
   materializeInteractiveMedia,
   listGeospatialViewports,
   resolveGeospatialCoordinate,
+  locateGeospatialCoordinate,
+  measureGeospatial,
   getDocumentMetadata,
   getPrintPreflight,
   validatePdfIso,
@@ -235,6 +237,8 @@ import type {
   IsoValidationReport,
   GeospatialViewportInfo,
   GeospatialCoordinate,
+  GeospatialLocation,
+  GeospatialMeasurementResult,
   AdvancedSearchHit,
   AdvancedSearchOptions,
   AnnotationInfo,
@@ -457,6 +461,9 @@ export default function App() {
   const [interactiveAssets, setInteractiveAssets] = useState<InteractiveAssetInfo[]>([]);
   const [geospatialViewports, setGeospatialViewports] = useState<GeospatialViewportInfo[]>([]);
   const [geospatialCoordinate, setGeospatialCoordinate] = useState<GeospatialCoordinate | null>(null);
+  const [geospatialLocation, setGeospatialLocation] = useState<GeospatialLocation | null>(null);
+  const [geospatialMeasurement, setGeospatialMeasurement] = useState<GeospatialMeasurementResult | null>(null);
+  const [geospatialMode, setGeospatialMode] = useState<"off" | "inspect" | "distance" | "perimeter" | "area">("off");
   const [interactiveLoading, setInteractiveLoading] = useState(false);
   const [advancedReport, setAdvancedReport] = useState<AdvancedPdfReport|null>(null);
   const [advancedLoading, setAdvancedLoading] = useState(false);
@@ -2138,6 +2145,57 @@ export default function App() {
       setNotice(errorMessage(error));
       setGeospatialCoordinate(null);
     }
+  };
+
+  const runLocateGeospatial = async (
+    pageIndex: number,
+    first: number,
+    second: number,
+  ) => {
+    if (!document) return;
+    try {
+      const location = await locateGeospatialCoordinate(document.id, pageIndex, first, second);
+      setGeospatialLocation(location);
+      setGeospatialCoordinate({
+        pageIndex: location.pageIndex,
+        viewportObjectId: location.viewportObjectId,
+        localX: location.normalizedX,
+        localY: location.normalizedY,
+        first: location.first,
+        second: location.second,
+        coordinateKind: location.coordinateKind,
+        epsg: location.epsg,
+        wkt: location.wkt,
+      });
+      setGeospatialMode("inspect");
+      setInteractiveMode(null);
+      if (location.pageIndex !== page) await render(location.pageIndex, zoom);
+      setNotice("Coordenada localizada no PDF geoespacial.");
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runMeasureGeospatial = async (
+    kind: "distance" | "perimeter" | "area",
+    points: Array<[number, number]>,
+  ) => {
+    if (!document) return;
+    try {
+      const result = await measureGeospatial(document.id, page, kind, points);
+      setGeospatialMeasurement(result);
+      setNotice(
+        `${kind === "area" ? "Área" : kind === "perimeter" ? "Perímetro" : "Distância"}: ${result.value.toFixed(3)} ${result.unit}`,
+      );
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const activateGeospatialMode = (mode: "inspect" | "distance" | "perimeter" | "area") => {
+    setGeospatialMode(mode);
+    setGeospatialMeasurement(null);
+    setInteractiveMode(null);
   };
 
   const reloadAdvanced = async () => {

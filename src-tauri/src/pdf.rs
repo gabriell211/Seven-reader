@@ -8,7 +8,7 @@ use lopdf::{dictionary, Document, Object, Stream};
 use pdfium_render::prelude::*;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
-use std::{fs, path::{Path, PathBuf}};
+use std::{fs, path::{Path, PathBuf}, time::UNIX_EPOCH};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -104,6 +104,15 @@ pub fn validate_pdf_path(path: &str) -> Result<PathBuf, SevenError> {
     Ok(canonical)
 }
 
+pub fn modified_ns(metadata: &fs::Metadata) -> u128 {
+    metadata
+        .modified()
+        .ok()
+        .and_then(|value| value.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0)
+}
+
 pub fn inspect(path: &Path, password: Option<String>) -> Result<OpenDocument, SevenError> {
     let metadata = fs::metadata(path).map_err(|error| SevenError::Io(error.to_string()))?;
     if metadata.len() > 16 * 1024 * 1024 * 1024 {
@@ -137,6 +146,8 @@ pub fn inspect(path: &Path, password: Option<String>) -> Result<OpenDocument, Se
         password,
         page_count,
         file_size: metadata.len(),
+        source_file_size: metadata.len(),
+        source_modified_ns: modified_ns(&metadata),
         pdf_version,
         encrypted,
         has_signatures,

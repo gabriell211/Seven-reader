@@ -1649,6 +1649,44 @@ pub fn add_attachment(
     atomic_save(document, output)
 }
 
+pub fn add_attachment_to_portfolio_folder(
+    input: &Path,
+    output: &Path,
+    file_path: &Path,
+    display_name: &str,
+    description: &str,
+    folder_path: &str,
+) -> Result<(), SevenError> {
+    let temp = output.with_extension(format!(
+        "seven-portfolio-{}.tmp.pdf",
+        uuid::Uuid::new_v4()
+    ));
+    add_attachment(input, &temp, file_path, display_name, description)?;
+
+    let added = attachment_list(
+        &Document::load(&temp).map_err(|error| SevenError::PdfOpen(error.to_string()))?
+    )
+    .into_iter()
+    .find(|item| {
+        item.collection_path == "/"
+            && item.name.eq_ignore_ascii_case(if display_name.trim().is_empty() {
+                file_path.file_name().and_then(|value| value.to_str()).unwrap_or("")
+            } else {
+                display_name.trim()
+            })
+    })
+    .ok_or_else(|| SevenError::Operation("Componente recém-adicionado não encontrado".into()))?;
+
+    let moved = move_attachment_to_portfolio_folder(
+        &temp,
+        output,
+        &added.object_id,
+        folder_path,
+    );
+    let _ = fs::remove_file(&temp);
+    moved
+}
+
 pub fn update_attachment(
     input: &Path,
     output: &Path,

@@ -37,6 +37,7 @@ pub struct SanitizeOptions {
     pub remove_annotations: bool,
     pub remove_forms: bool,
     pub remove_multimedia: bool,
+    pub cleanup_structure: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -265,6 +266,232 @@ fn remove_selected_annotations(
     Ok(())
 }
 
+fn destination_valid(document: &Document, value: &Object) -> bool {
+    match value {
+        Object::Reference(id) => document.objects.contains_key(id),
+        Object::Array(values) => values.first().is_some_and(|first| match first {
+            Object::Reference(id) => document.objects.contains_key(id),
+            Object::Integer(_) => true,
+            Object::Name(name) | Object::String(name, _) => !name.is_empty(),
+            _ => false,
+        }),
+        Object::Name(name) | Object::String(name, _) => !name.is_empty(),
+        _ => false,
+    }
+}
+
+fn action_valid(document: &Document, value: &Object) -> bool {
+    let dictionary = match value {
+        Object::Dictionary(dictionary) => Some(dictionary),
+        Object::Reference(id) => document.get_object(*id).ok().and_then(|object| object.as_dict().ok()),
+        _ => None,
+    };
+    let Some(dictionary) = dictionary else { return false };
+    let kind = dictionary.get(b"S").ok().and_then(|value| value.as_name().ok()).unwrap_or_default();
+    match kind {
+        b"GoTo" => dictionary.get(b"D").ok().is_some_and(|value| destination_valid(document, value)),
+        b"URI" => dictionary.get(b"URI").ok().and_then(object_text).is_some_and(|value| !value.trim().is_empty()),
+        b"GoToR" => dictionary.get(b"F").ok().and_then(object_text).is_some_and(|value| !value.trim().is_empty()),
+        b"Launch" | b"JavaScript" | b"SubmitForm" | b"ResetForm" | b"Hide" | b"Named" => true,
+        _ => !kind.is_empty(),
+    }
+}
+
+fn cleanup_invalid_links(document: &mut Document, removed: &mut usize) -> Result<(), SevenError> {
+    let page_ids = document.get_pages().values().copied().collect::<Vec<_>>();
+    for page_id in page_ids {
+        let annots = document
+            .get_object(page_id)
+            .ok()
+            .and_then(|object| object.as_dict().ok())
+            .and_then(|page| page.get(b"Annots").ok())
+            .and_then(|value| value.as_array().ok())
+            .cloned()
+            .unwrap_or_default();
+
+        let mut keep = Vec::with_capacity(annots.len());
+        for entry in annots {
+            let dictionary = entry
+                .as_reference()
+                .ok()
+                .and_then(|id| document.get_object(id).ok())
+                .and_then(|object| object.as_dict().ok());
+            let is_link = dictionary
+                .and_then(|dictionary| dictionary.get(b"Subtype").ok())
+                .and_then(|value| value.as_name().ok())
+                .is_some_and(|name| name == b"Link");
+
+            if !is_link {
+                keep.push(entry);
+                continue;
+            }
+
+            let valid = dictionary.is_some_and(|dictionary| {
+                dictionary.get(b"Dest").ok().is_some_and(|value| destination_valid(document, value))
+                    || dictionary.get(b"A").ok().is_some_and(|value| action_valid(document, value))
+            });
+
+            if valid {
+                keep.push(entry);
+            } else {
+                *removed += 1;
+            }
+        }
+
+        if let Ok(page) = document.get_object_mut(page_id).and_then(Object::as_dict_mut) {
+            page.remove(b"Thumb");
+            if keep.is_empty() {
+                page.remove(b"Annots");
+            } else {
+                page.set("Annots", keep);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn outline_leaf_invalid(document: &Document, dictionary: &Dictionary) -> bool {
+    let has_children = dictionary.get(b"First").ok().and_then(|value| value.as_reference().ok()).is_some();
+    if has_children {
+        return false;
+    }
+    let title = dictionary.get(b"Title").ok().and_then(object_text).unwrap_or_default();
+    if title.trim().is_empty() {
+        return true;
+    }
+    let has_valid_dest = dictionary
+        .get(b"Dest")
+        .ok()
+        .is_some_and(|value| destination_valid(document, value));
+    let has_valid_action = dictionary
+        .get(b"A")
+        .ok()
+        .is_some_and(|value| action_valid(document, value));
+    !has_valid_dest && !has_valid_action
+}
+
+fn collect_invalid_outline_leaves(
+    document: &Document,
+    first: Option<(u32, u16)>,
+    visited: &mut std::collections::HashSet<(u32, u16)>,
+    output: &mut Vec<(u32, u16)>,
+) {
+    let mut current = first;
+    while let Some(id) = current {
+        if !visited.insert(id) || visited.len() > 50_000 {
+            break;
+        }
+        let Ok(dictionary) = document.get_object(id).and_then(Object::as_dict) else { break };
+        let child = dictionary.get(b"First").ok().and_then(|value| value.as_reference().ok());
+        if child.is_some() {
+            collect_invalid_outline_leaves(document, child, visited, output);
+        } else if outline_leaf_invalid(document, dictionary) {
+            output.push(id);
+        }
+        current = dictionary.get(b"Next").ok().and_then(|value| value.as_reference().ok());
+    }
+}
+
+fn decrement_outline_counts(document: &mut Document, mut parent: Option<(u32, u16)>) {
+    let mut seen = std::collections::HashSet::new();
+    while let Some(id) = parent {
+        if !seen.insert(id) { break; }
+        let next_parent = document
+            .get_object(id)
+            .ok()
+            .and_then(|object| object.as_dict().ok())
+            .and_then(|dictionary| dictionary.get(b"Parent").ok())
+            .and_then(|value| value.as_reference().ok());
+        if let Ok(dictionary) = document.get_object_mut(id).and_then(Object::as_dict_mut) {
+            if let Ok(value) = dictionary.get(b"Count").and_then(Object::as_i64) {
+                let sign = if value < 0 { -1 } else { 1 };
+                let magnitude = value.unsigned_abs().saturating_sub(1) as i64;
+                dictionary.set("Count", sign * magnitude);
+            }
+        }
+        parent = next_parent;
+    }
+}
+
+fn cleanup_invalid_bookmarks(document: &mut Document, removed: &mut usize) {
+    let outlines_id = document
+        .catalog()
+        .ok()
+        .and_then(|catalog| catalog.get(b"Outlines").ok())
+        .and_then(|value| value.as_reference().ok());
+    let Some(outlines_id) = outlines_id else { return };
+    let first = document
+        .get_object(outlines_id)
+        .ok()
+        .and_then(|object| object.as_dict().ok())
+        .and_then(|dictionary| dictionary.get(b"First").ok())
+        .and_then(|value| value.as_reference().ok());
+
+    let mut invalid = Vec::new();
+    collect_invalid_outline_leaves(document, first, &mut std::collections::HashSet::new(), &mut invalid);
+
+    for id in invalid {
+        let snapshot = document
+            .get_object(id)
+            .ok()
+            .and_then(|object| object.as_dict().ok())
+            .cloned();
+        let Some(snapshot) = snapshot else { continue };
+        let parent = snapshot.get(b"Parent").ok().and_then(|value| value.as_reference().ok());
+        let prev = snapshot.get(b"Prev").ok().and_then(|value| value.as_reference().ok());
+        let next = snapshot.get(b"Next").ok().and_then(|value| value.as_reference().ok());
+
+        if let Some(prev_id) = prev {
+            if let Ok(dictionary) = document.get_object_mut(prev_id).and_then(Object::as_dict_mut) {
+                match next {
+                    Some(next_id) => dictionary.set("Next", next_id),
+                    None => { dictionary.remove(b"Next"); }
+                }
+            }
+        } else if let Some(parent_id) = parent {
+            if let Ok(dictionary) = document.get_object_mut(parent_id).and_then(Object::as_dict_mut) {
+                match next {
+                    Some(next_id) => dictionary.set("First", next_id),
+                    None => { dictionary.remove(b"First"); }
+                }
+            }
+        }
+
+        if let Some(next_id) = next {
+            if let Ok(dictionary) = document.get_object_mut(next_id).and_then(Object::as_dict_mut) {
+                match prev {
+                    Some(prev_id) => dictionary.set("Prev", prev_id),
+                    None => { dictionary.remove(b"Prev"); }
+                }
+            }
+        } else if let Some(parent_id) = parent {
+            if let Ok(dictionary) = document.get_object_mut(parent_id).and_then(Object::as_dict_mut) {
+                match prev {
+                    Some(prev_id) => dictionary.set("Last", prev_id),
+                    None => { dictionary.remove(b"Last"); }
+                }
+            }
+        }
+
+        decrement_outline_counts(document, parent);
+        document.objects.remove(&id);
+        *removed += 1;
+    }
+}
+
+fn cleanup_structure(document: &mut Document, removed: &mut usize) -> Result<(), SevenError> {
+    cleanup_invalid_links(document, removed)?;
+    cleanup_invalid_bookmarks(document, removed);
+
+    let page_ids = document.get_pages().values().copied().collect::<Vec<_>>();
+    for page_id in page_ids {
+        if let Ok(page) = document.get_object_mut(page_id).and_then(Object::as_dict_mut) {
+            remove_key(page, b"Thumb", removed);
+        }
+    }
+    Ok(())
+}
+
 pub fn sanitize_document(
     input: &Path,
     output: &Path,
@@ -278,6 +505,9 @@ pub fn sanitize_document(
     }
 
     remove_selected_annotations(&mut document, &options, &mut removed)?;
+    if options.cleanup_structure {
+        cleanup_structure(&mut document, &mut removed)?;
+    }
 
     if let Ok(catalog) = document.catalog_mut() {
         if options.remove_javascript {

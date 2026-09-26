@@ -378,6 +378,15 @@ svg { width: 20px; height: 20px; }
 .workflow-field textarea { width: 100%; padding: 10px 11px; border: 1px solid #d9d8df; border-radius: 9px; resize: vertical; background: white; font: inherit; }
 .annotation-kind-grid { grid-template-columns: repeat(6,1fr); }
 .rect-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 9px; }
+.comment-list-toolbar { display:grid; grid-template-columns:minmax(0,1.5fr) minmax(140px,.75fr) minmax(150px,.75fr); gap:9px; align-items:end; }
+.comment-transfer-bar { display:flex; gap:7px; flex-wrap:wrap; align-items:center; }
+.comment-transfer-bar > span { margin-left:auto; color:#858790; font-size:8.5px; }
+.comment-list-navigation { padding:8px 10px; border:1px solid #e3e1e9; border-radius:10px; display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:9px; align-items:center; background:#faf9fd; }
+.comment-list-navigation > div { display:grid; gap:2px; text-align:center; }
+.comment-list-navigation strong { font-size:9.5px; }
+.comment-list-navigation small { color:#8b8d96; font-size:8px; }
+.annotation-row.selected { outline:2px solid rgba(112,67,239,.22); outline-offset:-2px; }
+@media (max-width:720px) { .comment-list-toolbar { grid-template-columns:1fr; } .comment-transfer-bar > span { width:100%; margin-left:0; } }
 .annotation-list { max-height: 390px; overflow: auto; display: grid; gap: 7px; }
 .annotation-row { padding: 10px; border: 1px solid #e3e2e7; border-radius: 10px; display: grid; grid-template-columns: 34px 1fr auto; gap: 9px; align-items: center; background: white; }
 .annotation-row.current { border-color: #b6a4ed; background: #faf8ff; }

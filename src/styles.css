@@ -1013,3 +1013,22 @@ svg { width: 20px; height: 20px; }
 .immersive-presentation .workspace-body { height:100vh; }
 .immersive-presentation .document-stage { background:#111217; }
 .immersive-presentation .document-canvas { padding:18px; align-content:center; }
+
+.measurement-toolbar { position:absolute; z-index:18; left:14px; top:12px; min-height:36px; max-width:calc(100% - 28px); padding:4px; border:1px solid #d4d3da; border-radius:10px; display:flex; gap:3px; align-items:center; flex-wrap:wrap; color:#656770; background:rgba(255,255,255,.96); box-shadow:0 5px 18px rgba(31,29,39,.1); backdrop-filter:blur(14px); }
+.measurement-toolbar button { min-height:28px; padding:0 7px; border:0; border-radius:6px; color:inherit; background:transparent; cursor:pointer; font-size:8.5px; font-weight:700; }
+.measurement-toolbar button:hover:not(:disabled),.measurement-toolbar button.active { color:#5633bd; background:#eee9ff; }
+.measurement-toolbar button:disabled { opacity:.35; cursor:default; }
+.measurement-toolbar label { height:28px; padding:0 6px; display:flex; gap:4px; align-items:center; font-size:8px; white-space:nowrap; }
+.measurement-toolbar input { width:42px; height:24px; padding:0 4px; border:1px solid #dedde3; border-radius:5px; font-size:8px; }
+.measurement-toolbar select { height:28px; border:1px solid #dedde3; border-radius:6px; background:white; font-size:8px; }
+.cursor-coordinate { min-width:122px; padding:0 7px; font:8px ui-monospace,SFMono-Regular,Consolas,monospace; white-space:nowrap; }
+.page-grid-overlay { position:absolute; inset:0; z-index:3; pointer-events:none; background-image:linear-gradient(to right,rgba(78,89,130,.18) 1px,transparent 1px),linear-gradient(to bottom,rgba(78,89,130,.18) 1px,transparent 1px); }
+.page-guide { position:absolute; z-index:5; pointer-events:none; background:#26a7da; box-shadow:0 0 0 1px rgba(255,255,255,.55); }
+.page-guide--vertical { top:0; bottom:0; width:1px; }
+.page-guide--horizontal { left:0; right:0; height:1px; }
+.page-ruler { position:absolute; z-index:6; pointer-events:none; color:#5f6169; background:rgba(248,248,251,.92); font:7px ui-monospace,SFMono-Regular,Consolas,monospace; }
+.page-ruler--horizontal { left:0; right:0; top:0; height:17px; border-bottom:1px solid rgba(92,94,104,.35); }
+.page-ruler--vertical { top:0; bottom:0; left:0; width:20px; border-right:1px solid rgba(92,94,104,.35); }
+.page-ruler--horizontal span { position:absolute; top:2px; transform:translateX(-50%); }
+.page-ruler--vertical span { position:absolute; left:2px; transform:translateY(-50%) rotate(-90deg); transform-origin:left center; }
+.immersive-presentation .measurement-toolbar { display:none; }

@@ -42,6 +42,26 @@ pub struct InkAnnotationInput {
     pub author: String,
     pub points: Vec<[f64; 2]>,
     pub line_width: f64,
+    #[serde(default)]
+    pub x: Option<f64>,
+    #[serde(default)]
+    pub y: Option<f64>,
+    #[serde(default)]
+    pub width: Option<f64>,
+    #[serde(default)]
+    pub height: Option<f64>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SignatureImageInput {
+    pub page_index: usize,
+    pub image_path: String,
+    pub author: String,
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -418,9 +438,31 @@ pub fn add_ink_annotation(
     let mut max_x = f64::MIN;
     let mut max_y = f64::MIN;
 
+    let boxed = match (ink.x, ink.y, ink.width, ink.height) {
+        (Some(x), Some(y), Some(width), Some(height)) => {
+            if !x.is_finite() || !y.is_finite() || !width.is_finite() || !height.is_finite()
+                || width <= 0.0 || height <= 0.0
+            {
+                return Err(SevenError::OperationRejected("Área da assinatura desenhada inválida".into()));
+            }
+            Some((x, y, width, height))
+        }
+        (None, None, None, None) => None,
+        _ => return Err(SevenError::OperationRejected("Informe a geometria completa da assinatura desenhada".into())),
+    };
+
     for [nx, ny] in ink.points {
-        let x = media[0] + nx * page_width;
-        let y = media[1] + (1.0 - ny) * page_height;
+        let (x, y) = if let Some((box_x, box_y, box_width, box_height)) = boxed {
+            (
+                box_x + nx * box_width,
+                box_y + (1.0 - ny) * box_height,
+            )
+        } else {
+            (
+                media[0] + nx * page_width,
+                media[1] + (1.0 - ny) * page_height,
+            )
+        };
         min_x = min_x.min(x);
         min_y = min_y.min(y);
         max_x = max_x.max(x);
@@ -451,6 +493,84 @@ pub fn add_ink_annotation(
         },
     };
 
+    let annotation_id = document.add_object(annotation);
+    append_page_annotation(&mut document, page_id, annotation_id)?;
+    atomic_save(document, output)
+}
+
+pub fn add_signature_image(
+    input: &Path,
+    output: &Path,
+    signature: SignatureImageInput,
+) -> Result<(), SevenError> {
+    if signature.author.chars().count() > 256 {
+        return Err(SevenError::OperationRejected("Autor excede o limite permitido".into()));
+    }
+    if !signature.x.is_finite()
+        || !signature.y.is_finite()
+        || !signature.width.is_finite()
+        || !signature.height.is_finite()
+        || signature.width <= 0.0
+        || signature.height <= 0.0
+        || signature.width > 5_000.0
+        || signature.height > 5_000.0
+    {
+        return Err(SevenError::OperationRejected("Área da assinatura por imagem inválida".into()));
+    }
+
+    let image_path = Path::new(signature.image_path.trim());
+    if !image_path.is_file() {
+        return Err(SevenError::NotFound(signature.image_path));
+    }
+    let extension = image_path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if !matches!(extension.as_str(), "png" | "jpg" | "jpeg") {
+        return Err(SevenError::UnsupportedFormat(extension));
+    }
+
+    let mut document = Document::load(input)
+        .map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let page_id = page_id(&document, signature.page_index)?;
+    let image_stream = lopdf::xobject::image(image_path)
+        .map_err(|error| SevenError::Operation(format!("Imagem da assinatura: {error}")))?;
+    let image_id = document.add_object(image_stream);
+    let content = format!(
+        "q\n{:.3} 0 0 {:.3} 0 0 cm\n/ImSig Do\nQ\n",
+        signature.width,
+        signature.height,
+    );
+    let appearance = Stream::new(
+        dictionary! {
+            "Type" => "XObject",
+            "Subtype" => "Form",
+            "FormType" => 1,
+            "BBox" => vec![0.into(), 0.into(), signature.width.into(), signature.height.into()],
+            "Resources" => dictionary! {
+                "XObject" => dictionary! { "ImSig" => image_id },
+            },
+        },
+        content.into_bytes(),
+    );
+    let appearance_id = document.add_object(appearance);
+    let annotation = dictionary! {
+        "Type" => "Annot",
+        "Subtype" => "Stamp",
+        "Rect" => vec![
+            signature.x.into(),
+            signature.y.into(),
+            (signature.x + signature.width).into(),
+            (signature.y + signature.height).into(),
+        ],
+        "Name" => "Signature",
+        "Contents" => Object::string_literal("Assinatura eletrônica visual"),
+        "T" => Object::string_literal(signature.author),
+        "F" => 4,
+        "AP" => dictionary! { "N" => appearance_id },
+        "NM" => Object::string_literal(uuid::Uuid::new_v4().to_string()),
+    };
     let annotation_id = document.add_object(annotation);
     append_page_annotation(&mut document, page_id, annotation_id)?;
     atomic_save(document, output)

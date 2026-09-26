@@ -6,6 +6,7 @@ use crate::{
     capabilities,
     catalog,
     compare,
+    conversion,
     error::{CommandResult, ErrorPayload, SevenError},
     jobs::{self, JobStart},
     forms,
@@ -436,6 +437,19 @@ pub fn list_watch_folders(
     state: State<'_, AppState>,
 ) -> CommandResult<Vec<watch_folder::WatchFolderConfig>> {
     Ok(watch_folder::list(&state))
+}
+
+#[tauri::command]
+pub fn import_conversion_presets(path: String) -> CommandResult<Vec<conversion::ConversionPresetDefinition>> {
+    conversion::import_presets(&path).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn export_conversion_presets(
+    path: String,
+    presets: Vec<conversion::ConversionPresetDefinition>,
+) -> CommandResult<()> {
+    conversion::export_presets(&path, &presets).map_err(ErrorPayload::from)
 }
 
 #[tauri::command]
@@ -4440,36 +4454,102 @@ pub fn start_decrypt_pdf(
     Ok(jobs::start_process_job(app, &state, "decrypt", executable, args, Some(output)))
 }
 
+fn validate_office_conversion_input(value: &str) -> CommandResult<std::path::PathBuf> {
+    let path = std::path::Path::new(value);
+    if !path.exists() || !path.is_file() {
+        return Err(ErrorPayload::from(SevenError::NotFound(value.to_owned())));
+    }
+    let extension = path.extension().and_then(|value| value.to_str()).unwrap_or_default().to_ascii_lowercase();
+    if !matches!(
+        extension.as_str(),
+        "doc" | "docx" | "xls" | "xlsx" | "ppt" | "pptx" | "odt" | "ods" | "odp" | "rtf" | "txt" | "html" | "htm"
+    ) {
+        return Err(ErrorPayload::from(SevenError::UnsupportedFormat(extension)));
+    }
+    fs::canonicalize(path).map_err(|error| ErrorPayload::from(SevenError::InvalidPath(error.to_string())))
+}
+
 #[tauri::command]
 pub fn start_convert_to_pdf(
     app: AppHandle,
     state: State<'_, AppState>,
     input: String,
     output_directory: String,
+    options: Option<conversion::ConversionOptions>,
 ) -> CommandResult<JobStart> {
-    let executable = jobs::require_executable(&["soffice", "libreoffice"], "LibreOffice").map_err(ErrorPayload::from)?;
-    let input_path = std::path::Path::new(&input);
-    if !input_path.exists() || !input_path.is_file() {
-        return Err(ErrorPayload::from(SevenError::NotFound(input)));
-    }
-    let input = fs::canonicalize(input_path).map_err(|error| ErrorPayload::from(SevenError::InvalidPath(error.to_string())))?;
+    let libreoffice = jobs::require_executable(&["soffice", "libreoffice"], "LibreOffice").map_err(ErrorPayload::from)?;
+    let input = validate_office_conversion_input(&input)?;
     let output_directory = jobs::validated_directory(&output_directory).map_err(ErrorPayload::from)?;
+    let options = options.unwrap_or_else(conversion::ConversionOptions::standard);
+    options.validate().map_err(ErrorPayload::from)?;
 
-    let args = vec![
+    if !options.requires_postprocess() {
+        let args = vec![
+            "--headless".into(),
+            "--convert-to".into(),
+            "pdf".into(),
+            "--outdir".into(),
+            output_directory.to_string_lossy().into_owned(),
+            input.to_string_lossy().into_owned(),
+        ];
+        return Ok(jobs::start_process_job(
+            app,
+            &state,
+            "convert-to-pdf",
+            libreoffice,
+            args,
+            Some(output_directory),
+        ));
+    }
+
+    let ghostscript = jobs::require_executable(&["gswin64c", "gswin32c", "gs"], "Ghostscript").map_err(ErrorPayload::from)?;
+    let stem = input.file_stem().and_then(|value| value.to_str()).unwrap_or("documento");
+    let final_output = output_directory.join(format!("{stem}.pdf"));
+    let job_temp = state.cache_dir.join("jobs").join(format!("convert-{}", uuid::Uuid::new_v4()));
+    fs::create_dir_all(&job_temp).map_err(|error| ErrorPayload::from(SevenError::Io(error.to_string())))?;
+    let intermediate = job_temp.join(format!("{stem}.pdf"));
+
+    let prefix = match options.write_standard_prefix(&job_temp) {
+        Ok(value) => value,
+        Err(error) => {
+            let _ = fs::remove_dir_all(&job_temp);
+            return Err(ErrorPayload::from(error));
+        }
+    };
+    let ghostscript_args = match options.ghostscript_args(&intermediate, &final_output, prefix.as_deref()) {
+        Ok(value) => value,
+        Err(error) => {
+            let _ = fs::remove_dir_all(&job_temp);
+            return Err(ErrorPayload::from(error));
+        }
+    };
+
+    let libreoffice_args = vec![
         "--headless".into(),
         "--convert-to".into(),
         "pdf".into(),
         "--outdir".into(),
-        output_directory.to_string_lossy().into_owned(),
+        job_temp.to_string_lossy().into_owned(),
         input.to_string_lossy().into_owned(),
     ];
-    Ok(jobs::start_process_job(
+    Ok(jobs::start_process_sequence_job_with_cleanup(
         app,
         &state,
-        "convert-to-pdf",
-        executable,
-        args,
-        Some(output_directory),
+        "convert-to-pdf-advanced",
+        vec![
+            jobs::ProcessStep {
+                program: libreoffice,
+                args: libreoffice_args,
+                label: "Convertendo documento para PDF intermediário".into(),
+            },
+            jobs::ProcessStep {
+                program: ghostscript,
+                args: ghostscript_args,
+                label: "Aplicando preset profissional".into(),
+            },
+        ],
+        Some(final_output),
+        vec![job_temp],
     ))
 }
 
@@ -4479,6 +4559,7 @@ pub fn start_batch_convert_to_pdf(
     state: State<'_, AppState>,
     inputs: Vec<String>,
     output_directory: String,
+    options: Option<conversion::ConversionOptions>,
 ) -> CommandResult<JobStart> {
     if inputs.is_empty() || inputs.len() > 200 {
         return Err(ErrorPayload::from(SevenError::OperationRejected(
@@ -4486,48 +4567,107 @@ pub fn start_batch_convert_to_pdf(
         )));
     }
 
-    let executable = jobs::require_executable(&["soffice", "libreoffice"], "LibreOffice").map_err(ErrorPayload::from)?;
+    let libreoffice = jobs::require_executable(&["soffice", "libreoffice"], "LibreOffice").map_err(ErrorPayload::from)?;
     let output_directory = jobs::validated_directory(&output_directory).map_err(ErrorPayload::from)?;
+    let options = options.unwrap_or_else(conversion::ConversionOptions::standard);
+    options.validate().map_err(ErrorPayload::from)?;
     let total = inputs.len();
-    let mut steps = Vec::with_capacity(total);
 
-    for (index, input) in inputs.into_iter().enumerate() {
-        let path = std::path::Path::new(&input);
-        if !path.exists() || !path.is_file() {
-            return Err(ErrorPayload::from(SevenError::NotFound(input)));
+    let mut validated = Vec::with_capacity(total);
+    let mut output_names = std::collections::HashSet::new();
+    for input in inputs {
+        let canonical = validate_office_conversion_input(&input)?;
+        let stem = canonical.file_stem().and_then(|value| value.to_str()).unwrap_or("documento").to_owned();
+        let output_name = format!("{stem}.pdf").to_ascii_lowercase();
+        if !output_names.insert(output_name) {
+            return Err(ErrorPayload::from(SevenError::OperationRejected(
+                "O lote contém arquivos diferentes que produziriam o mesmo nome de PDF".into(),
+            )));
         }
-        let extension = path.extension().and_then(|value| value.to_str()).unwrap_or_default().to_ascii_lowercase();
-        if !matches!(
-            extension.as_str(),
-            "doc" | "docx" | "xls" | "xlsx" | "ppt" | "pptx" | "odt" | "ods" | "odp" | "rtf" | "txt" | "html" | "htm"
-        ) {
-            return Err(ErrorPayload::from(SevenError::UnsupportedFormat(extension)));
-        }
+        validated.push((canonical, stem));
+    }
 
-        let canonical = fs::canonicalize(path)
-            .map_err(|error| ErrorPayload::from(SevenError::InvalidPath(error.to_string())))?;
+    if !options.requires_postprocess() {
+        let mut steps = Vec::with_capacity(total);
+        for (index, (canonical, _)) in validated.into_iter().enumerate() {
+            let name = canonical.file_name().and_then(|value| value.to_str()).unwrap_or("arquivo").to_owned();
+            steps.push(jobs::ProcessStep {
+                program: libreoffice.clone(),
+                args: vec![
+                    "--headless".into(),
+                    "--convert-to".into(),
+                    "pdf".into(),
+                    "--outdir".into(),
+                    output_directory.to_string_lossy().into_owned(),
+                    canonical.to_string_lossy().into_owned(),
+                ],
+                label: format!("Convertendo {} de {} · {name}", index + 1, total),
+            });
+        }
+        return Ok(jobs::start_process_sequence_job(
+            app,
+            &state,
+            "batch-convert",
+            steps,
+            Some(output_directory),
+        ));
+    }
+
+    let ghostscript = jobs::require_executable(&["gswin64c", "gswin32c", "gs"], "Ghostscript").map_err(ErrorPayload::from)?;
+    let batch_temp = state.cache_dir.join("jobs").join(format!("batch-convert-{}", uuid::Uuid::new_v4()));
+    fs::create_dir_all(&batch_temp).map_err(|error| ErrorPayload::from(SevenError::Io(error.to_string())))?;
+    let mut steps = Vec::with_capacity(total * 2);
+
+    for (index, (canonical, stem)) in validated.into_iter().enumerate() {
+        let item_temp = batch_temp.join(format!("{index:04}"));
+        if let Err(error) = fs::create_dir_all(&item_temp) {
+            let _ = fs::remove_dir_all(&batch_temp);
+            return Err(ErrorPayload::from(SevenError::Io(error.to_string())));
+        }
+        let intermediate = item_temp.join(format!("{stem}.pdf"));
+        let final_output = output_directory.join(format!("{stem}.pdf"));
+        let prefix = match options.write_standard_prefix(&item_temp) {
+            Ok(value) => value,
+            Err(error) => {
+                let _ = fs::remove_dir_all(&batch_temp);
+                return Err(ErrorPayload::from(error));
+            }
+        };
+        let gs_args = match options.ghostscript_args(&intermediate, &final_output, prefix.as_deref()) {
+            Ok(value) => value,
+            Err(error) => {
+                let _ = fs::remove_dir_all(&batch_temp);
+                return Err(ErrorPayload::from(error));
+            }
+        };
         let name = canonical.file_name().and_then(|value| value.to_str()).unwrap_or("arquivo").to_owned();
-        let args = vec![
-            "--headless".into(),
-            "--convert-to".into(),
-            "pdf".into(),
-            "--outdir".into(),
-            output_directory.to_string_lossy().into_owned(),
-            canonical.to_string_lossy().into_owned(),
-        ];
+
         steps.push(jobs::ProcessStep {
-            program: executable.clone(),
-            args,
+            program: libreoffice.clone(),
+            args: vec![
+                "--headless".into(),
+                "--convert-to".into(),
+                "pdf".into(),
+                "--outdir".into(),
+                item_temp.to_string_lossy().into_owned(),
+                canonical.to_string_lossy().into_owned(),
+            ],
             label: format!("Convertendo {} de {} · {name}", index + 1, total),
+        });
+        steps.push(jobs::ProcessStep {
+            program: ghostscript.clone(),
+            args: gs_args,
+            label: format!("Aplicando preset {} de {} · {name}", index + 1, total),
         });
     }
 
-    Ok(jobs::start_process_sequence_job(
+    Ok(jobs::start_process_sequence_job_with_cleanup(
         app,
         &state,
-        "batch-convert",
+        "batch-convert-advanced",
         steps,
         Some(output_directory),
+        vec![batch_temp],
     ))
 }
 

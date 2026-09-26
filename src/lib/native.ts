@@ -24,6 +24,7 @@ import type {
   AnnotationInfo,
   AnnotationInput,
   CompareReport,
+  CombinePdfPreview,
   CompareOptions,
   DocumentMetadata,
   JobStart,
@@ -1297,6 +1298,13 @@ export async function scanPageToPdf(destination: string, dpi: number): Promise<v
 
 export async function startCombine(inputs: string[], output: string): Promise<JobStart> {
   return invoke<JobStart>("start_combine_documents", { inputs, output });
+}
+
+export async function previewCombinePdf(
+  path: string,
+  maxPages = 12,
+): Promise<CombinePdfPreview> {
+  return invoke<CombinePdfPreview>("preview_combine_pdf", { path, maxPages });
 }
 
 export async function startCombineMixed(

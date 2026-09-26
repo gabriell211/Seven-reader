@@ -61,6 +61,11 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(cache_dir: PathBuf, resource_dir: PathBuf) -> Self {
+        let jobs_dir = cache_dir.join("jobs");
+        if jobs_dir.exists() {
+            let _ = std::fs::remove_dir_all(&jobs_dir);
+        }
+        let _ = std::fs::create_dir_all(&jobs_dir);
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
             jobs: Arc::new(Mutex::new(HashMap::new())),

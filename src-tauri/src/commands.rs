@@ -3496,10 +3496,14 @@ fn validate_scan_mode(mode: &str) -> Result<&'static str, SevenError> {
 }
 
 #[cfg(target_os = "linux")]
-fn scan_image_blocking(output: &std::path::Path, dpi: u16, color_mode: &str) -> Result<(), SevenError> {
+fn scan_image_blocking(output: &std::path::Path, dpi: u16, color_mode: &str, scanner_id: Option<&str>) -> Result<(), SevenError> {
     let scanner = jobs::require_executable(&["scanimage"], "SANE/scanimage")?;
     let mode = validate_scan_mode(color_mode)?;
-    let scan = std::process::Command::new(scanner)
+    let mut command = std::process::Command::new(scanner);
+    if let Some(scanner_id) = scanner_id.filter(|value| !value.trim().is_empty()) {
+        command.arg(format!("--device-name={scanner_id}"));
+    }
+    let scan = command
         .arg("--format=png")
         .arg(format!("--resolution={dpi}"))
         .arg(format!("--mode={mode}"))
@@ -3516,7 +3520,7 @@ fn scan_image_blocking(output: &std::path::Path, dpi: u16, color_mode: &str) -> 
 }
 
 #[cfg(target_os = "windows")]
-fn scan_image_blocking(output: &std::path::Path, dpi: u16, color_mode: &str) -> Result<(), SevenError> {
+fn scan_image_blocking(output: &std::path::Path, dpi: u16, color_mode: &str, _scanner_id: Option<&str>) -> Result<(), SevenError> {
     let powershell = jobs::require_executable(&["powershell"], "Windows PowerShell/WIA")?;
     let intent = match color_mode {
         "color" => 1,
@@ -3559,7 +3563,7 @@ fn scan_image_blocking(output: &std::path::Path, dpi: u16, color_mode: &str) -> 
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "windows")))]
-fn scan_image_blocking(_output: &std::path::Path, _dpi: u16, _color_mode: &str) -> Result<(), SevenError> {
+fn scan_image_blocking(_output: &std::path::Path, _dpi: u16, _color_mode: &str, _scanner_id: Option<&str>) -> Result<(), SevenError> {
     Err(SevenError::CapabilityUnavailable(
         "Scanner nativo ainda não disponível neste sistema operacional".into(),
     ))
@@ -3595,6 +3599,7 @@ pub async fn scan_page_image(
     state: State<'_, AppState>,
     dpi: u16,
     color_mode: String,
+    scanner_id: Option<String>,
 ) -> CommandResult<ScannedPage> {
     let dpi = dpi.clamp(75, 1200);
     validate_scan_mode(&color_mode).map_err(ErrorPayload::from)?;
@@ -3603,7 +3608,7 @@ pub async fn scan_page_image(
     let output_for_task = output.clone();
 
     tauri::async_runtime::spawn_blocking(move || {
-        scan_image_blocking(&output_for_task, dpi, &color_mode)?;
+        scan_image_blocking(&output_for_task, dpi, &color_mode, scanner_id.as_deref())?;
         let (width, height) = image::image_dimensions(&output_for_task)
             .map_err(|error| SevenError::Operation(error.to_string()))?;
         Ok::<_, SevenError>((width, height))
@@ -3703,7 +3708,7 @@ pub async fn scan_page_to_pdf(
     let dpi = dpi.clamp(75, 1200);
     let temp = output.with_extension(format!("seven-scan-{}.png", uuid::Uuid::new_v4()));
     let temp_for_task = temp.clone();
-    tauri::async_runtime::spawn_blocking(move || scan_image_blocking(&temp_for_task, dpi, "color"))
+    tauri::async_runtime::spawn_blocking(move || scan_image_blocking(&temp_for_task, dpi, "color", None))
         .await
         .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
         .map_err(ErrorPayload::from)?;

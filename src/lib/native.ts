@@ -1,6 +1,9 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import type {
   Capabilities,
+  WatchFolderConfig,
+  ConversionPreset,
+  ConversionOptions,
   CatalogHit,
   CatalogSummary,
   DocumentSummary,
@@ -276,6 +279,14 @@ export async function stopWatchFolder(id: string): Promise<void> {
 
 export async function listWatchFolders(): Promise<WatchFolderConfig[]> {
   return invoke<WatchFolderConfig[]>("list_watch_folders");
+}
+
+export async function importConversionPresets(path: string): Promise<ConversionPreset[]> {
+  return invoke<ConversionPreset[]>("import_conversion_presets", { path });
+}
+
+export async function exportConversionPresets(path: string, presets: ConversionPreset[]): Promise<void> {
+  await invoke("export_conversion_presets", { path, presets });
 }
 
 export async function getCapabilities(): Promise<Capabilities | null> {
@@ -1701,15 +1712,17 @@ export async function startDecryptPdf(
 export async function startConvertToPdf(
   input: string,
   outputDirectory: string,
+  options?: ConversionOptions,
 ): Promise<JobStart> {
-  return invoke<JobStart>("start_convert_to_pdf", { input, outputDirectory });
+  return invoke<JobStart>("start_convert_to_pdf", { input, outputDirectory, options: options ?? null });
 }
 
 export async function startBatchConvertToPdf(
   inputs: string[],
   outputDirectory: string,
+  options?: ConversionOptions,
 ): Promise<JobStart> {
-  return invoke<JobStart>("start_batch_convert_to_pdf", { inputs, outputDirectory });
+  return invoke<JobStart>("start_batch_convert_to_pdf", { inputs, outputDirectory, options: options ?? null });
 }
 
 

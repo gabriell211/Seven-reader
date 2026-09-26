@@ -99,6 +99,7 @@ import {
   listMeasurements,
   exportMeasurements,
   sessionAddStamp,
+  sessionCorrectOcrWord,
   sessionEditAddText,
   sessionEditReplaceText,
   listPageImageObjects,
@@ -240,7 +241,7 @@ import type {
   NamedDestinationInfo,
   NewFormField,
   OcrOptions,
-  OcrWord,
+  OcrReviewResult,
   OptimizationAudit,
   OptimizeOptions,
   OverlayTextOptions,
@@ -391,7 +392,7 @@ export default function App() {
   const [optimizeOpen, setOptimizeOpen] = useState(false);
   const [optimizationAudit, setOptimizationAudit] = useState<OptimizationAudit | null>(null);
   const [optimizationAuditLoading, setOptimizationAuditLoading] = useState(false);
-  const [ocrSuspects, setOcrSuspects] = useState<OcrWord[]>([]);
+  const [ocrReview, setOcrReview] = useState<OcrReviewResult | null>(null);
   const [ocrReviewLoading, setOcrReviewLoading] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [measurements, setMeasurements] = useState<MeasurementInfo[]>([]);
@@ -2993,11 +2994,32 @@ export default function App() {
     if (!document) return;
     try {
       setOcrReviewLoading(true);
-      setOcrSuspects(await reviewOcrPage(document.id, page, language, threshold));
+      setOcrReview(await reviewOcrPage(document.id, page, language, threshold));
     } catch (error) {
       setNotice(errorMessage(error));
     } finally {
       setOcrReviewLoading(false);
+    }
+  };
+
+  const correctOcrWord = async (
+    recognized: string,
+    replacement: string,
+    occurrence: number,
+  ) => {
+    if (!document) return;
+    try {
+      const summary = await sessionCorrectOcrWord(
+        document.id,
+        page,
+        recognized,
+        replacement,
+        occurrence,
+      );
+      await acceptDocumentRevision(summary, `OCR corrigido: "${recognized}" → "${replacement}".`);
+    } catch (error) {
+      setNotice(errorMessage(error));
+      throw error;
     }
   };
 
@@ -3647,13 +3669,14 @@ export default function App() {
           documentPath={document?.path}
           documentId={document?.id}
           pageIndex={page}
-          suspects={ocrSuspects}
+          reviewResult={ocrReview}
           loadingReview={ocrReviewLoading}
           onClose={() => setOcrOpen(false)}
           onRunOcr={(output, options) => void runAdvancedOcr(output, options)}
           onRunBatchOcr={(inputs, outputDirectory, options) => void runBatchOcr(inputs, outputDirectory, options)}
           onReview={(language, threshold) => void reviewCurrentOcrPage(language, threshold)}
           onDetectLanguage={(candidates) => detectCurrentOcrLanguage(candidates)}
+          onCorrectWord={(recognized, replacement, occurrence) => correctOcrWord(recognized, replacement, occurrence)}
           onScanPage={(dpi, colorMode) => captureScanPage(dpi, colorMode)}
           onDeleteScanPages={(inputs) => discardScanPages(inputs)}
           onFinalizeScan={(inputs, output, dpi, options) => finishScanSession(inputs, output, dpi, options)}

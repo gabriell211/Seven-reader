@@ -14,6 +14,8 @@ pub struct OpenDocument {
     pub password: Option<String>,
     pub page_count: usize,
     pub file_size: u64,
+    pub source_file_size: u64,
+    pub source_modified_ns: u128,
     pub pdf_version: Option<String>,
     pub encrypted: bool,
     pub has_signatures: bool,

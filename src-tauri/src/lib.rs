@@ -48,6 +48,8 @@ pub fn run() {
             commands::delete_catalog,
             commands::open_document,
             commands::restore_document_session,
+            commands::get_external_file_status,
+            commands::reload_document_from_source,
             commands::close_document,
             commands::render_page,
             commands::render_pages,

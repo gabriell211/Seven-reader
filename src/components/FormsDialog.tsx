@@ -76,7 +76,7 @@ export function FormsDialog({ pageIndex, fields, actions, loading, onClose, onRe
   const [actionTargetPage, setActionTargetPage] = useState(1);
   const [actionHide, setActionHide] = useState(true);
 
-  useEffect(() => { onReload(); }, [onReload]);
+  useEffect(() => { onReload(); }, []);
   useEffect(() => {
     setValues(Object.fromEntries(fields.map((field) => [field.name, field.value])));
   }, [fields]);

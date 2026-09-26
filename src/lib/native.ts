@@ -87,6 +87,9 @@ import type {
   SignRequest,
   SignatureValidationReport,
   SanitizeReport,
+  ScannedPage,
+  ScannerInfo,
+  ScanFinalizeResult,
   SessionFormFillResult,
   SessionFlattenLayersResult,
   SessionPortfolioFolderResult,
@@ -1224,11 +1227,16 @@ export async function reviewOcrPage(
   return invoke<OcrReviewResult>("review_ocr_page", { documentId, pageIndex, language, threshold });
 }
 
+export async function listScanners(): Promise<ScannerInfo[]> {
+  return invoke<ScannerInfo[]>("list_scanners");
+}
+
 export async function scanPageImage(
   dpi: number,
   colorMode: "color" | "gray" | "lineart",
+  scannerId?: string,
 ): Promise<ScannedPage> {
-  return invoke<ScannedPage>("scan_page_image", { dpi, colorMode });
+  return invoke<ScannedPage>("scan_page_image", { dpi, colorMode, scannerId: scannerId ?? null });
 }
 
 export async function deleteScanPages(inputs: string[]): Promise<number> {

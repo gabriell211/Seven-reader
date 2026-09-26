@@ -3967,12 +3967,33 @@ pub fn start_batch_split_pdf(
         )));
     }
     let executable = jobs::require_executable(&["qpdf"], "qpdf").map_err(ErrorPayload::from)?;
-    let (output_directory, items) =
-        prepare_batch_pdf_outputs(inputs, output_directory, "dividido")?;
-    let total = items.len();
-    let mut steps = Vec::with_capacity(total);
+    if inputs.is_empty() || inputs.len() > 200 {
+        return Err(ErrorPayload::from(SevenError::OperationRejected(
+            "Selecione entre 1 e 200 PDFs para dividir".into(),
+        )));
+    }
+    let output_directory = jobs::validated_directory(&output_directory).map_err(ErrorPayload::from)?;
+    let mut validated = Vec::with_capacity(inputs.len());
+    let mut reserved = std::collections::HashSet::new();
 
-    for (index, (input, output, name)) in items.into_iter().enumerate() {
+    for input in inputs {
+        let canonical = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+        let stem = canonical.file_stem().and_then(|value| value.to_str()).unwrap_or("documento");
+        let name = canonical.file_name().and_then(|value| value.to_str()).unwrap_or("documento.pdf").to_owned();
+        let mut directory = output_directory.join(format!("{stem}-dividido"));
+        let mut suffix = 2usize;
+        while directory.exists() || !reserved.insert(directory.to_string_lossy().to_ascii_lowercase()) {
+            directory = output_directory.join(format!("{stem}-dividido-{suffix}"));
+            suffix += 1;
+        }
+        fs::create_dir_all(&directory)
+            .map_err(|error| ErrorPayload::from(SevenError::Io(error.to_string())))?;
+        validated.push((canonical, directory.join("parte.pdf"), name));
+    }
+
+    let total = validated.len();
+    let mut steps = Vec::with_capacity(total);
+    for (index, (input, output, name)) in validated.into_iter().enumerate() {
         steps.push(jobs::ProcessStep {
             program: executable.clone(),
             args: vec![

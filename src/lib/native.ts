@@ -62,6 +62,7 @@ import type {
   SessionFormFillResult,
   SessionFlattenLayersResult,
   SessionPortfolioFolderResult,
+  SessionPortfolioDirectoryImportResult,
   SessionReplaceTextResult,
   TextPlacement,
   TextSelectionResult,
@@ -690,6 +691,16 @@ export async function sessionSetPdfPortfolioView(
   view: "details" | "tile" | "hidden",
 ): Promise<DocumentSummary> {
   return invoke<DocumentSummary>("session_set_pdf_portfolio_view", { documentId, view });
+}
+
+export async function sessionImportPdfPortfolioDirectory(
+  documentId: string,
+  directory: string,
+  targetPath: string,
+): Promise<SessionPortfolioDirectoryImportResult> {
+  return invoke<SessionPortfolioDirectoryImportResult>("session_import_pdf_portfolio_directory", {
+    documentId, directory, targetPath,
+  });
 }
 
 export async function sessionCreatePdfPortfolioFolder(

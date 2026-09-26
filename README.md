@@ -532,60 +532,60 @@ Acesso rápido a:
 
 ## Navegação
 
-- [ ] Próxima página
-- [ ] Página anterior
-- [ ] Primeira página
-- [ ] Última página
-- [ ] Ir para página
-- [ ] Histórico de navegação
-- [ ] Voltar à visualização anterior
-- [ ] Avançar à visualização seguinte
-- [ ] Rolagem contínua
-- [ ] Página única
-- [ ] Duas páginas
-- [ ] Duas páginas contínuas
-- [ ] Ajustar página
-- [ ] Ajustar largura
-- [ ] Tamanho real
-- [ ] Zoom +
-- [ ] Zoom -
-- [ ] Zoom por seleção
-- [ ] Zoom dinâmico
-- [ ] Lupa
-- [ ] Pan/Mão
-- [ ] Rotação visual
-- [ ] Tela cheia
-- [ ] Modo leitura
-- [ ] Modo apresentação
-- [ ] Reflow quando o PDF permitir
+- [x] Próxima página
+- [x] Página anterior
+- [x] Primeira página
+- [x] Última página
+- [x] Ir para página
+- [x] Histórico de navegação
+- [x] Voltar à visualização anterior
+- [x] Avançar à visualização seguinte
+- [x] Rolagem contínua
+- [x] Página única
+- [x] Duas páginas
+- [x] Duas páginas contínuas
+- [x] Ajustar página
+- [x] Ajustar largura
+- [x] Tamanho real
+- [x] Zoom +
+- [x] Zoom -
+- [x] Zoom por seleção
+- [x] Zoom dinâmico
+- [x] Lupa
+- [x] Pan/Mão
+- [x] Rotação visual
+- [x] Tela cheia
+- [x] Modo leitura
+- [x] Modo apresentação
+- [x] Reflow quando o PDF permitir
 
 ## Réguas, grades e guias
 
-- [ ] Régua horizontal
-- [ ] Régua vertical
-- [ ] Grade
-- [ ] Snap na grade
-- [ ] Guias
-- [ ] Coordenadas do cursor
-- [ ] Unidades configuráveis
+- [x] Régua horizontal
+- [x] Régua vertical
+- [x] Grade
+- [x] Snap na grade
+- [x] Guias
+- [x] Coordenadas do cursor
+- [x] Unidades configuráveis
 
 ---
 
 # Abas e múltiplas janelas
 
-- [ ] Abrir vários PDFs em abas
-- [ ] Reordenar abas
-- [ ] Fechar aba
-- [ ] Fechar outras
-- [ ] Reabrir fechada
-- [ ] Próxima aba
-- [ ] Aba anterior
-- [ ] Abrir em nova janela
-- [ ] Mover para nova janela
-- [ ] Abrir dois documentos lado a lado
-- [ ] Restaurar sessão
-- [ ] Memorizar posição e zoom por documento
-- [ ] Detectar arquivo alterado externamente
+- [x] Abrir vários PDFs em abas
+- [x] Reordenar abas
+- [x] Fechar aba
+- [x] Fechar outras
+- [x] Reabrir fechada
+- [x] Próxima aba
+- [x] Aba anterior
+- [x] Abrir em nova janela
+- [x] Mover para nova janela
+- [x] Abrir dois documentos lado a lado
+- [x] Restaurar sessão
+- [x] Memorizar posição e zoom por documento
+- [x] Detectar arquivo alterado externamente
 
 ---
 
@@ -593,43 +593,43 @@ Acesso rápido a:
 
 ## Busca simples
 
-- [ ] Texto
-- [ ] Próximo resultado
-- [ ] Resultado anterior
-- [ ] Total de ocorrências
-- [ ] Destaques no documento
+- [x] Texto
+- [x] Próximo resultado
+- [x] Resultado anterior
+- [x] Total de ocorrências
+- [x] Destaques no documento
 
 ## Busca avançada
 
-- [ ] Maiúsculas/minúsculas
-- [ ] Palavra inteira
-- [ ] Intervalo de páginas
-- [ ] Comentários
-- [ ] Marcadores
-- [ ] Campos
-- [ ] Anexos textuais
-- [ ] Texto OCR
-- [ ] Metadados
-- [ ] Índice local
+- [x] Maiúsculas/minúsculas
+- [x] Palavra inteira
+- [x] Intervalo de páginas
+- [x] Comentários
+- [x] Marcadores
+- [x] Campos
+- [x] Anexos textuais
+- [x] Texto OCR
+- [x] Metadados
+- [x] Índice local
 - [ ] Histórico opcional
-- [ ] Regex opcional como melhoria própria
+- [x] Regex opcional como melhoria própria
 
 ---
 
 # Seleção e clipboard
 
-- [ ] Selecionar texto
-- [ ] Selecionar bloco
+- [x] Selecionar texto
+- [x] Selecionar bloco
 - [ ] Seleção por coluna
 - [ ] Selecionar imagem
 - [ ] Selecionar objeto
-- [ ] Selecionar área
-- [ ] Copiar texto
-- [ ] Copiar imagem
-- [ ] Copiar área como imagem
-- [ ] Copiar preservando ordem de leitura
-- [ ] Selecionar tudo
-- [ ] Criar PDF diretamente da área de transferência
+- [x] Selecionar área
+- [x] Copiar texto
+- [x] Copiar imagem
+- [x] Copiar área como imagem
+- [x] Copiar preservando ordem de leitura
+- [x] Selecionar tudo
+- [x] Criar PDF diretamente da área de transferência
 
 ---
 

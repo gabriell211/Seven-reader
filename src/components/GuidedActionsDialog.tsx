@@ -2,7 +2,39 @@ import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { SevenIcon } from "./SevenIcon";
 
-export type GuidedActionKind = "ocr" | "optimize" | "convert";
+export type GuidedActionKind =
+  | "ocr"
+  | "optimize"
+  | "convert"
+  | "sanitize"
+  | "metadata"
+  | "watermark"
+  | "header"
+  | "footer"
+  | "bates"
+  | "redact";
+
+export interface GuidedActionRunOptions {
+  text: string;
+  query: string;
+  prefix: string;
+  suffix: string;
+  startNumber: number;
+  digits: number;
+  matchCase: boolean;
+  wholeWord: boolean;
+  sanitize: {
+    removeJavascript: boolean;
+    removeOpenActions: boolean;
+    removeEmbeddedFiles: boolean;
+    removeMetadata: boolean;
+    removeXfa: boolean;
+    removeAnnotations: boolean;
+    removeForms: boolean;
+    removeMultimedia: boolean;
+    cleanupStructure: boolean;
+  };
+}
 
 export interface GuidedActionPreset {
   id: string;
@@ -12,7 +44,7 @@ export interface GuidedActionPreset {
 
 interface GuidedActionsDialogProps {
   onClose: () => void;
-  onRun: (kind: GuidedActionKind, inputs: string[], outputDirectory: string) => void;
+  onRun: (kind: GuidedActionKind, inputs: string[], outputDirectory: string, options: GuidedActionRunOptions) => void;
 }
 
 const STORAGE_KEY = "seven-reader:guided-actions:v1";
@@ -21,6 +53,13 @@ const defaults: GuidedActionPreset[] = [
   { id: "ocr-batch", name: "OCR em vários PDFs", kind: "ocr" },
   { id: "optimize-batch", name: "Otimizar vários PDFs", kind: "optimize" },
   { id: "convert-batch", name: "Converter documentos para PDF", kind: "convert" },
+  { id: "sanitize-batch", name: "Sanitizar PDFs", kind: "sanitize" },
+  { id: "metadata-batch", name: "Remover metadados", kind: "metadata" },
+  { id: "watermark-batch", name: "Marca d'água em lote", kind: "watermark" },
+  { id: "header-batch", name: "Cabeçalho em lote", kind: "header" },
+  { id: "footer-batch", name: "Rodapé em lote", kind: "footer" },
+  { id: "bates-batch", name: "Numeração Bates em lote", kind: "bates" },
+  { id: "redact-batch", name: "Redação por busca", kind: "redact" },
 ];
 
 function loadPresets(): GuidedActionPreset[] {
@@ -39,12 +78,51 @@ export function GuidedActionsDialog({ onClose, onRun }: GuidedActionsDialogProps
   const [outputDirectory, setOutputDirectory] = useState("");
   const [newName, setNewName] = useState("");
   const [newKind, setNewKind] = useState<GuidedActionKind>("ocr");
+  const [text, setText] = useState("CONFIDENCIAL");
+  const [query, setQuery] = useState("");
+  const [prefix, setPrefix] = useState("DOC-");
+  const [suffix, setSuffix] = useState("");
+  const [startNumber, setStartNumber] = useState(1);
+  const [digits, setDigits] = useState(6);
+  const [matchCase, setMatchCase] = useState(false);
+  const [wholeWord, setWholeWord] = useState(false);
+  const [sanitize, setSanitize] = useState<GuidedActionRunOptions["sanitize"]>({
+    removeJavascript: true,
+    removeOpenActions: true,
+    removeEmbeddedFiles: false,
+    removeMetadata: false,
+    removeXfa: false,
+    removeAnnotations: false,
+    removeForms: false,
+    removeMultimedia: true,
+    cleanupStructure: true,
+  });
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(presets));
   }, [presets]);
 
   const current = presets.find((preset) => preset.id === selected) ?? presets[0];
+
+  const runOptions: GuidedActionRunOptions = {
+    text,
+    query,
+    prefix,
+    suffix,
+    startNumber,
+    digits,
+    matchCase,
+    wholeWord,
+    sanitize,
+  };
+
+  const requiresText = current?.kind === "watermark" || current?.kind === "header" || current?.kind === "footer";
+  const requiresQuery = current?.kind === "redact";
+  const sanitizeHasSelection = Object.values(sanitize).some(Boolean);
+  const configurationValid =
+    (!requiresText || text.trim().length > 0)
+    && (!requiresQuery || query.trim().length > 0)
+    && (current?.kind !== "sanitize" || sanitizeHasSelection);
 
   const chooseInputs = async () => {
     if (!current) return;
@@ -107,7 +185,7 @@ export function GuidedActionsDialog({ onClose, onRun }: GuidedActionsDialogProps
               {presets.map((preset) => (
                 <div className={selected === preset.id ? "guided-preset active" : "guided-preset"} key={preset.id}>
                   <button onClick={() => { setSelected(preset.id); setInputs([]); }}>
-                    <SevenIcon name={preset.kind === "ocr" ? "ocr" : preset.kind === "optimize" ? "compress" : "convert"} />
+                    <SevenIcon name={preset.kind === "ocr" ? "ocr" : preset.kind === "optimize" ? "compress" : preset.kind === "convert" ? "convert" : preset.kind === "redact" ? "redact" : preset.kind === "sanitize" || preset.kind === "metadata" ? "shield" : "edit"} />
                     <span><strong>{preset.name}</strong><small>{preset.kind}</small></span>
                   </button>
                   {preset.id.startsWith("custom-") && <button className="guided-delete" onClick={() => removePreset(preset.id)}><SevenIcon name="close" /></button>}
@@ -119,7 +197,7 @@ export function GuidedActionsDialog({ onClose, onRun }: GuidedActionsDialogProps
               {current && (
                 <>
                   <div className="guided-summary">
-                    <SevenIcon name={current.kind === "ocr" ? "ocr" : current.kind === "optimize" ? "compress" : "convert"} />
+                    <SevenIcon name={current.kind === "ocr" ? "ocr" : current.kind === "optimize" ? "compress" : current.kind === "convert" ? "convert" : current.kind === "redact" ? "redact" : current.kind === "sanitize" || current.kind === "metadata" ? "shield" : "edit"} />
                     <div><strong>{current.name}</strong><small>Processamento local · saída em nova pasta · original preservado.</small></div>
                   </div>
 
@@ -133,7 +211,71 @@ export function GuidedActionsDialog({ onClose, onRun }: GuidedActionsDialogProps
                     <SevenIcon name="folder" /> {outputDirectory || "Selecionar pasta de saída"}
                   </button>
 
-                  <button className="primary-button workflow-submit" disabled={!inputs.length || !outputDirectory} onClick={() => onRun(current.kind, inputs, outputDirectory)}>
+                  {current.kind === "sanitize" && (
+                    <section className="guided-options-box">
+                      <div className="section-mini-title">Categorias de sanitização</div>
+                      {[
+                        ["removeJavascript", "JavaScript"],
+                        ["removeOpenActions", "Open/Launch actions"],
+                        ["removeEmbeddedFiles", "Anexos"],
+                        ["removeMetadata", "Metadados"],
+                        ["removeXfa", "XFA"],
+                        ["removeAnnotations", "Comentários"],
+                        ["removeForms", "Formulários"],
+                        ["removeMultimedia", "Rich Media / 3D"],
+                        ["cleanupStructure", "Limpeza estrutural"],
+                      ].map(([key, label]) => (
+                        <label className="toggle-row" key={key}>
+                          <input
+                            type="checkbox"
+                            checked={sanitize[key as keyof GuidedActionRunOptions["sanitize"]]}
+                            onChange={(event) => setSanitize((currentOptions) => ({
+                              ...currentOptions,
+                              [key]: event.target.checked,
+                            }))}
+                          />
+                          <span><strong>{label}</strong></span>
+                        </label>
+                      ))}
+                    </section>
+                  )}
+
+                  {(current.kind === "watermark" || current.kind === "header" || current.kind === "footer") && (
+                    <section className="guided-options-box">
+                      <label className="workflow-field">
+                        <span>Texto</span>
+                        <input value={text} onChange={(event) => setText(event.target.value)} placeholder={current.kind === "watermark" ? "CONFIDENCIAL" : "Use {page}, {pages} e {date}"} />
+                      </label>
+                    </section>
+                  )}
+
+                  {current.kind === "bates" && (
+                    <section className="guided-options-box">
+                      <div className="three-column-fields">
+                        <label className="workflow-field"><span>Prefixo</span><input value={prefix} onChange={(event) => setPrefix(event.target.value)} /></label>
+                        <label className="workflow-field"><span>Início</span><input type="number" min={1} value={startNumber} onChange={(event) => setStartNumber(Math.max(1, Number(event.target.value) || 1))} /></label>
+                        <label className="workflow-field"><span>Dígitos</span><input type="number" min={1} max={20} value={digits} onChange={(event) => setDigits(Math.max(1, Math.min(20, Number(event.target.value) || 1)))} /></label>
+                      </div>
+                      <label className="workflow-field"><span>Sufixo</span><input value={suffix} onChange={(event) => setSuffix(event.target.value)} /></label>
+                    </section>
+                  )}
+
+                  {current.kind === "redact" && (
+                    <section className="guided-options-box">
+                      <label className="workflow-field"><span>Texto a redigir permanentemente</span><input value={query} onChange={(event) => setQuery(event.target.value)} /></label>
+                      <div className="two-column-fields">
+                        <label className="toggle-row"><input type="checkbox" checked={matchCase} onChange={(event) => setMatchCase(event.target.checked)} /><span><strong>Diferenciar maiúsculas/minúsculas</strong></span></label>
+                        <label className="toggle-row"><input type="checkbox" checked={wholeWord} onChange={(event) => setWholeWord(event.target.checked)} /><span><strong>Palavra inteira</strong></span></label>
+                      </div>
+                      <div className="organizer-note organizer-note--warning"><SevenIcon name="shield" /><span>A redação remove objetos sobrepostos e verifica se o texto continua recuperável antes de concluir cada arquivo.</span></div>
+                    </section>
+                  )}
+
+                  {current.kind === "metadata" && (
+                    <div className="organizer-note"><SevenIcon name="shield" /><span>Remove metadados estruturais e informações do documento, preservando o conteúdo visível.</span></div>
+                  )}
+
+                  <button className="primary-button workflow-submit" disabled={!inputs.length || !outputDirectory || !configurationValid} onClick={() => onRun(current.kind, inputs, outputDirectory, runOptions)}>
                     <SevenIcon name="automation" /> Executar ação
                   </button>
                 </>
@@ -148,6 +290,13 @@ export function GuidedActionsDialog({ onClose, onRun }: GuidedActionsDialogProps
               <option value="ocr">OCR em lote</option>
               <option value="optimize">Otimização em lote</option>
               <option value="convert">Conversão em lote</option>
+              <option value="sanitize">Sanitização em lote</option>
+              <option value="metadata">Remover metadados</option>
+              <option value="watermark">Marca d'água</option>
+              <option value="header">Cabeçalho</option>
+              <option value="footer">Rodapé</option>
+              <option value="bates">Bates</option>
+              <option value="redact">Redação por busca</option>
             </select>
             <button className="secondary-light-button" disabled={!newName.trim()} onClick={addPreset}><SevenIcon name="create" /> Adicionar</button>
           </div>

@@ -464,7 +464,7 @@ export function OcrDialog({
                   <small>{scannerId ? "Este scanner fica salvo como padrão no Seven Reader." : "O sistema escolherá o primeiro scanner disponível."}</small>
                 </label>
                 <button className="secondary-light-button" disabled={scannerLoading || !capabilities?.scanner.available} onClick={() => void refreshScanners()}>
-                  <SevenIcon name="refresh" /> {scannerLoading ? "Atualizando…" : "Atualizar scanners"}
+                  <SevenIcon name="recent" /> {scannerLoading ? "Atualizando…" : "Atualizar scanners"}
                 </button>
               </div>
               <div className="two-column-fields">

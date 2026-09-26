@@ -31,6 +31,7 @@ import type {
   LinkUpdate,
   ManagedElementInfo,
   PageLabelOptions,
+  PagePreflight,
   MetadataUpdate,
   NamedDestinationInfo,
   NewFormField,
@@ -926,6 +927,13 @@ export async function inspectAdvancedPdf(path: string): Promise<AdvancedPdfRepor
 
 export async function listPdfActions(path: string): Promise<PdfActionInfo[]> {
   return invoke<PdfActionInfo[]>("list_pdf_actions", { path });
+}
+
+export async function getPagePreflight(
+  documentId: string,
+  pageIndex: number,
+): Promise<PagePreflight> {
+  return invoke<PagePreflight>("get_page_preflight", { documentId, pageIndex });
 }
 
 export async function getPrintPreflight(path: string): Promise<PrintPreflightReport> {

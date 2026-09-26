@@ -203,6 +203,7 @@ import {
   startBatchSanitize,
   startBatchOverlay,
   startBatchRedactBySearch,
+  startBatchEncryptPdf,
   startDecryptPdf,
   startEncryptPdf,
   startExportPdf,
@@ -3151,6 +3152,21 @@ export default function App() {
           options.query.trim(),
           options.matchCase,
           options.wholeWord,
+        );
+      } else if (kind === "encrypt") {
+        started = await startBatchEncryptPdf(
+          inputs,
+          outputDirectory,
+          options.userPassword,
+          options.ownerPassword,
+          {
+            print: "full",
+            allowExtract: true,
+            allowModify: true,
+            allowAnnotations: true,
+            allowForms: true,
+            allowAssembly: true,
+          },
         );
       } else {
         const overlayKind =

@@ -11,6 +11,7 @@ import type {
   NormalizedRect,
   PagePreflight,
   DocumentSummary,
+  ExternalFileStatus,
   RenderResult,
   SearchHit,
   ToolId,
@@ -66,6 +67,8 @@ interface WorkspaceProps {
   onAdvancedSearch: (options: AdvancedSearchOptions) => void;
   onTool: (tool: ToolId) => void;
   onSettings: () => void;
+  externalFileStatus: ExternalFileStatus | null;
+  onReloadExternal: () => void;
   protectedView: boolean;
   protectedReasons: string[];
   onTrustOnce: () => void;
@@ -125,6 +128,8 @@ export function DocumentWorkspace({
   onAdvancedSearch,
   onTool,
   onSettings,
+  externalFileStatus,
+  onReloadExternal,
   protectedView,
   protectedReasons,
   onTrustOnce,
@@ -843,6 +848,24 @@ export function DocumentWorkspace({
       </nav>
 
       <div className="workspace-body">
+        {externalFileStatus?.changed && (
+          <div className={externalFileStatus.exists ? "external-change-banner" : "external-change-banner danger"}>
+            <SevenIcon name={externalFileStatus.exists ? "history" : "warning"} />
+            <div>
+              <strong>{externalFileStatus.exists ? "Arquivo alterado fora do Seven Reader" : "Arquivo original não está mais no disco"}</strong>
+              <span>
+                {document.dirty
+                  ? "Há alterações locais não salvas. Use Salvar como para preservar esta versão antes de recarregar."
+                  : externalFileStatus.exists
+                    ? "Recarregue para visualizar a versão atual do disco antes de continuar editando."
+                    : "O arquivo pode ter sido movido, renomeado ou excluído."}
+              </span>
+            </div>
+            {externalFileStatus.exists && (
+              <button disabled={document.dirty} onClick={onReloadExternal}>Recarregar do disco</button>
+            )}
+          </div>
+        )}
         {protectedView && <ProtectedViewBanner reasons={protectedReasons} onTrustOnce={onTrustOnce} onTrustLocation={onTrustLocation} />}
         <aside className="side-rail">
           {sidePanels.map((panel) => (

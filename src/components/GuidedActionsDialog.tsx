@@ -12,7 +12,8 @@ export type GuidedActionKind =
   | "header"
   | "footer"
   | "bates"
-  | "redact";
+  | "redact"
+  | "encrypt";
 
 export interface GuidedActionRunOptions {
   text: string;
@@ -23,6 +24,8 @@ export interface GuidedActionRunOptions {
   digits: number;
   matchCase: boolean;
   wholeWord: boolean;
+  userPassword: string;
+  ownerPassword: string;
   sanitize: {
     removeJavascript: boolean;
     removeOpenActions: boolean;
@@ -60,6 +63,7 @@ const defaults: GuidedActionPreset[] = [
   { id: "footer-batch", name: "Rodapé em lote", kind: "footer" },
   { id: "bates-batch", name: "Numeração Bates em lote", kind: "bates" },
   { id: "redact-batch", name: "Redação por busca", kind: "redact" },
+  { id: "encrypt-batch", name: "Proteger com senha AES-256", kind: "encrypt" },
 ];
 
 function loadPresets(): GuidedActionPreset[] {
@@ -94,6 +98,8 @@ export function GuidedActionsDialog({ onClose, onRun }: GuidedActionsDialogProps
   const [digits, setDigits] = useState(6);
   const [matchCase, setMatchCase] = useState(false);
   const [wholeWord, setWholeWord] = useState(false);
+  const [userPassword, setUserPassword] = useState("");
+  const [ownerPassword, setOwnerPassword] = useState("");
   const [sanitize, setSanitize] = useState<GuidedActionRunOptions["sanitize"]>({
     removeJavascript: true,
     removeOpenActions: true,
@@ -121,6 +127,8 @@ export function GuidedActionsDialog({ onClose, onRun }: GuidedActionsDialogProps
     digits,
     matchCase,
     wholeWord,
+    userPassword,
+    ownerPassword,
     sanitize,
   };
 
@@ -130,7 +138,8 @@ export function GuidedActionsDialog({ onClose, onRun }: GuidedActionsDialogProps
   const configurationValid =
     (!requiresText || text.trim().length > 0)
     && (!requiresQuery || query.trim().length > 0)
-    && (current?.kind !== "sanitize" || sanitizeHasSelection);
+    && (current?.kind !== "sanitize" || sanitizeHasSelection)
+    && (current?.kind !== "encrypt" || (userPassword.length > 0 && ownerPassword.length > 0));
 
   const chooseInputs = async () => {
     if (!current) return;
@@ -193,7 +202,7 @@ export function GuidedActionsDialog({ onClose, onRun }: GuidedActionsDialogProps
               {presets.map((preset) => (
                 <div className={selected === preset.id ? "guided-preset active" : "guided-preset"} key={preset.id}>
                   <button onClick={() => { setSelected(preset.id); setInputs([]); }}>
-                    <SevenIcon name={preset.kind === "ocr" ? "ocr" : preset.kind === "optimize" ? "compress" : preset.kind === "convert" ? "convert" : preset.kind === "redact" ? "redact" : preset.kind === "sanitize" || preset.kind === "metadata" ? "shield" : "edit"} />
+                    <SevenIcon name={preset.kind === "ocr" ? "ocr" : preset.kind === "optimize" ? "compress" : preset.kind === "convert" ? "convert" : preset.kind === "redact" ? "redact" : preset.kind === "sanitize" || preset.kind === "metadata" || preset.kind === "encrypt" ? "shield" : "edit"} />
                     <span><strong>{preset.name}</strong><small>{preset.kind}</small></span>
                   </button>
                   {preset.id.startsWith("custom-") && <button className="guided-delete" onClick={() => removePreset(preset.id)}><SevenIcon name="close" /></button>}
@@ -205,7 +214,7 @@ export function GuidedActionsDialog({ onClose, onRun }: GuidedActionsDialogProps
               {current && (
                 <>
                   <div className="guided-summary">
-                    <SevenIcon name={current.kind === "ocr" ? "ocr" : current.kind === "optimize" ? "compress" : current.kind === "convert" ? "convert" : current.kind === "redact" ? "redact" : current.kind === "sanitize" || current.kind === "metadata" ? "shield" : "edit"} />
+                    <SevenIcon name={current.kind === "ocr" ? "ocr" : current.kind === "optimize" ? "compress" : current.kind === "convert" ? "convert" : current.kind === "redact" ? "redact" : current.kind === "sanitize" || current.kind === "metadata" || current.kind === "encrypt" ? "shield" : "edit"} />
                     <div><strong>{current.name}</strong><small>Processamento local · saída em nova pasta · original preservado.</small></div>
                   </div>
 
@@ -283,6 +292,16 @@ export function GuidedActionsDialog({ onClose, onRun }: GuidedActionsDialogProps
                     <div className="organizer-note"><SevenIcon name="shield" /><span>Remove metadados estruturais e informações do documento, preservando o conteúdo visível.</span></div>
                   )}
 
+                  {current.kind === "encrypt" && (
+                    <section className="guided-options-box">
+                      <div className="two-column-fields">
+                        <label className="workflow-field"><span>Senha de abertura</span><input type="password" autoComplete="new-password" value={userPassword} onChange={(event) => setUserPassword(event.target.value)} /></label>
+                        <label className="workflow-field"><span>Senha de proprietário</span><input type="password" autoComplete="new-password" value={ownerPassword} onChange={(event) => setOwnerPassword(event.target.value)} /></label>
+                      </div>
+                      <div className="organizer-note"><SevenIcon name="lock" /><span>AES-256 via qpdf. O lote preserva permissões completas por padrão; as senhas não são salvas no preset.</span></div>
+                    </section>
+                  )}
+
                   <button className="primary-button workflow-submit" disabled={!inputs.length || !outputDirectory || !configurationValid} onClick={() => onRun(current.kind, inputs, outputDirectory, runOptions)}>
                     <SevenIcon name="automation" /> Executar ação
                   </button>
@@ -305,6 +324,7 @@ export function GuidedActionsDialog({ onClose, onRun }: GuidedActionsDialogProps
               <option value="footer">Rodapé</option>
               <option value="bates">Bates</option>
               <option value="redact">Redação por busca</option>
+              <option value="encrypt">Proteger com senha AES-256</option>
             </select>
             <button className="secondary-light-button" disabled={!newName.trim()} onClick={addPreset}><SevenIcon name="create" /> Adicionar</button>
           </div>

@@ -247,6 +247,35 @@ export interface AnnotationInput {
   height: number;
 }
 
+export interface MeasurementInput {
+  pageIndex: number;
+  kind: "distance" | "perimeter" | "area";
+  points: Array<[number, number]>;
+  pointsPerUnit: number;
+  unit: string;
+  label: string;
+  comment: string;
+  author: string;
+  lineWidth: number;
+}
+
+export interface MeasurementInfo {
+  objectId: string;
+  pageIndex: number;
+  kind: "distance" | "perimeter" | "area" | string;
+  value: number;
+  unit: string;
+  label: string;
+  comment: string;
+  author: string;
+  points: Array<[number, number]>;
+}
+
+export interface SessionMeasurementResult {
+  document: DocumentSummary;
+  value: number;
+}
+
 export interface StampInput {
   pageIndex: number;
   name: string;
@@ -845,4 +874,4 @@ export type ToolId =
   | "sanitize" | "properties" | "export" | "bookmarks" | "attachments"
   | "redact" | "compare" | "optimize" | "accessibility" | "print-production"
   | "automation" | "javascript" | "portfolio" | "layers" | "articles"
-  | "catalog" | "rich-media" | "three-d" | "shared-review" | "geospatial";
+  | "catalog" | "rich-media" | "three-d" | "shared-review" | "geospatial" | "measure";

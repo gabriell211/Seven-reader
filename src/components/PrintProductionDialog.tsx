@@ -230,7 +230,7 @@ export function PrintProductionDialog({
   const [showOnlyFailures, setShowOnlyFailures] = useState(true);
   const [customProfileName, setCustomProfileName] = useState("");
 
-  useEffect(() => { onReload(); }, [onReload]);
+  useEffect(() => { onReload(); }, []);
 
   const profiles = useMemo(() => [...builtInProfiles, ...customProfiles], [customProfiles]);
   const activeProfile = profiles.find((profile) => profile.id === profileId) ?? builtInProfiles[0];

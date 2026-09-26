@@ -641,21 +641,21 @@ Não converter o documento inteiro em imagens para simular edição.
 
 ## Texto
 
-- [ ] Adicionar texto
-- [ ] Alterar texto existente
-- [ ] Substituir texto
-- [ ] Excluir texto
+- [x] Adicionar texto
+- [x] Alterar texto existente
+- [x] Substituir texto
+- [x] Excluir texto
 - [ ] Fonte
-- [ ] Tamanho
-- [ ] Cor
+- [x] Tamanho
+- [x] Cor
 - [ ] Negrito
 - [ ] Itálico
 - [ ] Sublinhado quando aplicável
 - [ ] Espaçamento
 - [ ] Alinhamento
-- [ ] Rotação
-- [ ] Reposicionamento
-- [ ] Redimensionamento da caixa
+- [x] Rotação
+- [x] Reposicionamento
+- [x] Redimensionamento da caixa
 - [ ] Reflow dentro da caixa
 - [ ] Listas com marcadores
 - [ ] Listas numeradas
@@ -667,16 +667,16 @@ Não converter o documento inteiro em imagens para simular edição.
 
 ## Imagens
 
-- [ ] Adicionar
-- [ ] Substituir
-- [ ] Excluir
-- [ ] Recortar
-- [ ] Redimensionar
-- [ ] Girar
-- [ ] Espelhar
-- [ ] Reposicionar
-- [ ] Opacidade
-- [ ] Manter proporção
+- [x] Adicionar
+- [x] Substituir
+- [x] Excluir
+- [x] Recortar
+- [x] Redimensionar
+- [x] Girar
+- [x] Espelhar
+- [x] Reposicionar
+- [x] Opacidade
+- [x] Manter proporção
 - [ ] Editar em aplicativo externo opcional
 - [ ] Reimportar edição externa
 
@@ -697,77 +697,77 @@ Não converter o documento inteiro em imagens para simular edição.
 
 ## Links e destinos
 
-- [ ] Criar link para URL
-- [ ] Criar link para página
-- [ ] Criar link para arquivo
-- [ ] Criar destino nomeado
-- [ ] Editar destino
-- [ ] Remover destino
-- [ ] Alterar área clicável
-- [ ] Alterar aparência
-- [ ] Mover área
-- [ ] Redimensionar área
-- [ ] Validar URL
-- [ ] Confirmar links externos conforme política de segurança
+- [x] Criar link para URL
+- [x] Criar link para página
+- [x] Criar link para arquivo
+- [x] Criar destino nomeado
+- [x] Editar destino
+- [x] Remover destino
+- [x] Alterar área clicável
+- [x] Alterar aparência
+- [x] Mover área
+- [x] Redimensionar área
+- [x] Validar URL
+- [x] Confirmar links externos conforme política de segurança
 
 ## Cabeçalho e rodapé
 
-- [ ] Adicionar
-- [ ] Atualizar
-- [ ] Remover
-- [ ] Texto
-- [ ] Data
-- [ ] Página
-- [ ] Total de páginas
-- [ ] Margens
-- [ ] Intervalo
-- [ ] Páginas pares/ímpares
+- [x] Adicionar
+- [x] Atualizar
+- [x] Remover
+- [x] Texto
+- [x] Data
+- [x] Página
+- [x] Total de páginas
+- [x] Margens
+- [x] Intervalo
+- [x] Páginas pares/ímpares
 - [ ] Preview
 
 ## Numeração de página
 
-- [ ] Número visual
-- [ ] Renumerar labels de páginas
-- [ ] Prefixo
-- [ ] Sufixo
-- [ ] Numeração romana
-- [ ] Intervalos
+- [x] Número visual
+- [x] Renumerar labels de páginas
+- [x] Prefixo
+- [x] Sufixo
+- [x] Numeração romana
+- [x] Intervalos
 
 ## Marca d'água
 
-- [ ] Texto
-- [ ] Imagem
-- [ ] Rotação
-- [ ] Escala
-- [ ] Opacidade
-- [ ] Posição
-- [ ] Intervalo de páginas
-- [ ] Adicionar
-- [ ] Atualizar
-- [ ] Remover
+- [x] Texto
+- [x] Imagem
+- [x] Rotação
+- [x] Escala
+- [x] Opacidade
+- [x] Posição
+- [x] Intervalo de páginas
+- [x] Adicionar
+- [x] Atualizar
+- [x] Remover
 
 ## Plano de fundo
 
-- [ ] Cor
-- [ ] Imagem
-- [ ] Opacidade
-- [ ] Escala
-- [ ] Posição
-- [ ] Intervalo
-- [ ] Adicionar
-- [ ] Atualizar
-- [ ] Remover
+- [x] Cor
+- [x] Imagem
+- [x] Opacidade
+- [x] Escala
+- [x] Posição
+- [x] Intervalo
+- [x] Adicionar
+- [x] Atualizar
+- [x] Remover
 
 ## Numeração Bates
 
-- [ ] Adicionar
-- [ ] Prefixo
-- [ ] Sufixo
-- [ ] Dígitos
-- [ ] Número inicial
+- [x] Adicionar
+- [x] Prefixo
+- [x] Sufixo
+- [x] Dígitos
+- [x] Número inicial
 - [ ] Aplicar em lote
 - [ ] Adicionar ao nome do arquivo
-- [ ] Remover
+- [x] Remover
 - [ ] Pesquisar por número Bates
 
 ---

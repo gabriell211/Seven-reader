@@ -2317,25 +2317,25 @@ Módulo de colaboração sem IA. Pode utilizar backend configurável e deve perm
 
 ## Diálogo principal
 
-- [ ] Impressora
-- [ ] Cópias
-- [ ] Intervalo
-- [ ] Página atual
-- [ ] Seleção
-- [ ] Páginas ímpares
-- [ ] Páginas pares
-- [ ] Reverse
-- [ ] Ajustar
-- [ ] Tamanho real
+- [x] Impressora
+- [x] Cópias
+- [x] Intervalo
+- [x] Página atual
+- [x] Seleção
+- [x] Páginas ímpares
+- [x] Páginas pares
+- [x] Reverse
+- [x] Ajustar
+- [x] Tamanho real
 - [ ] Shrink oversized
 - [ ] Escala customizada
 - [ ] Centralizar
-- [ ] Auto rotate
-- [ ] Orientação
-- [ ] Páginas por folha
-- [ ] Ordem
-- [ ] Duplex
-- [ ] Duplex manual
+- [x] Auto rotate
+- [x] Orientação
+- [x] Páginas por folha
+- [x] Ordem
+- [x] Duplex
+- [x] Duplex manual
 - [ ] Booklet
 - [ ] Poster/Tiling
 - [ ] Large format
@@ -2343,26 +2343,26 @@ Módulo de colaboração sem IA. Pode utilizar backend configurável e deve perm
 - [ ] Marked pages
 - [ ] Custom page size
 - [ ] Tray quando driver permitir
-- [ ] Color
-- [ ] Grayscale
-- [ ] Print as image
-- [ ] Preview
+- [x] Color
+- [x] Grayscale
+- [x] Print as image
+- [x] Preview
 
 ## Comentários e formulários
 
-- [ ] Documento
-- [ ] Documento e marcações
-- [ ] Documento e carimbos
+- [x] Documento
+- [x] Documento e marcações
+- [x] Documento e carimbos
 - [ ] Somente campos
 - [ ] Resumo de comentários
 
 ## Presets de impressão
 
-- [ ] Criar
-- [ ] Salvar
-- [ ] Editar
-- [ ] Excluir
-- [ ] Aplicar
+- [x] Criar
+- [x] Salvar
+- [x] Editar
+- [x] Excluir
+- [x] Aplicar
 
 ---
 
@@ -2408,16 +2408,16 @@ A ferramenta deve reproduzir o fluxo completo de **Use print production**, com c
 
 ## Set Page Boxes
 
-- [ ] MediaBox
-- [ ] CropBox
-- [ ] BleedBox
-- [ ] TrimBox
+- [x] MediaBox
+- [x] CropBox
+- [x] BleedBox
+- [x] TrimBox
 - [ ] ArtBox
-- [ ] Margens numéricas
+- [x] Margens numéricas
 - [ ] Preview
-- [ ] Página atual
-- [ ] Intervalo
-- [ ] Todas as páginas
+- [x] Página atual
+- [x] Intervalo
+- [x] Todas as páginas
 
 ## Add Printer Marks
 
@@ -2465,22 +2465,22 @@ A ferramenta deve reproduzir o fluxo completo de **Use print production**, com c
 
 ## Preflight
 
-- [ ] Perfis de verificação
-- [ ] Centenas de checks
-- [ ] Detectar problemas
+- [x] Perfis de verificação
+- [x] Centenas de checks
+- [x] Detectar problemas
 - [ ] Fixups automáticos quando seguros
-- [ ] PDF/A validation
+- [x] PDF/A validation
 - [ ] PDF/X validation
 - [ ] PDF/E validation quando aplicável
-- [ ] Relatório
-- [ ] Preset customizado
-- [ ] Mais de um conjunto/biblioteca de perfis
-- [ ] Checks
+- [x] Relatório
+- [x] Preset customizado
+- [x] Mais de um conjunto/biblioteca de perfis
+- [x] Checks
 - [ ] Fixups
-- [ ] Inspeções avançadas
-- [ ] Resultados por objeto
+- [x] Inspeções avançadas
+- [x] Resultados por objeto
 - [ ] Resultados por recurso
-- [ ] Output intents
+- [x] Output intents
 - [ ] Correção de problemas selecionados
 - [ ] Preflight actions
 - [ ] Droplet/automação equivalente

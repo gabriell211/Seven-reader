@@ -151,7 +151,7 @@ export interface JobStart {
 export interface JobStatus {
   id: string;
   kind: string;
-  state: "queued" | "running" | "completed" | "failed" | "cancelled";
+  state: "queued" | "running" | "paused" | "completed" | "failed" | "cancelled";
   stage: string;
   progress?: number;
   output?: string;

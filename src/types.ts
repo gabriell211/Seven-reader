@@ -76,6 +76,11 @@ export interface SearchHit {
   occurrences: number;
 }
 
+export interface SearchOccurrence {
+  pageIndex: number;
+  rects: NormalizedRect[];
+}
+
 export interface NormalizedRect {
   x: number;
   y: number;

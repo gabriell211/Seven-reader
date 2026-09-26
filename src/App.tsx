@@ -104,6 +104,7 @@ import {
   applyRedactions,
   detectOcrLanguage,
   reviewOcrPage,
+  analyzeSanitization,
   sanitizeDocument,
   scanPageImage,
   deleteScanPages,
@@ -295,6 +296,7 @@ import type {
   RedactionArea,
   ReviewTransferReport,
   RenderResult,
+  SanitizeAnalysis,
   SanitizeOptions,
   SearchHit,
   SearchOccurrence,
@@ -425,6 +427,8 @@ export default function App() {
   const [watchFolders, setWatchFolders] = useState<WatchFolderConfig[]>([]);
   const [watchFolderEvents, setWatchFolderEvents] = useState<WatchFolderEvent[]>([]);
   const [securityMode, setSecurityMode] = useState<"protect" | "sanitize" | null>(null);
+  const [sanitizeAnalysis, setSanitizeAnalysis] = useState<SanitizeAnalysis | null>(null);
+  const [sanitizeAnalysisLoading, setSanitizeAnalysisLoading] = useState(false);
   const [propertiesOpen, setPropertiesOpen] = useState(false);
   const [reportMode, setReportMode] = useState<"compare" | "accessibility" | null>(null);
   const [metadata, setMetadata] = useState<DocumentMetadata | null>(null);
@@ -3681,6 +3685,19 @@ export default function App() {
     }
   };
 
+  const loadSanitizeAnalysis = async () => {
+    if (!document) return;
+    try {
+      setSanitizeAnalysisLoading(true);
+      setSanitizeAnalysis(await analyzeSanitization(document.activePath));
+    } catch (error) {
+      setSanitizeAnalysis(null);
+      setNotice(errorMessage(error));
+    } finally {
+      setSanitizeAnalysisLoading(false);
+    }
+  };
+
   const runSanitize = async (output: string, options: SanitizeOptions) => {
     if (!document) return;
     try {
@@ -4152,6 +4169,9 @@ export default function App() {
           mode={securityMode}
           currentPdf={document.activePath}
           onClose={() => setSecurityMode(null)}
+          sanitizeAnalysis={sanitizeAnalysis}
+          sanitizeAnalysisLoading={sanitizeAnalysisLoading}
+          onAnalyzeSanitization={() => void loadSanitizeAnalysis()}
           onEncrypt={(output, userPassword, ownerPassword, options) => void runEncrypt(output, userPassword, ownerPassword, options)}
           onDecrypt={(output, password) => void runDecrypt(output, password)}
           onSanitize={(output, options) => void runSanitize(output, options)}

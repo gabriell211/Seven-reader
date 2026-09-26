@@ -50,6 +50,7 @@ pub fn run() {
             commands::restore_document_session,
             commands::close_document,
             commands::render_page,
+            commands::render_pages,
             commands::search_document,
             commands::search_document_advanced,
             commands::extract_text_in_rect,

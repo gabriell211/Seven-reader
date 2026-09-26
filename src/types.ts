@@ -947,6 +947,26 @@ export interface PrintOptions {
   printForms: boolean;
 }
 
+export interface IsoValidationFailure {
+  specification: string;
+  clause: string;
+  testNumber: string;
+  description: string;
+  object: string;
+  failedChecks: number;
+}
+
+export interface IsoValidationReport {
+  profileName: string;
+  statement: string;
+  compliant: boolean;
+  passedRules: number;
+  failedRules: number;
+  passedChecks: number;
+  failedChecks: number;
+  failures: IsoValidationFailure[];
+}
+
 export interface PrintPreflightReport {
   pdfVersion: string;
   pageCount: number;

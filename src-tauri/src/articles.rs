@@ -10,6 +10,7 @@ pub struct ArticleBoxInfo {
     pub index: usize,
     pub page_index: usize,
     pub rect: [f64; 4],
+    pub normalized_rect: NormalizedRect,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -128,6 +129,28 @@ fn page_index_for_id(document: &Document, page_id: ObjectId) -> Option<usize> {
         .position(|candidate| *candidate == page_id)
 }
 
+fn pdf_to_normalized_rect(
+    document: &Document,
+    page_id: ObjectId,
+    rect: [f64; 4],
+) -> NormalizedRect {
+    let page_box = inherited_box(document, page_id, b"CropBox")
+        .or_else(|| inherited_box(document, page_id, b"MediaBox"))
+        .unwrap_or([0.0, 0.0, 612.0, 792.0]);
+    let width = (page_box[2] - page_box[0]).abs().max(1.0);
+    let height = (page_box[3] - page_box[1]).abs().max(1.0);
+    let x = ((rect[0] - page_box[0]) / width).clamp(0.0, 1.0);
+    let top = ((page_box[3] - rect[3]) / height).clamp(0.0, 1.0);
+    let rect_width = ((rect[2] - rect[0]).abs() / width).clamp(0.0, 1.0 - x);
+    let rect_height = ((rect[3] - rect[1]).abs() / height).clamp(0.0, 1.0 - top);
+    NormalizedRect {
+        x: x as f32,
+        y: top as f32,
+        width: rect_width as f32,
+        height: rect_height as f32,
+    }
+}
+
 fn bead_rect(dictionary: &Dictionary) -> Option<[f64; 4]> {
     let values = dictionary.get(b"R").ok()?.as_array().ok()?;
     if values.len() < 4 { return None; }
@@ -180,6 +203,7 @@ pub fn list_articles(path: &Path) -> Result<Vec<ArticleInfo>, SevenError> {
                 index,
                 page_index,
                 rect,
+                normalized_rect: pdf_to_normalized_rect(&document, page_id, rect),
             });
         }
 

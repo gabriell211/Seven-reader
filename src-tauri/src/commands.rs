@@ -413,6 +413,30 @@ pub fn measure_geospatial(
 }
 
 #[tauri::command]
+pub fn start_watch_folder(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    config: watch_folder::WatchFolderConfig,
+) -> CommandResult<watch_folder::WatchFolderConfig> {
+    watch_folder::start(app, &state, config).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn stop_watch_folder(
+    state: State<'_, AppState>,
+    id: String,
+) -> CommandResult<()> {
+    watch_folder::stop(&state, &id).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn list_watch_folders(
+    state: State<'_, AppState>,
+) -> CommandResult<Vec<watch_folder::WatchFolderConfig>> {
+    Ok(watch_folder::list(&state))
+}
+
+#[tauri::command]
 pub fn get_capabilities(state: State<'_, AppState>) -> capabilities::Capabilities {
     capabilities::detect(&state)
 }

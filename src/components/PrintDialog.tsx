@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import type { NormalizedRect, PrinterInfo, PrintOptions } from "../types";
 import { SevenIcon } from "./SevenIcon";
+import { nativeAssetUrl } from "../lib/native";
 
 interface PrintDialogProps {
   fileName: string;
   currentPage: number;
   pageCount: number;
   selection?: NormalizedRect;
+  previewPath?: string;
   printers: PrinterInfo[];
   loading: boolean;
   advancedAvailable: boolean;
@@ -44,6 +46,7 @@ export function PrintDialog({
   currentPage,
   pageCount,
   selection,
+  previewPath,
   printers,
   loading,
   advancedAvailable,
@@ -71,8 +74,21 @@ export function PrintDialog({
   const [rasterDpi, setRasterDpi] = useState(300);
   const [printAnnotations, setPrintAnnotations] = useState(true);
   const [printForms, setPrintForms] = useState(true);
+  const [presetName, setPresetName] = useState("");
+  const [presets, setPresets] = useState<Array<{ name: string; options: PrintOptions }>>(() => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem("seven-reader:print-presets:v1") ?? "[]");
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
 
   useEffect(() => { onReload(); }, []);
+  useEffect(() => {
+    localStorage.setItem("seven-reader:print-presets:v1", JSON.stringify(presets));
+  }, [presets]);
+
   useEffect(() => {
     if (printer || !printers.length) return;
     setPrinter(printers.find((item) => item.isDefault)?.name ?? printers[0].name);
@@ -97,29 +113,63 @@ export function PrintDialog({
     && (pageMode !== "selection" || Boolean(selection))
     && (!needsQpdf || pageMode === "selection" || qpdfAvailable);
 
+  const currentOptions = (): PrintOptions => ({
+    printer: printer || undefined,
+    copies,
+    pageMode,
+    currentPage,
+    pageRange,
+    selectionRect: pageMode === "selection" ? selection : undefined,
+    pageSet,
+    reverse,
+    duplex,
+    manualPass,
+    nUp,
+    nUpLayout,
+    orientation,
+    paperSize,
+    scaling,
+    colorMode,
+    printAsImage,
+    rasterDpi,
+    printAnnotations,
+    printForms,
+  });
+
+  const applyPreset = (options: PrintOptions) => {
+    setPrinter(options.printer ?? printer);
+    setCopies(options.copies);
+    setPageMode(options.pageMode === "selection" && !selection ? "current" : options.pageMode);
+    setPageRange(options.pageRange);
+    setPageSet(options.pageSet);
+    setReverse(options.reverse);
+    setDuplex(options.duplex);
+    setManualPass(options.manualPass);
+    setNUp(options.nUp);
+    setNUpLayout(options.nUpLayout);
+    setOrientation(options.orientation);
+    setPaperSize(options.paperSize);
+    setScaling(options.scaling);
+    setColorMode(options.colorMode);
+    setPrintAsImage(options.printAsImage);
+    setRasterDpi(options.rasterDpi);
+    setPrintAnnotations(options.printAnnotations);
+    setPrintForms(options.printForms);
+  };
+
+  const savePreset = () => {
+    const name = presetName.trim();
+    if (!name) return;
+    const options = currentOptions();
+    setPresets((current) => [
+      ...current.filter((preset) => preset.name.toLocaleLowerCase() !== name.toLocaleLowerCase()),
+      { name, options: { ...options, currentPage: 0, selectionRect: undefined } },
+    ]);
+    setPresetName("");
+  };
+
   const submit = () => {
-    onPrint({
-      printer: printer || undefined,
-      copies,
-      pageMode,
-      currentPage,
-      pageRange,
-      selectionRect: pageMode === "selection" ? selection : undefined,
-      pageSet,
-      reverse,
-      duplex,
-      manualPass,
-      nUp,
-      nUpLayout,
-      orientation,
-      paperSize,
-      scaling,
-      colorMode,
-      printAsImage,
-      rasterDpi,
-      printAnnotations,
-      printForms,
-    });
+    onPrint(currentOptions());
   };
 
   return (
@@ -136,10 +186,25 @@ export function PrintDialog({
 
         <div className="print-dialog-layout">
           <aside className="print-summary">
-            <div className="print-preview-sheet">
-              <SevenIcon name="pages" />
-              <strong>{pages.length || 0}</strong>
-              <span>{pages.length === 1 ? "página" : "páginas"}</span>
+            <div className={previewPath ? "print-preview-sheet has-page" : "print-preview-sheet"}>
+              {previewPath ? (
+                <div className="print-page-preview">
+                  <img src={nativeAssetUrl(previewPath)} alt={`Preview da página ${currentPage + 1}`} />
+                  {pageMode === "selection" && selection && (
+                    <span
+                      className="print-preview-selection"
+                      style={{
+                        left: `${selection.x * 100}%`,
+                        top: `${selection.y * 100}%`,
+                        width: `${selection.width * 100}%`,
+                        height: `${selection.height * 100}%`,
+                      }}
+                    />
+                  )}
+                </div>
+              ) : (
+                <><SevenIcon name="pages" /><strong>{pages.length || 0}</strong><span>{pages.length === 1 ? "página" : "páginas"}</span></>
+              )}
             </div>
             <div className="print-summary-data">
               <div><span>Documento</span><strong>{pageCount} páginas</strong></div>
@@ -157,6 +222,22 @@ export function PrintDialog({
           </aside>
 
           <main className="print-options">
+            <section className="print-section print-presets-section">
+              <div className="section-mini-title">Presets de impressão</div>
+              <div className="print-preset-list">
+                {presets.map((preset) => (
+                  <div key={preset.name}>
+                    <button onClick={() => applyPreset(preset.options)}><strong>{preset.name}</strong><small>Aplicar</small></button>
+                    <button title="Atualizar com a configuração atual" onClick={() => setPresets((current) => current.map((item) => item.name === preset.name ? { ...item, options: { ...currentOptions(), currentPage: 0, selectionRect: undefined } } : item))}><SevenIcon name="save" /></button>
+                    <button className="danger" title="Excluir preset" onClick={() => setPresets((current) => current.filter((item) => item.name !== preset.name))}><SevenIcon name="close" /></button>
+                  </div>
+                ))}
+              </div>
+              <div className="print-preset-create">
+                <input value={presetName} onChange={(event) => setPresetName(event.target.value)} placeholder="Nome do novo preset" />
+                <button className="secondary-light-button" disabled={!presetName.trim()} onClick={savePreset}><SevenIcon name="create" /> Salvar preset</button>
+              </div>
+            </section>
             <section className="print-section">
               <div className="section-mini-title">Impressora</div>
               <div className="two-column-fields">

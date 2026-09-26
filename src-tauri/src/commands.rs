@@ -3567,6 +3567,48 @@ pub fn session_set_page_boxes(
 }
 
 #[tauri::command]
+pub fn list_pdf_page_actions(path: String) -> CommandResult<Vec<advanced::PageActionInfo>> {
+    let input = pdf::validate_pdf_path(&path).map_err(ErrorPayload::from)?;
+    advanced::list_page_actions(&input).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_set_pdf_page_action(
+    state: State<'_, AppState>,
+    document_id: String,
+    request: advanced::PageActionInput,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "page-action", move |input, output| {
+        advanced::set_page_action(input, output, request)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn session_remove_pdf_page_action(
+    state: State<'_, AppState>,
+    document_id: String,
+    page_index: usize,
+    trigger: String,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "remove-page-action", move |input, output| {
+        advanced::remove_page_action(input, output, page_index, &trigger)
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
+pub fn resolve_pdf_action(
+    path: String,
+    object_id: String,
+) -> CommandResult<advanced::ActionExecution> {
+    let input = pdf::validate_pdf_path(&path).map_err(ErrorPayload::from)?;
+    advanced::resolve_action(&input, &object_id).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn list_pdf_actions(path: String) -> CommandResult<Vec<advanced::PdfActionInfo>> {
     let input = pdf::validate_pdf_path(&path).map_err(ErrorPayload::from)?;
     advanced::list_actions(&input).map_err(ErrorPayload::from)

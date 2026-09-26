@@ -1,5 +1,5 @@
 use crate::error::SevenError;
-use lopdf::{dictionary, Dictionary, Document, Object, ObjectId, Stream};
+use lopdf::{content::{Content, Operation}, dictionary, Dictionary, Document, Object, ObjectId, Stream};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{collections::{HashMap, HashSet}, fs, path::{Path, PathBuf}};
@@ -1689,12 +1689,12 @@ fn ensure_oc_config_ids(document: &mut Document) -> Result<(ObjectId, ObjectId),
         .as_dict()
         .map_err(|error| SevenError::Operation(error.to_string()))?
         .get(b"OCProperties")
-        .map_err(|_| SevenError::OperationRejected("Documento sem OCGs".into()))?
-        .clone();
+        .ok()
+        .cloned();
 
     let oc_id = match existing_oc {
-        Object::Reference(id) => id,
-        Object::Dictionary(dictionary) => {
+        Some(Object::Reference(id)) => id,
+        Some(Object::Dictionary(dictionary)) => {
             let id = document.add_object(dictionary);
             document
                 .get_object_mut(root_id)
@@ -1704,7 +1704,24 @@ fn ensure_oc_config_ids(document: &mut Document) -> Result<(ObjectId, ObjectId),
                 .set("OCProperties", id);
             id
         }
-        _ => return Err(SevenError::Operation("OCProperties inválido".into())),
+        Some(_) => return Err(SevenError::Operation("OCProperties inválido".into())),
+        None => {
+            let default_id = document.add_object(dictionary! {
+                "BaseState" => "ON",
+                "Order" => Vec::<Object>::new(),
+            });
+            let oc_id = document.add_object(dictionary! {
+                "OCGs" => Vec::<Object>::new(),
+                "D" => default_id,
+            });
+            document
+                .get_object_mut(root_id)
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .as_dict_mut()
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .set("OCProperties", oc_id);
+            return Ok((oc_id, default_id));
+        }
     };
 
     let existing_default = document
@@ -1772,6 +1789,454 @@ fn set_usage_state(
         usage.set(category_key, category);
     }
     Ok(())
+}
+
+
+fn inherited_resources(document: &Document, mut page_id: ObjectId) -> Dictionary {
+    for _ in 0..64 {
+        let Ok(page) = document.get_object(page_id).and_then(Object::as_dict) else { break };
+        if let Ok(resources) = page.get(b"Resources") {
+            match resources {
+                Object::Dictionary(dictionary) => return dictionary.clone(),
+                Object::Reference(id) => {
+                    if let Ok(dictionary) = document.get_object(*id).and_then(Object::as_dict) {
+                        return dictionary.clone();
+                    }
+                }
+                _ => {}
+            }
+        }
+        let Ok(parent) = page.get(b"Parent").and_then(Object::as_reference) else { break };
+        page_id = parent;
+    }
+    Dictionary::new()
+}
+
+fn resolved_subdictionary(document: &Document, dictionary: &Dictionary, key: &[u8]) -> Dictionary {
+    match dictionary.get(key) {
+        Ok(Object::Dictionary(value)) => value.clone(),
+        Ok(Object::Reference(id)) => document
+            .get_object(*id)
+            .ok()
+            .and_then(|object| object.as_dict().ok())
+            .cloned()
+            .unwrap_or_default(),
+        _ => Dictionary::new(),
+    }
+}
+
+fn append_page_stream(
+    document: &mut Document,
+    page_id: ObjectId,
+    content: Content,
+) -> Result<(), SevenError> {
+    let bytes = content
+        .encode()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    let new_id = document.add_object(Stream::new(Dictionary::new(), bytes));
+    let existing = document
+        .get_object(page_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .get(b"Contents")
+        .ok()
+        .cloned();
+
+    let replacement = match existing {
+        None => Object::Reference(new_id),
+        Some(Object::Reference(id)) => Object::Array(vec![Object::Reference(id), Object::Reference(new_id)]),
+        Some(Object::Array(mut values)) => {
+            values.push(Object::Reference(new_id));
+            Object::Array(values)
+        }
+        Some(Object::Stream(stream)) => {
+            let old_id = document.add_object(stream);
+            Object::Array(vec![Object::Reference(old_id), Object::Reference(new_id)])
+        }
+        Some(other) => {
+            return Err(SevenError::Operation(format!(
+                "Estrutura /Contents não suportada: {other:?}"
+            )))
+        }
+    };
+
+    document
+        .get_object_mut(page_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .set("Contents", replacement);
+    Ok(())
+}
+
+pub fn import_image_as_layer(
+    input: &Path,
+    output: &Path,
+    page_index: usize,
+    image_path: &Path,
+    name: &str,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    visible: bool,
+    locked: bool,
+) -> Result<(), SevenError> {
+    let name = name.trim();
+    if name.is_empty() || name.chars().count() > 500 {
+        return Err(SevenError::OperationRejected("Nome da camada inválido".into()));
+    }
+    if !image_path.is_file() || width <= 0.0 || height <= 0.0 {
+        return Err(SevenError::OperationRejected("Imagem ou dimensões inválidas".into()));
+    }
+
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let page_id = document
+        .get_pages()
+        .get(&((page_index + 1) as u32))
+        .copied()
+        .ok_or_else(|| SevenError::OperationRejected("Página não existe".into()))?;
+    let (oc_id, default_id) = ensure_oc_config_ids(&mut document)?;
+
+    let layer_id = document.add_object(dictionary! {
+        "Type" => "OCG",
+        "Name" => Object::string_literal(name),
+        "Intent" => vec![Object::Name(b"View".to_vec()), Object::Name(b"Design".to_vec())],
+    });
+
+    {
+        let oc = document
+            .get_object_mut(oc_id)
+            .map_err(|error| SevenError::Operation(error.to_string()))?
+            .as_dict_mut()
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+        match oc.get_mut(b"OCGs") {
+            Ok(Object::Array(values)) => values.push(Object::Reference(layer_id)),
+            _ => oc.set("OCGs", vec![Object::Reference(layer_id)]),
+        }
+    }
+    {
+        let default = document
+            .get_object_mut(default_id)
+            .map_err(|error| SevenError::Operation(error.to_string()))?
+            .as_dict_mut()
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+        match default.get_mut(b"Order") {
+            Ok(Object::Array(values)) => values.push(Object::Reference(layer_id)),
+            _ => default.set("Order", vec![Object::Reference(layer_id)]),
+        }
+        set_visibility_arrays(default, layer_id, visible);
+        if locked {
+            match default.get_mut(b"Locked") {
+                Ok(Object::Array(values)) => values.push(Object::Reference(layer_id)),
+                _ => default.set("Locked", vec![Object::Reference(layer_id)]),
+            }
+        }
+    }
+
+    let image_stream = lopdf::xobject::image(image_path)
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    let image_id = document.add_object(image_stream);
+    let property_name = format!("SRLayer{}", layer_id.0);
+    let image_name = format!("SRImage{}", image_id.0);
+
+    let mut resources = inherited_resources(&document, page_id);
+    let mut properties = resolved_subdictionary(&document, &resources, b"Properties");
+    let mut xobjects = resolved_subdictionary(&document, &resources, b"XObject");
+    properties.set(property_name.as_str(), layer_id);
+    xobjects.set(image_name.as_str(), image_id);
+    resources.set("Properties", properties);
+    resources.set("XObject", xobjects);
+    document
+        .get_object_mut(page_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .set("Resources", resources);
+
+    append_page_stream(
+        &mut document,
+        page_id,
+        Content {
+            operations: vec![
+                Operation::new("BDC", vec![
+                    Object::Name(b"OC".to_vec()),
+                    Object::Name(property_name.into_bytes()),
+                ]),
+                Operation::new("q", vec![]),
+                Operation::new("cm", vec![
+                    width.into(), 0.into(), 0.into(), height.into(), x.into(), y.into(),
+                ]),
+                Operation::new("Do", vec![Object::Name(image_name.into_bytes())]),
+                Operation::new("Q", vec![]),
+                Operation::new("EMC", vec![]),
+            ],
+        },
+    )?;
+
+    atomic_save(document, output)
+}
+
+fn move_reference_in_order(value: &mut Object, target: ObjectId, direction: i32) -> bool {
+    let Object::Array(values) = value else { return false };
+    if let Some(index) = values.iter().position(|value| value.as_reference().ok() == Some(target)) {
+        let min_index = usize::from(values.first().is_some_and(|value| matches!(value, Object::String(_, _) | Object::Name(_))));
+        let new_index = if direction < 0 {
+            index.saturating_sub(1).max(min_index)
+        } else {
+            (index + 1).min(values.len().saturating_sub(1))
+        };
+        if new_index != index {
+            values.swap(index, new_index);
+        }
+        return true;
+    }
+    for child in values.iter_mut() {
+        if move_reference_in_order(child, target, direction) {
+            return true;
+        }
+    }
+    false
+}
+
+pub fn reorder_layer(
+    input: &Path,
+    output: &Path,
+    object_id: &str,
+    direction: &str,
+) -> Result<(), SevenError> {
+    let target = parse_id(object_id)?;
+    let direction = match direction {
+        "up" => -1,
+        "down" => 1,
+        _ => return Err(SevenError::OperationRejected("Direção de layer inválida".into())),
+    };
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let (_, default_id) = ensure_oc_config_ids(&mut document)?;
+    let default = document
+        .get_object_mut(default_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    let order = default
+        .get_mut(b"Order")
+        .map_err(|_| SevenError::OperationRejected("Documento não possui ordem de layers editável".into()))?;
+    if !move_reference_in_order(order, target, direction) {
+        return Err(SevenError::OperationRejected("Layer não encontrada na ordem atual".into()));
+    }
+    atomic_save(document, output)
+}
+
+fn replace_ocg_reference_in_object(object: &mut Object, source: ObjectId, target: ObjectId) {
+    match object {
+        Object::Reference(id) if *id == source => *id = target,
+        Object::Array(values) => {
+            for value in values {
+                replace_ocg_reference_in_object(value, source, target);
+            }
+        }
+        Object::Dictionary(dictionary) => {
+            for (_, value) in dictionary.iter_mut() {
+                replace_ocg_reference_in_object(value, source, target);
+            }
+        }
+        Object::Stream(stream) => {
+            for (_, value) in stream.dict.iter_mut() {
+                replace_ocg_reference_in_object(value, source, target);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn remove_reference_recursive(object: &mut Object, target: ObjectId) {
+    match object {
+        Object::Array(values) => {
+            values.retain(|value| value.as_reference().ok() != Some(target));
+            for value in values {
+                remove_reference_recursive(value, target);
+            }
+        }
+        Object::Dictionary(dictionary) => {
+            for (_, value) in dictionary.iter_mut() {
+                remove_reference_recursive(value, target);
+            }
+        }
+        Object::Stream(stream) => {
+            for (_, value) in stream.dict.iter_mut() {
+                remove_reference_recursive(value, target);
+            }
+        }
+        _ => {}
+    }
+}
+
+pub fn merge_layers(
+    input: &Path,
+    output: &Path,
+    source_id: &str,
+    target_id: &str,
+) -> Result<(), SevenError> {
+    let source = parse_id(source_id)?;
+    let target = parse_id(target_id)?;
+    if source == target {
+        return Err(SevenError::OperationRejected("Escolha duas layers diferentes".into()));
+    }
+
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let source_is_ocg = document
+        .get_object(source)
+        .ok()
+        .and_then(|object| object.as_dict().ok())
+        .and_then(|dictionary| dictionary.get(b"Type").ok())
+        .and_then(|value| value.as_name().ok())
+        == Some(b"OCG");
+    let target_is_ocg = document
+        .get_object(target)
+        .ok()
+        .and_then(|object| object.as_dict().ok())
+        .and_then(|dictionary| dictionary.get(b"Type").ok())
+        .and_then(|value| value.as_name().ok())
+        == Some(b"OCG");
+    if !source_is_ocg || !target_is_ocg {
+        return Err(SevenError::OperationRejected("Objeto de layer inválido".into()));
+    }
+
+    for object in document.objects.values_mut() {
+        replace_ocg_reference_in_object(object, source, target);
+    }
+    if let Ok(catalog) = document.catalog_mut() {
+        if let Ok(oc) = catalog.get_mut(b"OCProperties") {
+            remove_reference_recursive(oc, source);
+        }
+    }
+    document.objects.remove(&source);
+    atomic_save(document, output)
+}
+
+fn layer_visibility_map(document: &Document) -> HashMap<ObjectId, bool> {
+    layer_list(document)
+        .into_iter()
+        .filter_map(|layer| parse_id(&layer.object_id).ok().map(|id| (id, layer.visible)))
+        .collect()
+}
+
+fn property_layer_map(document: &Document, page_id: ObjectId) -> HashMap<Vec<u8>, ObjectId> {
+    let resources = inherited_resources(document, page_id);
+    let properties = resolved_subdictionary(document, &resources, b"Properties");
+    let mut output = HashMap::new();
+    for (name, value) in properties.iter() {
+        let id = match value {
+            Object::Reference(id) => Some(*id),
+            Object::Dictionary(dictionary) => dictionary
+                .get(b"OCGs")
+                .ok()
+                .and_then(|value| value.as_reference().ok()),
+            _ => None,
+        };
+        if let Some(id) = id {
+            output.insert(name.clone(), id);
+        }
+    }
+    output
+}
+
+#[derive(Clone, Copy)]
+struct MarkedFrame {
+    hidden: bool,
+    omit_wrapper: bool,
+}
+
+pub fn flatten_layers(input: &Path, output: &Path) -> Result<usize, SevenError> {
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let visibility = layer_visibility_map(&document);
+    if visibility.is_empty() {
+        return Err(SevenError::OperationRejected("Documento não possui OCGs".into()));
+    }
+
+    let page_ids = document.get_pages().values().copied().collect::<Vec<_>>();
+    let mut changed_pages = 0usize;
+    for page_id in page_ids {
+        let properties = property_layer_map(&document, page_id);
+        let data = document.get_page_content(page_id);
+        if data.is_empty() {
+            continue;
+        }
+        let content = Content::decode(&data)
+            .map_err(|error| SevenError::Operation(format!("Content stream inválido: {error}")))?;
+        let mut output_ops = Vec::with_capacity(content.operations.len());
+        let mut stack: Vec<MarkedFrame> = Vec::new();
+
+        for operation in content.operations {
+            if operation.operator == "BDC" {
+                let parent_hidden = stack.last().is_some_and(|frame| frame.hidden);
+                let layer_id = match operation.operands.as_slice() {
+                    [Object::Name(tag), Object::Name(property)] if tag.as_slice() == b"OC" => {
+                        properties.get(property).copied()
+                    }
+                    _ => None,
+                };
+                if let Some(layer_id) = layer_id {
+                    let hidden = parent_hidden || !visibility.get(&layer_id).copied().unwrap_or(true);
+                    stack.push(MarkedFrame { hidden, omit_wrapper: true });
+                    continue;
+                }
+                stack.push(MarkedFrame { hidden: parent_hidden, omit_wrapper: false });
+                if !parent_hidden {
+                    output_ops.push(operation);
+                }
+                continue;
+            }
+
+            if operation.operator == "BMC" {
+                let hidden = stack.last().is_some_and(|frame| frame.hidden);
+                stack.push(MarkedFrame { hidden, omit_wrapper: false });
+                if !hidden {
+                    output_ops.push(operation);
+                }
+                continue;
+            }
+
+            if operation.operator == "EMC" {
+                let frame = stack.pop().unwrap_or(MarkedFrame { hidden: false, omit_wrapper: false });
+                let parent_hidden = stack.last().is_some_and(|value| value.hidden);
+                if !frame.omit_wrapper && !parent_hidden {
+                    output_ops.push(operation);
+                }
+                continue;
+            }
+
+            if !stack.last().is_some_and(|frame| frame.hidden) {
+                output_ops.push(operation);
+            }
+        }
+
+        let encoded = Content { operations: output_ops }
+            .encode()
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+        let stream_id = document.add_object(Stream::new(Dictionary::new(), encoded));
+        document
+            .get_object_mut(page_id)
+            .map_err(|error| SevenError::Operation(error.to_string()))?
+            .as_dict_mut()
+            .map_err(|error| SevenError::Operation(error.to_string()))?
+            .set("Contents", stream_id);
+        changed_pages += 1;
+    }
+
+    for object in document.objects.values_mut() {
+        if let Ok(dictionary) = object.as_dict_mut() {
+            dictionary.remove(b"OC");
+        } else if let Object::Stream(stream) = object {
+            stream.dict.remove(b"OC");
+        }
+    }
+    if let Ok(catalog) = document.catalog_mut() {
+        catalog.remove(b"OCProperties");
+    }
+    atomic_save(document, output)?;
+    Ok(changed_pages)
 }
 
 pub fn update_layer_properties(

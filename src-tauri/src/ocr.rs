@@ -15,6 +15,13 @@ pub struct OcrOptions {
     pub output_type: String,
     pub mode: String,
     pub sidecar: Option<String>,
+    pub page_range: Option<String>,
+    pub clean: bool,
+    pub clean_final: bool,
+    pub remove_background: bool,
+    pub oversample: Option<u16>,
+    pub optimize: u8,
+    pub rotate_pages_threshold: f32,
 }
 
 impl OcrOptions {
@@ -34,6 +41,29 @@ impl OcrOptions {
         if !matches!(self.mode.as_str(), "skip" | "redo" | "force") {
             return Err(SevenError::OperationRejected("Modo OCR inválido".into()));
         }
+        if let Some(range) = &self.page_range {
+            let range = range.trim();
+            if range.is_empty()
+                || range.len() > 512
+                || !range.chars().all(|character| character.is_ascii_digit() || matches!(character, ',' | '-'))
+                || range.starts_with('-')
+                || range.ends_with('-')
+                || range.contains("--")
+            {
+                return Err(SevenError::OperationRejected("Intervalo OCR inválido".into()));
+            }
+        }
+        if let Some(dpi) = self.oversample {
+            if !(72..=1200).contains(&dpi) {
+                return Err(SevenError::OperationRejected("Oversample deve ficar entre 72 e 1200 DPI".into()));
+            }
+        }
+        if self.optimize > 3 {
+            return Err(SevenError::OperationRejected("Nível de otimização OCR deve ficar entre 0 e 3".into()));
+        }
+        if !(0.0..=100.0).contains(&self.rotate_pages_threshold) {
+            return Err(SevenError::OperationRejected("Threshold de rotação deve ficar entre 0 e 100".into()));
+        }
         Ok(())
     }
 
@@ -50,6 +80,27 @@ impl OcrOptions {
         }
         if self.rotate_pages {
             args.push("--rotate-pages".into());
+            args.push("--rotate-pages-threshold".into());
+            args.push(format!("{:.2}", self.rotate_pages_threshold));
+        }
+        if self.clean {
+            args.push("--clean".into());
+        }
+        if self.clean_final {
+            args.push("--clean-final".into());
+        }
+        if self.remove_background {
+            args.push("--remove-background".into());
+        }
+        if let Some(dpi) = self.oversample {
+            args.push("--oversample".into());
+            args.push(dpi.to_string());
+        }
+        args.push("--optimize".into());
+        args.push(self.optimize.to_string());
+        if let Some(range) = &self.page_range {
+            args.push("--pages".into());
+            args.push(range.trim().into());
         }
         args.push(match self.mode.as_str() {
             "redo" => "--redo-ocr".into(),

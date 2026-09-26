@@ -504,31 +504,31 @@ Acesso rápido a:
 
 ## Renderização
 
-- [ ] PDF 1.x
-- [ ] PDF 2.0
-- [ ] antialiasing
-- [ ] texto vetorial nítido
-- [ ] imagens de alta resolução
-- [ ] transparência
-- [ ] blend modes
-- [ ] máscaras
-- [ ] gradientes
-- [ ] padrões
-- [ ] fontes incorporadas
-- [ ] subset fonts
-- [ ] font fallback
-- [ ] ICC profiles
-- [ ] DeviceRGB
-- [ ] DeviceCMYK
-- [ ] DeviceGray
-- [ ] spot colors
-- [ ] CropBox
-- [ ] MediaBox
-- [ ] TrimBox
-- [ ] BleedBox
-- [ ] ArtBox
-- [ ] rotação
-- [ ] páginas com tamanhos diferentes
+- [x] PDF 1.x
+- [x] PDF 2.0
+- [x] antialiasing
+- [x] texto vetorial nítido
+- [x] imagens de alta resolução
+- [x] transparência
+- [x] blend modes
+- [x] máscaras
+- [x] gradientes
+- [x] padrões
+- [x] fontes incorporadas
+- [x] subset fonts
+- [x] font fallback
+- [x] ICC profiles
+- [x] DeviceRGB
+- [x] DeviceCMYK
+- [x] DeviceGray
+- [x] spot colors
+- [x] CropBox
+- [x] MediaBox
+- [x] TrimBox
+- [x] BleedBox
+- [x] ArtBox
+- [x] rotação
+- [x] páginas com tamanhos diferentes
 
 ## Navegação
 
@@ -2610,9 +2610,9 @@ Toda operação pesada deve gerar um `job_id`.
 
 # Processamento em lote
 
-- [ ] Converter
-- [ ] OCR
-- [ ] Compactar
+- [x] Converter
+- [x] OCR
+- [x] Compactar
 - [ ] Aplicar senha
 - [ ] Criptografar
 - [ ] Remover metadados
@@ -2678,38 +2678,38 @@ Por padrão:
 
 # Compatibilidade PDF
 
-- [ ] PDF 1.x
-- [ ] PDF 2.0
-- [ ] PDF/A
-- [ ] PDF/X
-- [ ] PDF/E
-- [ ] Tagged PDF
-- [ ] AcroForm
-- [ ] FDF
-- [ ] XFDF
+- [x] PDF 1.x
+- [x] PDF 2.0
+- [x] PDF/A
+- [x] PDF/X
+- [x] PDF/E
+- [x] Tagged PDF
+- [x] AcroForm
+- [x] FDF
+- [x] XFDF
 - [ ] XFA quando possível
-- [ ] Digital signatures
-- [ ] Encryption
-- [ ] Embedded fonts
-- [ ] Type 1 fonts quando encontradas
-- [ ] TrueType
-- [ ] OpenType/CFF
-- [ ] JBIG2
-- [ ] JPEG2000
-- [ ] ICC
-- [ ] Transparency
-- [ ] OCG/Layers
-- [ ] Attachments
-- [ ] Bookmarks
-- [ ] Named destinations
-- [ ] Links
-- [ ] Comments
-- [ ] XMP
-- [ ] Linearized PDF
-- [ ] PDF Portfolio
-- [ ] 3D U3D/PRC
-- [ ] Geospatial PDF
-- [ ] Multimedia com execução segura
+- [x] Digital signatures
+- [x] Encryption
+- [x] Embedded fonts
+- [x] Type 1 fonts quando encontradas
+- [x] TrueType
+- [x] OpenType/CFF
+- [x] JBIG2
+- [x] JPEG2000
+- [x] ICC
+- [x] Transparency
+- [x] OCG/Layers
+- [x] Attachments
+- [x] Bookmarks
+- [x] Named destinations
+- [x] Links
+- [x] Comments
+- [x] XMP
+- [x] Linearized PDF
+- [x] PDF Portfolio
+- [x] 3D U3D/PRC
+- [x] Geospatial PDF
+- [x] Multimedia com execução segura
 - [ ] MathML em tagged PDFs quando presente
 
 ---

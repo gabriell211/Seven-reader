@@ -885,7 +885,7 @@ export default function App() {
     if (!native) return;
     let unlisten: (() => void) | undefined;
     void getCurrentWebviewWindow().onDragDropEvent((event) => {
-      if (event.payload.type !== "drop") return;
+      if (event.payload.type !== "drop" || combineDialogOpen) return;
       const paths = event.payload.paths.filter((path) => /\.pdf$/i.test(path));
       if (!paths.length) return;
       void (async () => {
@@ -895,7 +895,7 @@ export default function App() {
       })();
     }).then((dispose) => { unlisten = dispose; });
     return () => unlisten?.();
-  }, [native, openTabs, settings.defaultZoom]);
+  }, [native, openTabs, settings.defaultZoom, combineDialogOpen]);
 
   const restoreSession = async () => {
     if (!native) return;

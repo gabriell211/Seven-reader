@@ -30,6 +30,9 @@ import type {
   FormFieldUpdate,
   FormValue,
   ImagePlacement,
+  InteractiveAssetInfo,
+  GeospatialViewportInfo,
+  GeospatialCoordinate,
   ImageObjectInfo,
   InkAnnotationInput,
   LinkPlacement,
@@ -125,6 +128,37 @@ export async function sessionImportReviewXfdf(
   xfdf: string,
 ): Promise<SessionReviewImportResult> {
   return invoke<SessionReviewImportResult>("session_import_review_xfdf", { documentId, xfdf });
+}
+
+export async function listInteractiveAssets(
+  documentId: string,
+): Promise<InteractiveAssetInfo[]> {
+  return invoke<InteractiveAssetInfo[]>("list_interactive_assets", { documentId });
+}
+
+export async function extractInteractiveAsset(
+  documentId: string,
+  objectId: string,
+  destination: string,
+): Promise<number> {
+  return invoke<number>("extract_interactive_asset", { documentId, objectId, destination });
+}
+
+export async function listGeospatialViewports(
+  documentId: string,
+): Promise<GeospatialViewportInfo[]> {
+  return invoke<GeospatialViewportInfo[]>("list_geospatial_viewports", { documentId });
+}
+
+export async function resolveGeospatialCoordinate(
+  documentId: string,
+  pageIndex: number,
+  normalizedX: number,
+  normalizedY: number,
+): Promise<GeospatialCoordinate> {
+  return invoke<GeospatialCoordinate>("resolve_geospatial_coordinate", {
+    documentId, pageIndex, normalizedX, normalizedY,
+  });
 }
 
 export async function getCapabilities(): Promise<Capabilities | null> {

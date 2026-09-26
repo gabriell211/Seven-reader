@@ -254,6 +254,7 @@ pub fn run() {
             commands::export_compare_report_pdf,
             commands::compare_documents,
             commands::start_encrypt_pdf,
+            commands::start_batch_encrypt_pdf,
             commands::start_decrypt_pdf,
             commands::start_convert_to_pdf,
             commands::start_batch_convert_to_pdf,

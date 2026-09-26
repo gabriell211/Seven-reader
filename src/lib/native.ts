@@ -84,6 +84,7 @@ import type {
   SessionReviewImportResult,
   RenderResult,
   ReplaceTextReport,
+  SanitizeAnalysis,
   SanitizeOptions,
   SignRequest,
   SignatureValidationReport,
@@ -1625,6 +1626,10 @@ export async function updateDocumentMetadata(
   update: MetadataUpdate,
 ): Promise<void> {
   await invoke("update_document_metadata", { input, output, update });
+}
+
+export async function analyzeSanitization(path: string): Promise<SanitizeAnalysis> {
+  return invoke<SanitizeAnalysis>("analyze_sanitization", { path });
 }
 
 export async function sanitizeDocument(

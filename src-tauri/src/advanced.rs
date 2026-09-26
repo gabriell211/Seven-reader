@@ -807,6 +807,346 @@ pub fn inspect(path: &Path) -> Result<AdvancedPdfReport, SevenError> {
     })
 }
 
+
+fn portfolio_view_name(view: &str) -> Result<&'static str, SevenError> {
+    match view {
+        "details" | "D" => Ok("D"),
+        "tile" | "T" => Ok("T"),
+        "hidden" | "H" => Ok("H"),
+        _ => Err(SevenError::OperationRejected("Visualização de portfólio inválida".into())),
+    }
+}
+
+fn ensure_collection_id(document: &mut Document, view: &str) -> Result<ObjectId, SevenError> {
+    let view = portfolio_view_name(view)?;
+    let catalog_id = document
+        .trailer
+        .get(b"Root")
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_reference()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+
+    let existing = document
+        .get_object(catalog_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .get(b"Collection")
+        .ok()
+        .cloned();
+
+    let collection_id = match existing {
+        Some(Object::Reference(id)) => id,
+        Some(Object::Dictionary(dictionary)) => {
+            let id = document.add_object(dictionary);
+            document
+                .get_object_mut(catalog_id)
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .as_dict_mut()
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .set("Collection", id);
+            id
+        }
+        Some(_) => return Err(SevenError::Operation("Collection inválida".into())),
+        None => {
+            let id = document.add_object(Dictionary::new());
+            document
+                .get_object_mut(catalog_id)
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .as_dict_mut()
+                .map_err(|error| SevenError::Operation(error.to_string()))?
+                .set("Collection", id);
+            id
+        }
+    };
+
+    let schema = dictionary! {
+        "Type" => "CollectionSchema",
+        "FileName" => dictionary! {
+            "Type" => "CollectionField",
+            "Subtype" => "F",
+            "N" => Object::string_literal("Nome do arquivo"),
+            "O" => 0i64,
+            "V" => true,
+            "E" => false,
+        },
+        "Description" => dictionary! {
+            "Type" => "CollectionField",
+            "Subtype" => "Desc",
+            "N" => Object::string_literal("Descrição"),
+            "O" => 1i64,
+            "V" => true,
+            "E" => true,
+        },
+        "Size" => dictionary! {
+            "Type" => "CollectionField",
+            "Subtype" => "Size",
+            "N" => Object::string_literal("Tamanho"),
+            "O" => 2i64,
+            "V" => true,
+            "E" => false,
+        },
+    };
+
+    let collection = document
+        .get_object_mut(collection_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    collection.set("Type", "Collection");
+    collection.set("View", view);
+    if collection.get(b"Schema").is_err() {
+        collection.set("Schema", schema);
+    }
+    if collection.get(b"Sort").is_err() {
+        collection.set("Sort", dictionary! {
+            "Type" => "CollectionSort",
+            "S" => Object::Name(b"FileName".to_vec()),
+            "A" => true,
+        });
+    }
+
+    Ok(collection_id)
+}
+
+fn ensure_portfolio_root_folder(document: &mut Document, collection_id: ObjectId) -> Result<ObjectId, SevenError> {
+    let existing = document
+        .get_object(collection_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .get(b"Folders")
+        .ok()
+        .and_then(|value| value.as_reference().ok());
+
+    if let Some(id) = existing {
+        return Ok(id);
+    }
+
+    document.version = "2.0".into();
+    let root_id = document.add_object(dictionary! {
+        "Type" => "Folder",
+        "ID" => 0i64,
+        "Name" => Object::string_literal("Raiz"),
+        "Free" => Vec::<Object>::new(),
+    });
+    document
+        .get_object_mut(collection_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .set("Folders", root_id);
+    Ok(root_id)
+}
+
+fn valid_folder_segment(value: &str) -> Result<&str, SevenError> {
+    let value = value.trim();
+    if value.is_empty()
+        || value.ends_with('.')
+        || value.chars().all(char::is_whitespace)
+        || value.chars().any(|ch| matches!(ch, '/' | '\\' | ':' | '?' | '*' | '"' | '<' | '>' | '|'))
+        || value.chars().count() > 255
+    {
+        return Err(SevenError::OperationRejected("Nome de pasta de portfólio inválido".into()));
+    }
+    Ok(value)
+}
+
+fn folder_child_named(document: &Document, parent_id: ObjectId, name: &str) -> Option<ObjectId> {
+    let mut current = document
+        .get_object(parent_id)
+        .ok()?
+        .as_dict()
+        .ok()?
+        .get(b"Child")
+        .ok()
+        .and_then(|value| value.as_reference().ok());
+    let mut visited = HashSet::new();
+    while let Some(id) = current {
+        if !visited.insert(id) {
+            return None;
+        }
+        let folder = document.get_object(id).ok()?.as_dict().ok()?;
+        if folder.get(b"Name").ok().map(object_text).as_deref() == Some(name) {
+            return Some(id);
+        }
+        current = folder.get(b"Next").ok().and_then(|value| value.as_reference().ok());
+    }
+    None
+}
+
+fn max_portfolio_folder_id(document: &Document, root_id: ObjectId) -> i64 {
+    fn walk(document: &Document, id: ObjectId, visited: &mut HashSet<ObjectId>, max_id: &mut i64) {
+        if !visited.insert(id) {
+            return;
+        }
+        let Ok(folder) = document.get_object(id).and_then(Object::as_dict) else { return };
+        *max_id = (*max_id).max(folder.get(b"ID").ok().and_then(|value| value.as_i64().ok()).unwrap_or(0));
+        if let Some(child) = folder.get(b"Child").ok().and_then(|value| value.as_reference().ok()) {
+            walk(document, child, visited, max_id);
+        }
+        if let Some(next) = folder.get(b"Next").ok().and_then(|value| value.as_reference().ok()) {
+            walk(document, next, visited, max_id);
+        }
+    }
+    let mut max_id = 0;
+    walk(document, root_id, &mut HashSet::new(), &mut max_id);
+    max_id
+}
+
+fn append_folder_child(
+    document: &mut Document,
+    parent_id: ObjectId,
+    child_id: ObjectId,
+) -> Result<(), SevenError> {
+    let first = document
+        .get_object(parent_id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .get(b"Child")
+        .ok()
+        .and_then(|value| value.as_reference().ok());
+
+    if first.is_none() {
+        document
+            .get_object_mut(parent_id)
+            .map_err(|error| SevenError::Operation(error.to_string()))?
+            .as_dict_mut()
+            .map_err(|error| SevenError::Operation(error.to_string()))?
+            .set("Child", child_id);
+        return Ok(());
+    }
+
+    let mut current = first.unwrap();
+    let mut visited = HashSet::new();
+    loop {
+        if !visited.insert(current) {
+            return Err(SevenError::Operation("Ciclo na árvore de folders".into()));
+        }
+        let next = document
+            .get_object(current)
+            .map_err(|error| SevenError::Operation(error.to_string()))?
+            .as_dict()
+            .map_err(|error| SevenError::Operation(error.to_string()))?
+            .get(b"Next")
+            .ok()
+            .and_then(|value| value.as_reference().ok());
+        if let Some(next) = next {
+            current = next;
+            continue;
+        }
+        document
+            .get_object_mut(current)
+            .map_err(|error| SevenError::Operation(error.to_string()))?
+            .as_dict_mut()
+            .map_err(|error| SevenError::Operation(error.to_string()))?
+            .set("Next", child_id);
+        return Ok(());
+    }
+}
+
+fn resolve_portfolio_folder_path(
+    document: &Document,
+    root_id: ObjectId,
+    path: &str,
+) -> Option<ObjectId> {
+    let normalized = path.trim().trim_matches('/');
+    if normalized.is_empty() {
+        return Some(root_id);
+    }
+    let mut parent = root_id;
+    for segment in normalized.split('/') {
+        parent = folder_child_named(document, parent, segment)?;
+    }
+    Some(parent)
+}
+
+pub fn configure_portfolio(
+    input: &Path,
+    output: &Path,
+    view: &str,
+) -> Result<(), SevenError> {
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    ensure_collection_id(&mut document, view)?;
+    atomic_save(document, output)
+}
+
+pub fn create_portfolio_folder(
+    input: &Path,
+    output: &Path,
+    path: &str,
+    description: &str,
+) -> Result<usize, SevenError> {
+    let segments = path
+        .trim()
+        .trim_matches('/')
+        .split('/')
+        .filter(|value| !value.trim().is_empty())
+        .map(valid_folder_segment)
+        .collect::<Result<Vec<_>, _>>()?;
+    if segments.is_empty() {
+        return Err(SevenError::OperationRejected("Informe uma pasta abaixo da raiz".into()));
+    }
+
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let collection_id = ensure_collection_id(&mut document, "details")?;
+    let root_id = ensure_portfolio_root_folder(&mut document, collection_id)?;
+    let mut next_id = max_portfolio_folder_id(&document, root_id) + 1;
+    let mut parent = root_id;
+    let mut created = 0usize;
+
+    for (index, segment) in segments.iter().enumerate() {
+        if let Some(existing) = folder_child_named(&document, parent, segment) {
+            parent = existing;
+            if index + 1 == segments.len() && !description.trim().is_empty() {
+                document
+                    .get_object_mut(parent)
+                    .map_err(|error| SevenError::Operation(error.to_string()))?
+                    .as_dict_mut()
+                    .map_err(|error| SevenError::Operation(error.to_string()))?
+                    .set("Desc", Object::string_literal(description.trim()));
+            }
+            continue;
+        }
+
+        let mut folder = dictionary! {
+            "Type" => "Folder",
+            "ID" => next_id,
+            "Name" => Object::string_literal(*segment),
+            "Parent" => parent,
+        };
+        if index + 1 == segments.len() && !description.trim().is_empty() {
+            folder.set("Desc", Object::string_literal(description.trim()));
+        }
+        let id = document.add_object(folder);
+        append_folder_child(&mut document, parent, id)?;
+        parent = id;
+        next_id += 1;
+        created += 1;
+    }
+
+    atomic_save(document, output)?;
+    Ok(created)
+}
+
+pub fn set_portfolio_view(
+    input: &Path,
+    output: &Path,
+    view: &str,
+) -> Result<(), SevenError> {
+    let mut document = Document::load(input).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let id = ensure_collection_id(&mut document, view)?;
+    let view_name = portfolio_view_name(view)?;
+    document
+        .get_object_mut(id)
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .as_dict_mut()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .set("View", view_name);
+    atomic_save(document, output)
+}
+
 pub fn add_attachment(
     input: &Path,
     output: &Path,

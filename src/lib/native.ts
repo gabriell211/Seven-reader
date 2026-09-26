@@ -52,6 +52,9 @@ import type {
   OptimizeOptions,
   OverlayTextOptions,
   PdfActionInfo,
+  PageActionInfo,
+  PageActionInput,
+  ActionExecution,
   PrintPreflightReport,
   PortfolioPreview,
   PortfolioSearchHit,
@@ -1177,6 +1180,34 @@ export async function editSetBackground(
 
 export async function inspectAdvancedPdf(path: string): Promise<AdvancedPdfReport> {
   return invoke<AdvancedPdfReport>("inspect_advanced_pdf", { path });
+}
+
+export async function listPdfPageActions(path: string): Promise<PageActionInfo[]> {
+  return invoke<PageActionInfo[]>("list_pdf_page_actions", { path });
+}
+
+export async function sessionSetPdfPageAction(
+  documentId: string,
+  request: PageActionInput,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_set_pdf_page_action", { documentId, request });
+}
+
+export async function sessionRemovePdfPageAction(
+  documentId: string,
+  pageIndex: number,
+  trigger: string,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_remove_pdf_page_action", {
+    documentId, pageIndex, trigger,
+  });
+}
+
+export async function resolvePdfAction(
+  path: string,
+  objectId: string,
+): Promise<ActionExecution> {
+  return invoke<ActionExecution>("resolve_pdf_action", { path, objectId });
 }
 
 export async function listPdfActions(path: string): Promise<PdfActionInfo[]> {

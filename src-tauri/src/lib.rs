@@ -120,6 +120,7 @@ pub fn run() {
             commands::session_add_pdf_portfolio_item,
             commands::session_configure_pdf_portfolio,
             commands::session_set_pdf_portfolio_view,
+            commands::session_import_pdf_portfolio_directory,
             commands::session_create_pdf_portfolio_folder,
             commands::session_move_pdf_portfolio_item,
             commands::session_rename_pdf_portfolio_folder,

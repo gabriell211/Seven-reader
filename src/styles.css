@@ -1057,7 +1057,7 @@ svg { width: 20px; height: 20px; }
 
 .split-view--vertical .document-canvas { right:50%; }
 .split-view--horizontal .document-canvas { bottom:50%; }
-.secondary-document-pane { position:absolute; z-index:10; display:grid; grid-template-rows:40px minmax(0,1fr) 42px; background:#d8d8de; }
+.secondary-document-pane { position:absolute; z-index:10; display:grid; grid-template-rows:40px auto minmax(0,1fr) 42px; background:#d8d8de; }
 .split-view--vertical .secondary-document-pane { top:0; right:0; bottom:0; width:50%; border-left:2px solid #bfc0c7; }
 .split-view--horizontal .secondary-document-pane { left:0; right:0; bottom:0; height:50%; border-top:2px solid #bfc0c7; }
 .secondary-pane-header { padding:0 9px 0 11px; border-bottom:1px solid #d7d6dc; display:flex; align-items:center; justify-content:space-between; gap:8px; background:#fafafd; }
@@ -1089,3 +1089,13 @@ svg { width: 20px; height: 20px; }
   .split-view--vertical .quick-tools { left:50%; bottom:calc(50% + 18px); }
   .split-view--vertical .view-controls { right:14px; bottom:calc(50% + 16px); }
 }
+
+.page-transfer-bar { min-width:0; padding:6px 8px; border-bottom:1px solid #d1d1d7; display:grid; grid-template-columns:minmax(130px,1.3fr) minmax(88px,1fr) 90px auto auto; gap:5px; align-items:end; background:#f4f4f7; }
+.page-transfer-bar select,.page-transfer-bar input { width:100%; min-width:0; height:30px; padding:0 7px; border:1px solid #d8d7dd; border-radius:6px; background:white; font-size:8.5px; }
+.page-transfer-bar label { min-width:0; display:grid; gap:2px; }
+.page-transfer-bar label span { color:#858790; font-size:7.5px; font-weight:700; }
+.page-transfer-bar > button { height:30px; padding:0 9px; border:1px solid #d4c9f4; border-radius:6px; color:#5633bd; background:#f2edff; cursor:pointer; font-size:8.5px; font-weight:750; }
+.page-transfer-bar > button:hover:not(:disabled) { background:#e9e0ff; }
+.page-transfer-bar > button.move-pages-button { color:#8a4b57; border-color:#e5c5cc; background:#fff1f3; }
+.page-transfer-bar > button:disabled { opacity:.4; cursor:default; }
+@media (max-width:1050px) { .page-transfer-bar { grid-template-columns:1fr 1fr 80px; } .page-transfer-bar > button { grid-row:2; } }

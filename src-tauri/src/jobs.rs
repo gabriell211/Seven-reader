@@ -608,6 +608,114 @@ pub fn start_process_sequence_job_with_cleanup(
     JobStart { job_id: id }
 }
 
+pub fn start_rust_batch_job<F>(
+    app: AppHandle,
+    state: &AppState,
+    kind: &str,
+    labels: Vec<String>,
+    output_path: Option<PathBuf>,
+    mut operation: F,
+) -> JobStart
+where
+    F: FnMut(usize) -> Result<(), SevenError> + Send + 'static,
+{
+    let id = Uuid::new_v4().to_string();
+    let cancel = Arc::new(AtomicBool::new(false));
+    let paused = Arc::new(AtomicBool::new(false));
+    let status = JobStatus {
+        id: id.clone(),
+        kind: kind.to_owned(),
+        state: "queued".into(),
+        stage: "Na fila".into(),
+        progress: Some(0.0),
+        output: None,
+        error: None,
+    };
+
+    state.jobs.lock().insert(
+        id.clone(),
+        JobRuntime {
+            status,
+            cancel: cancel.clone(),
+            paused: paused.clone(),
+        },
+    );
+    let jobs = state.jobs.clone();
+    let id_for_thread = id.clone();
+
+    thread::spawn(move || {
+        if labels.is_empty() {
+            update_job(
+                &jobs,
+                &app,
+                &id_for_thread,
+                JobUpdate::new("failed", "Lote vazio").error("Nenhum arquivo foi informado".into()),
+            );
+            return;
+        }
+
+        let total = labels.len() as f64;
+        for (index, label) in labels.iter().enumerate() {
+            while paused.load(Ordering::Relaxed) {
+                if cancel.load(Ordering::Relaxed) {
+                    update_job(&jobs, &app, &id_for_thread, JobUpdate::new("cancelled", "Cancelado"));
+                    return;
+                }
+                update_job(
+                    &jobs,
+                    &app,
+                    &id_for_thread,
+                    JobUpdate::new("paused", format!("Pausado · {label}"))
+                        .progress(index as f64 / total),
+                );
+                thread::sleep(Duration::from_millis(200));
+            }
+
+            if cancel.load(Ordering::Relaxed) {
+                update_job(&jobs, &app, &id_for_thread, JobUpdate::new("cancelled", "Cancelado"));
+                return;
+            }
+
+            update_job(
+                &jobs,
+                &app,
+                &id_for_thread,
+                JobUpdate::new("running", label.clone()).progress(index as f64 / total),
+            );
+
+            if let Err(error) = operation(index) {
+                update_job(
+                    &jobs,
+                    &app,
+                    &id_for_thread,
+                    JobUpdate::new("failed", format!("Falha · {label}")).error(error.to_string()),
+                );
+                return;
+            }
+
+            update_job(
+                &jobs,
+                &app,
+                &id_for_thread,
+                JobUpdate::new("running", format!("Concluído · {label}"))
+                    .progress((index + 1) as f64 / total),
+            );
+        }
+
+        let output = output_path.as_ref().map(|path| path.to_string_lossy().into_owned());
+        update_job(
+            &jobs,
+            &app,
+            &id_for_thread,
+            JobUpdate::new("completed", "Lote concluído")
+                .progress(1.0)
+                .output(output),
+        );
+    });
+
+    JobStart { job_id: id }
+}
+
 pub fn require_executable(candidates: &[&str], label: &str) -> Result<PathBuf, SevenError> {
     for candidate in candidates {
         if let Ok(path) = which::which(candidate) {

@@ -1568,6 +1568,14 @@ export async function addInkAnnotation(
   await invoke("add_ink_annotation", { input, output, ink });
 }
 
+export async function addSignatureImage(
+  input: string,
+  output: string,
+  signature: SignatureImageInput,
+): Promise<void> {
+  await invoke("add_signature_image", { input, output, signature });
+}
+
 export async function deleteAnnotation(
   input: string,
   output: string,

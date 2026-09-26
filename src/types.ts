@@ -633,6 +633,25 @@ export interface AttachmentInfo {
   collectionPath: string;
 }
 
+export interface PortfolioPreview {
+  objectId: string;
+  name: string;
+  mime: string;
+  kind: "pdf" | "image" | "text" | "file";
+  cachePath: string;
+  text?: string;
+  size: number;
+}
+
+export interface PortfolioSearchHit {
+  objectId: string;
+  name: string;
+  mime: string;
+  collectionPath: string;
+  excerpt: string;
+  occurrences: number;
+}
+
 export interface PortfolioFolderInfo {
   objectId: string;
   id: number;

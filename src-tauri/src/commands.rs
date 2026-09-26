@@ -80,6 +80,7 @@ pub async fn build_catalog(
     let snapshot = AppState {
         documents: state.documents.clone(),
         jobs: state.jobs.clone(),
+        watch_folders: state.watch_folders.clone(),
         cache_dir: state.cache_dir.clone(),
         resource_dir: state.resource_dir.clone(),
     };
@@ -104,6 +105,7 @@ pub async fn search_catalog(
     let snapshot = AppState {
         documents: state.documents.clone(),
         jobs: state.jobs.clone(),
+        watch_folders: state.watch_folders.clone(),
         cache_dir: state.cache_dir.clone(),
         resource_dir: state.resource_dir.clone(),
     };
@@ -547,6 +549,7 @@ pub async fn session_transfer_pages(
     let snapshot = AppState {
         documents: state.documents.clone(),
         jobs: state.jobs.clone(),
+        watch_folders: state.watch_folders.clone(),
         cache_dir: state.cache_dir.clone(),
         resource_dir: state.resource_dir.clone(),
     };
@@ -649,6 +652,7 @@ pub async fn render_page(
     let state_snapshot = AppState {
         documents: state.documents.clone(),
         jobs: state.jobs.clone(),
+        watch_folders: state.watch_folders.clone(),
         cache_dir: state.cache_dir.clone(),
         resource_dir: state.resource_dir.clone(),
     };
@@ -690,6 +694,7 @@ pub async fn render_pages(
     let snapshot = AppState {
         documents: state.documents.clone(),
         jobs: state.jobs.clone(),
+        watch_folders: state.watch_folders.clone(),
         cache_dir: state.cache_dir.clone(),
         resource_dir: state.resource_dir.clone(),
     };
@@ -720,6 +725,7 @@ pub async fn get_page_text_status(
     let snapshot = AppState {
         documents: state.documents.clone(),
         jobs: state.jobs.clone(),
+        watch_folders: state.watch_folders.clone(),
         cache_dir: state.cache_dir.clone(),
         resource_dir: state.resource_dir.clone(),
     };
@@ -739,6 +745,7 @@ pub async fn search_document(
     let state_snapshot = AppState {
         documents: state.documents.clone(),
         jobs: state.jobs.clone(),
+        watch_folders: state.watch_folders.clone(),
         cache_dir: state.cache_dir.clone(),
         resource_dir: state.resource_dir.clone(),
     };
@@ -765,6 +772,7 @@ pub async fn search_document_occurrences(
     let snapshot = AppState {
         documents: state.documents.clone(),
         jobs: state.jobs.clone(),
+        watch_folders: state.watch_folders.clone(),
         cache_dir: state.cache_dir.clone(),
         resource_dir: state.resource_dir.clone(),
     };
@@ -791,6 +799,7 @@ pub async fn search_document_advanced(
     let snapshot = AppState {
         documents: state.documents.clone(),
         jobs: state.jobs.clone(),
+        watch_folders: state.watch_folders.clone(),
         cache_dir: state.cache_dir.clone(),
         resource_dir: state.resource_dir.clone(),
     };
@@ -816,6 +825,7 @@ pub async fn extract_text_in_rect(
     let snapshot = AppState {
         documents: state.documents.clone(),
         jobs: state.jobs.clone(),
+        watch_folders: state.watch_folders.clone(),
         cache_dir: state.cache_dir.clone(),
         resource_dir: state.resource_dir.clone(),
     };
@@ -844,6 +854,7 @@ pub async fn crop_page_selection(
     let snapshot = AppState {
         documents: state.documents.clone(),
         jobs: state.jobs.clone(),
+        watch_folders: state.watch_folders.clone(),
         cache_dir: state.cache_dir.clone(),
         resource_dir: state.resource_dir.clone(),
     };
@@ -3301,6 +3312,7 @@ pub async fn detect_ocr_language(
     let snapshot = AppState {
         documents: state.documents.clone(),
         jobs: state.jobs.clone(),
+        watch_folders: state.watch_folders.clone(),
         cache_dir: state.cache_dir.clone(),
         resource_dir: state.resource_dir.clone(),
     };
@@ -3329,6 +3341,7 @@ pub async fn review_ocr_page(
     let state_snapshot = AppState {
         documents: state.documents.clone(),
         jobs: state.jobs.clone(),
+        watch_folders: state.watch_folders.clone(),
         cache_dir: state.cache_dir.clone(),
         resource_dir: state.resource_dir.clone(),
     };
@@ -3850,6 +3863,7 @@ pub async fn find_redaction_matches(
     let snapshot = AppState {
         documents: state.documents.clone(),
         jobs: state.jobs.clone(),
+        watch_folders: state.watch_folders.clone(),
         cache_dir: state.cache_dir.clone(),
         resource_dir: state.resource_dir.clone(),
     };
@@ -3873,6 +3887,7 @@ pub async fn apply_redactions(
     let snapshot = AppState {
         documents: state.documents.clone(),
         jobs: state.jobs.clone(),
+        watch_folders: state.watch_folders.clone(),
         cache_dir: state.cache_dir.clone(),
         resource_dir: state.resource_dir.clone(),
     };
@@ -4335,6 +4350,7 @@ pub async fn compare_documents_advanced(
     let state_snapshot = AppState {
         documents: state.documents.clone(),
         jobs: state.jobs.clone(),
+        watch_folders: state.watch_folders.clone(),
         cache_dir: state.cache_dir.clone(),
         resource_dir: state.resource_dir.clone(),
     };
@@ -4366,6 +4382,7 @@ pub async fn compare_documents(
     let state_snapshot = AppState {
         documents: state.documents.clone(),
         jobs: state.jobs.clone(),
+        watch_folders: state.watch_folders.clone(),
         cache_dir: state.cache_dir.clone(),
         resource_dir: state.resource_dir.clone(),
     };

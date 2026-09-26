@@ -284,26 +284,26 @@ Exemplos de fluxos principais:
 
 # Tela inicial
 
-- [ ] Arquivos recentes
-- [ ] Favoritos
-- [ ] Fixados
-- [ ] Recuperar sessão
-- [ ] Abrir arquivo
-- [ ] Abrir pasta
-- [ ] Criar PDF
-- [ ] Combinar arquivos
-- [ ] Digitalizar
-- [ ] Converter
-- [ ] OCR
-- [ ] Compactar
-- [ ] Assinar
-- [ ] Ferramentas recentes
-- [ ] Tarefas recentes
-- [ ] Drag and drop
-- [ ] Histórico local opcional
-- [ ] Limpar recentes
-- [ ] Abrir localização do arquivo
-- [ ] Remover item da lista sem apagar o arquivo
+- [x] Arquivos recentes
+- [x] Favoritos
+- [x] Fixados
+- [x] Recuperar sessão
+- [x] Abrir arquivo
+- [x] Abrir pasta
+- [x] Criar PDF
+- [x] Combinar arquivos
+- [x] Digitalizar
+- [x] Converter
+- [x] OCR
+- [x] Compactar
+- [x] Assinar
+- [x] Ferramentas recentes
+- [x] Tarefas recentes
+- [x] Drag and drop
+- [x] Histórico local opcional
+- [x] Limpar recentes
+- [x] Abrir localização do arquivo
+- [x] Remover item da lista sem apagar o arquivo
 
 ---
 
@@ -1933,8 +1933,8 @@ Suporte sempre isolado e desativado por padrão para conteúdo ativo.
 - [ ] Referenciar mídia por URL HTTP/HTTPS quando permitido
 - [ ] H.264
 - [ ] AAC
-- [ ] MP3
-- [ ] MOV/MP4 compatíveis
+- [x] MP3
+- [x] MOV/MP4 compatíveis
 - [ ] Definir play area
 - [ ] Mover play area
 - [ ] Redimensionar play area
@@ -1953,16 +1953,16 @@ Suporte sempre isolado e desativado por padrão para conteúdo ativo.
 - [ ] Preview e trim
 - [ ] Chapter points
 - [ ] Actions por chapter point
-- [ ] Extrair mídia
-- [ ] Política de confiança
-- [ ] Nunca executar automaticamente
+- [x] Extrair mídia
+- [x] Política de confiança
+- [x] Nunca executar automaticamente
 
 ## 3D
 
-- [ ] Detectar objetos 3D
+- [x] Detectar objetos 3D
 - [ ] Adicionar 3D quando engine permitir
-- [ ] U3D
-- [ ] PRC
+- [x] U3D
+- [x] PRC
 - [ ] Poster/preview estático
 - [ ] Ativar conteúdo somente com consentimento
 - [ ] Views 3D
@@ -1970,7 +1970,7 @@ Suporte sempre isolado e desativado por padrão para conteúdo ativo.
 - [ ] Medição de objetos 3D
 - [ ] Comentários associados a views 3D
 - [ ] Propriedades da área 3D
-- [ ] Compatibilidade legada somente quando segura
+- [x] Compatibilidade legada somente quando segura
 
 ---
 
@@ -1978,20 +1978,20 @@ Suporte sempre isolado e desativado por padrão para conteúdo ativo.
 
 Módulo profissional.
 
-- [ ] Detectar geospatial PDF
-- [ ] Interpretar sistemas de coordenadas
-- [ ] Interpretar escala/projeção/metadados espaciais
+- [x] Detectar geospatial PDF
+- [x] Interpretar sistemas de coordenadas
+- [x] Interpretar escala/projeção/metadados espaciais
 - [ ] Mostrar latitude/longitude sob o cursor
-- [ ] Localizar posição por coordenadas
+- [x] Localizar posição por coordenadas
 - [ ] Adicionar marcador geoespacial
 - [ ] Copiar coordenadas
-- [ ] Formato decimal
+- [x] Formato decimal
 - [ ] Graus/minutos/segundos
 - [ ] Coordenadas assinadas ou direcionais
 - [ ] Opção WGS 1984
-- [ ] Medir distância geográfica
-- [ ] Medir perímetro
-- [ ] Medir área
+- [x] Medir distância geográfica
+- [x] Medir perímetro
+- [x] Medir área
 - [ ] Unidades de distância
 - [ ] Unidades de área
 - [ ] Criar PDF geoespacial a partir de GeoTIFF

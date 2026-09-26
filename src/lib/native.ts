@@ -49,6 +49,7 @@ import type {
   OcrOptions,
   OcrLanguageDetection,
   OcrWord,
+  OcrReviewResult,
   OptimizationAudit,
   OptimizeOptions,
   OverlayTextOptions,
@@ -308,6 +309,22 @@ export async function sessionAddMarkup(
 ): Promise<DocumentSummary> {
   return invoke<DocumentSummary>("session_add_markup", {
     documentId, pageIndex, kind, author, rect,
+  });
+}
+
+export async function sessionCorrectOcrWord(
+  documentId: string,
+  pageIndex: number,
+  recognized: string,
+  replacement: string,
+  occurrence: number,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_correct_ocr_word", {
+    documentId,
+    pageIndex,
+    recognized,
+    replacement,
+    occurrence,
   });
 }
 
@@ -1030,8 +1047,8 @@ export async function reviewOcrPage(
   pageIndex: number,
   language: string,
   threshold: number,
-): Promise<OcrWord[]> {
-  return invoke<OcrWord[]>("review_ocr_page", { documentId, pageIndex, language, threshold });
+): Promise<OcrReviewResult> {
+  return invoke<OcrReviewResult>("review_ocr_page", { documentId, pageIndex, language, threshold });
 }
 
 export async function scanPageImage(

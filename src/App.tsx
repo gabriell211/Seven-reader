@@ -204,6 +204,11 @@ import {
   startBatchOverlay,
   startBatchRedactBySearch,
   startBatchEncryptPdf,
+  startBatchSplitPdf,
+  startBatchExtractPdf,
+  startBatchRenamePdf,
+  startBatchValidatePdfa,
+  startBatchPreflightPdf,
   startDecryptPdf,
   startEncryptPdf,
   startExportPdf,
@@ -3168,6 +3173,25 @@ export default function App() {
             allowAssembly: true,
           },
         );
+      } else if (kind === "split") {
+        started = await startBatchSplitPdf(inputs, outputDirectory, options.pagesPerFile);
+      } else if (kind === "extract") {
+        started = await startBatchExtractPdf(inputs, outputDirectory, options.pageRange.trim());
+      } else if (kind === "rename") {
+        started = await startBatchRenamePdf(
+          inputs,
+          outputDirectory,
+          options.renamePrefix,
+          options.renameSuffix,
+        );
+      } else if (kind === "validate-pdfa") {
+        started = await startBatchValidatePdfa(
+          inputs,
+          outputDirectory,
+          options.pdfaFlavour,
+        );
+      } else if (kind === "preflight") {
+        started = await startBatchPreflightPdf(inputs, outputDirectory);
       } else {
         const overlayKind =
           kind === "watermark" ? "watermark" :

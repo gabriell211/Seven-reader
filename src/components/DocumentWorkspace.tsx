@@ -158,7 +158,7 @@ export function DocumentWorkspace({
   const drawingRef = useRef(false);
   const visiblePageRef = useRef(page);
   const scrollFrameRef = useRef<number | null>(null);
-  const [viewerTool, setViewerTool] = useState<"select" | "hand" | "draw" | "highlight" | "underline" | "strikeout">("select");
+  const [viewerTool, setViewerTool] = useState<"select" | "hand" | "draw" | "highlight" | "underline" | "strikeout" | "zoom-area" | "dynamic-zoom">("select");
   const [visualRotation, setVisualRotation] = useState<0 | 90 | 180 | 270>(0);
   const [immersiveMode, setImmersiveMode] = useState<"normal" | "reading" | "presentation">("normal");
   const [pageGeometry, setPageGeometry] = useState<PagePreflight | null>(null);
@@ -169,6 +169,13 @@ export function DocumentWorkspace({
   const [rulerUnit, setRulerUnit] = useState<"pt" | "mm" | "cm" | "in">("mm");
   const [cursorPoint, setCursorPoint] = useState<[number, number] | null>(null);
   const [guides, setGuides] = useState<Array<{ id: string; axis: "x" | "y"; valuePt: number }>>([]);
+  const [loupeEnabled, setLoupeEnabled] = useState(false);
+  const [loupePoint, setLoupePoint] = useState<[number, number] | null>(null);
+  const [reflowEnabled, setReflowEnabled] = useState(false);
+  const [reflowText, setReflowText] = useState("");
+  const [reflowLoading, setReflowLoading] = useState(false);
+  const [dynamicScale, setDynamicScale] = useState(1);
+  const dynamicZoomRef = useRef<{ pointerId: number; startY: number; startZoom: number; previewZoom: number } | null>(null);
 
   useEffect(() => {
     const focus = () => searchRef.current?.focus();
@@ -190,6 +197,21 @@ export function DocumentWorkspace({
       .catch(() => active && setPageGeometry(null));
     return () => { active = false; };
   }, [document.id, document.revision, page]);
+  useEffect(() => {
+    if (!reflowEnabled) {
+      setReflowText("");
+      return;
+    }
+    let active = true;
+    setReflowLoading(true);
+    void extractTextInRect(document.id, page, { x: 0, y: 0, width: 1, height: 1 })
+      .then((result) => {
+        if (active) setReflowText(result.text.trim());
+      })
+      .catch(() => active && setReflowText(""))
+      .finally(() => active && setReflowLoading(false));
+    return () => { active = false; };
+  }, [reflowEnabled, document.id, document.revision, page]);
 
   useEffect(() => {
     if (!tabMenu) return;
@@ -479,6 +501,13 @@ export function DocumentWorkspace({
   };
 
   const updateCursorPoint = (event: React.PointerEvent<HTMLDivElement>) => {
+    const shell = pageRef.current?.getBoundingClientRect();
+    if (loupeEnabled && shell) {
+      setLoupePoint([
+        Math.max(0, Math.min(1, (event.clientX - shell.left) / shell.width)),
+        Math.max(0, Math.min(1, (event.clientY - shell.top) / shell.height)),
+      ]);
+    }
     if (!pageGeometry) return;
     const point = normalizedPoint(event.clientX, event.clientY);
     if (!point) return;
@@ -511,7 +540,7 @@ export function DocumentWorkspace({
     }
   };
 
-  const isRectSelectionTool = viewerTool === "select" || viewerTool === "highlight" || viewerTool === "underline" || viewerTool === "strikeout";
+  const isRectSelectionTool = viewerTool === "select" || viewerTool === "highlight" || viewerTool === "underline" || viewerTool === "strikeout" || viewerTool === "zoom-area";
 
   const beginSelection = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!isRectSelectionTool) return;
@@ -540,8 +569,25 @@ export function DocumentWorkspace({
       setSelectionRect(rect);
       if (viewerTool === "select") {
         void loadSelectionText(rect);
+      } else if (viewerTool === "zoom-area" && rect.width >= 0.01 && rect.height >= 0.01) {
+        const stage = stageRef.current;
+        const current = rendered;
+        if (stage && current) {
+          const sourceWidth = current.width * rect.width;
+          const sourceHeight = current.height * rect.height;
+          const rotatedSelection = visualRotation === 90 || visualRotation === 270
+            ? { width: sourceHeight, height: sourceWidth }
+            : { width: sourceWidth, height: sourceHeight };
+          const factor = Math.min(
+            Math.max(1, stage.clientWidth - 110) / Math.max(1, rotatedSelection.width),
+            Math.max(1, stage.clientHeight - 140) / Math.max(1, rotatedSelection.height),
+          );
+          onRender(page, Math.max(25, Math.min(400, zoom * factor)));
+        }
+        setViewerTool("select");
+        setSelectionRect(null);
       } else if (rect.width >= 0.002 && rect.height >= 0.002) {
-        onMarkup(viewerTool, rect);
+        onMarkup(viewerTool as "highlight" | "underline" | "strikeout", rect);
         setSelectionStart(null);
         setSelectionRect(null);
         setSelectedText("");
@@ -612,6 +658,34 @@ export function DocumentWorkspace({
       }
       return [];
     });
+  };
+
+  const beginDynamicZoom = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (viewerTool !== "dynamic-zoom") return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dynamicZoomRef.current = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      startZoom: zoom,
+      previewZoom: zoom,
+    };
+  };
+
+  const moveDynamicZoom = (event: React.PointerEvent<HTMLDivElement>) => {
+    const state = dynamicZoomRef.current;
+    if (viewerTool !== "dynamic-zoom" || !state || state.pointerId !== event.pointerId) return;
+    const nextZoom = Math.max(25, Math.min(400, state.startZoom + (state.startY - event.clientY) * 0.35));
+    state.previewZoom = nextZoom;
+    setDynamicScale(nextZoom / Math.max(1, zoom));
+  };
+
+  const finishDynamicZoom = (event: React.PointerEvent<HTMLDivElement>) => {
+    const state = dynamicZoomRef.current;
+    if (viewerTool !== "dynamic-zoom" || !state || state.pointerId !== event.pointerId) return;
+    dynamicZoomRef.current = null;
+    try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* already released */ }
+    setDynamicScale(1);
+    onRender(page, state.previewZoom);
   };
 
   const submitSearch = () => {
@@ -839,7 +913,18 @@ export function DocumentWorkspace({
 
         <main className="document-stage" ref={stageRef} onScroll={handleStageScroll}>
           <div className={`document-canvas document-canvas--${viewMode}`}>
-            {(renderedPages.length || rendered) ? (
+            {reflowEnabled ? (
+              <article className="reflow-view">
+                <header><span>Página {page + 1}</span><strong>Reflow de texto</strong></header>
+                {reflowLoading ? (
+                  <div className="report-loading"><span className="loader-ring" /> Extraindo camada textual…</div>
+                ) : reflowText ? (
+                  <div className="reflow-text">{reflowText}</div>
+                ) : (
+                  <div className="empty-panel">Esta página não possui camada textual suficiente para reflow. Use OCR quando o documento for digitalizado.</div>
+                )}
+              </article>
+            ) : (renderedPages.length || rendered) ? (
               (renderedPages.length ? renderedPages : rendered ? [rendered] : []).map((result) => {
                 const active = result.pageIndex === page;
                 if (!active) {
@@ -884,19 +969,22 @@ export function DocumentWorkspace({
                     ].filter(Boolean).join(" ")}
                     style={{
                       width: result.width,
-                      transform: `translate(-50%,-50%) rotate(${visualRotation}deg)`,
+                      transform: `translate(-50%,-50%) rotate(${visualRotation}deg) scale(${dynamicScale})`,
                     }}
                     onPointerDown={(event) => {
+                      beginDynamicZoom(event);
                       beginInk(event);
                       beginSelection(event);
                     }}
                     onPointerMove={(event) => {
                       updateCursorPoint(event);
+                      moveDynamicZoom(event);
                       moveInk(event);
                       moveSelection(event);
                     }}
-                    onPointerLeave={() => setCursorPoint(null)}
+                    onPointerLeave={() => { setCursorPoint(null); setLoupePoint(null); }}
                     onPointerUp={(event) => {
+                      finishDynamicZoom(event);
                       finishInk(event);
                       finishSelection(event);
                     }}
@@ -976,6 +1064,19 @@ export function DocumentWorkspace({
                           vectorEffect="non-scaling-stroke"
                         />
                       </svg>
+                    )}
+                    {loupeEnabled && loupePoint && (
+                      <div
+                        className="page-loupe"
+                        style={{
+                          left: `${loupePoint[0] * 100}%`,
+                          top: `${loupePoint[1] * 100}%`,
+                          backgroundImage: `url("${nativeAssetUrl(result.cachePath)}")`,
+                          backgroundSize: "300% 300%",
+                          backgroundPosition: `${loupePoint[0] * 100}% ${loupePoint[1] * 100}%`,
+                        }}
+                        aria-hidden="true"
+                      />
                     )}
                     <span className="page-corner-label">{result.pageIndex + 1}</span>
                   </div>
@@ -1060,6 +1161,11 @@ export function DocumentWorkspace({
             <button className={viewMode === "continuous" ? "view-mode-button active" : "view-mode-button"} onClick={() => onViewModeChange("continuous")} title="Rolagem contínua">Cont.</button>
             <button className={viewMode === "facing" ? "view-mode-button active" : "view-mode-button"} onClick={() => onViewModeChange("facing")} title="Duas páginas">2 pág.</button>
             <button className={viewMode === "facing-continuous" ? "view-mode-button active" : "view-mode-button"} onClick={() => onViewModeChange("facing-continuous")} title="Duas páginas contínuas">2 cont.</button>
+            <i />
+            <button className={viewerTool === "zoom-area" ? "view-mode-button active" : "view-mode-button"} onClick={() => setViewerTool(viewerTool === "zoom-area" ? "select" : "zoom-area")} title="Zoom por seleção">Área</button>
+            <button className={viewerTool === "dynamic-zoom" ? "view-mode-button active" : "view-mode-button"} onClick={() => setViewerTool(viewerTool === "dynamic-zoom" ? "select" : "dynamic-zoom")} title="Zoom dinâmico">Din.</button>
+            <button className={loupeEnabled ? "view-mode-button active" : "view-mode-button"} onClick={() => setLoupeEnabled((value) => !value)} title="Lupa">Lupa</button>
+            <button className={reflowEnabled ? "view-mode-button active" : "view-mode-button"} onClick={() => setReflowEnabled((value) => !value)} title="Reflow da camada textual">Reflow</button>
             <i />
             <button className="view-mode-button" onClick={() => rotateView(-1)} title="Girar visualização 90° à esquerda">↶</button>
             <button className="view-mode-button" onClick={() => rotateView(1)} title="Girar visualização 90° à direita">↷</button>

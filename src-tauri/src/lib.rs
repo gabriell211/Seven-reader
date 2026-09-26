@@ -26,6 +26,7 @@ mod session;
 mod shared_review;
 mod signatures;
 mod state;
+mod watch_folder;
 
 use std::fs;
 use tauri::Manager;

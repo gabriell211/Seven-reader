@@ -1099,6 +1099,27 @@ export interface GeospatialViewportInfo {
   wkt?: string;
 }
 
+export interface GeospatialLocation {
+  pageIndex: number;
+  normalizedX: number;
+  normalizedY: number;
+  viewportObjectId?: string;
+  first: number;
+  second: number;
+  coordinateKind: "geographic" | "projected" | string;
+  epsg?: number;
+  wkt?: string;
+}
+
+export interface GeospatialMeasurementResult {
+  kind: "distance" | "perimeter" | "area" | string;
+  value: number;
+  unit: string;
+  coordinateKind: "geographic" | "projected" | string;
+  epsg?: number;
+  points: Array<[number, number]>;
+}
+
 export interface GeospatialCoordinate {
   pageIndex: number;
   viewportObjectId?: string;

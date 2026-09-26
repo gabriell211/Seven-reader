@@ -74,6 +74,7 @@ pub fn run() {
             commands::session_add_stamp,
             commands::session_add_ink,
             commands::session_add_markup,
+            commands::session_correct_ocr_word,
             commands::session_edit_add_text,
             commands::session_edit_replace_text,
             commands::get_image_dimensions,

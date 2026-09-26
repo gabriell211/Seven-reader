@@ -2704,15 +2704,16 @@ pub fn start_combine_mixed_documents(
                         let executable = batch_libreoffice.as_ref().ok_or_else(|| {
                             SevenError::CapabilityUnavailable("LibreOffice".into())
                         })?;
+                        let args = vec![
+                            "--headless".to_owned(),
+                            "--convert-to".to_owned(),
+                            "pdf".to_owned(),
+                            "--outdir".to_owned(),
+                            directory.to_string_lossy().into_owned(),
+                            item.source.to_string_lossy().into_owned(),
+                        ];
                         let status = Command::new(executable)
-                            .args([
-                                "--headless",
-                                "--convert-to",
-                                "pdf",
-                                "--outdir",
-                                directory.to_string_lossy().as_ref(),
-                                item.source.to_string_lossy().as_ref(),
-                            ])
+                            .args(args)
                             .status()
                             .map_err(|error| SevenError::Operation(error.to_string()))?;
                         if !status.success() {

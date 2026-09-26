@@ -41,6 +41,14 @@ pub struct RenderResult {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct PageTextStatus {
+    pub page_index: usize,
+    pub char_count: usize,
+    pub textless: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SearchHit {
     pub page_index: usize,
     pub excerpt: String,
@@ -272,6 +280,31 @@ pub fn render_page(
         height,
         cache_path: cache_path.to_string_lossy().into_owned(),
         revision: document.revision,
+    })
+}
+
+pub fn page_text_status(
+    state: &AppState,
+    document: &OpenDocument,
+    page_index: usize,
+) -> Result<PageTextStatus, SevenError> {
+    if page_index >= document.page_count {
+        return Err(SevenError::OperationRejected(format!("Página {} não existe", page_index + 1)));
+    }
+    let pdfium = bind_pdfium(&state.resource_dir).map_err(SevenError::PdfEngineUnavailable)?;
+    let pdf = pdfium
+        .load_pdf_from_file(document.active_path(), document.password.as_deref())
+        .map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let page = pdf.pages().get(page_index as PdfPageIndex)
+        .map_err(|error| SevenError::Operation(error.to_string()))?;
+    let text = page.text()
+        .map_err(|error| SevenError::Operation(error.to_string()))?
+        .all();
+    let char_count = text.chars().filter(|character| !character.is_whitespace()).count();
+    Ok(PageTextStatus {
+        page_index,
+        char_count,
+        textless: char_count == 0,
     })
 }
 

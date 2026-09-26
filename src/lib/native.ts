@@ -597,6 +597,18 @@ export async function sessionRemovePdfAttachment(
   });
 }
 
+export async function sessionAddPdfPortfolioItem(
+  documentId: string,
+  filePath: string,
+  displayName: string,
+  description: string,
+  folderPath: string,
+): Promise<DocumentSummary> {
+  return invoke<DocumentSummary>("session_add_pdf_portfolio_item", {
+    documentId, filePath, displayName, description, folderPath,
+  });
+}
+
 export async function sessionConfigurePdfPortfolio(
   documentId: string,
   view: "details" | "tile" | "hidden",

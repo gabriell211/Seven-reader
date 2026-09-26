@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
-import type { SanitizeOptions } from "../types";
+import type { PdfEncryptionOptions, SanitizeOptions } from "../types";
 import { SevenIcon } from "./SevenIcon";
 
 interface SecurityDialogProps {
   mode: "protect" | "sanitize";
   currentPdf: string;
   onClose: () => void;
-  onEncrypt: (output: string, userPassword: string, ownerPassword: string) => void;
+  onEncrypt: (output: string, userPassword: string, ownerPassword: string, options: PdfEncryptionOptions) => void;
   onDecrypt: (output: string, password: string) => void;
   onSanitize: (output: string, options: SanitizeOptions) => void;
 }
@@ -16,6 +16,14 @@ export function SecurityDialog({ mode, currentPdf, onClose, onEncrypt, onDecrypt
   const [protectMode, setProtectMode] = useState<"encrypt" | "decrypt">("encrypt");
   const [userPassword, setUserPassword] = useState("");
   const [ownerPassword, setOwnerPassword] = useState("");
+  const [encryptionOptions, setEncryptionOptions] = useState<PdfEncryptionOptions>({
+    print: "full",
+    allowExtract: true,
+    allowModify: true,
+    allowAnnotations: true,
+    allowForms: true,
+    allowAssembly: true,
+  });
   const [options, setOptions] = useState<SanitizeOptions>({
     removeJavascript: true,
     removeOpenActions: true,
@@ -38,7 +46,7 @@ export function SecurityDialog({ mode, currentPdf, onClose, onEncrypt, onDecrypt
     const output = await chooseOutput(protectMode === "encrypt" ? "protegido" : "descriptografado");
     if (!output) return;
     if (protectMode === "encrypt") {
-      onEncrypt(output, userPassword, ownerPassword || userPassword);
+      onEncrypt(output, userPassword, ownerPassword || userPassword, encryptionOptions);
     } else {
       onDecrypt(output, userPassword);
     }
@@ -65,8 +73,45 @@ export function SecurityDialog({ mode, currentPdf, onClose, onEncrypt, onDecrypt
               </div>
               <label className="workflow-field"><span>{protectMode === "encrypt" ? "Senha para abrir" : "Senha atual"}</span><input type="password" value={userPassword} onChange={(event) => setUserPassword(event.target.value)} autoComplete="new-password" /></label>
               {protectMode === "encrypt" && <label className="workflow-field"><span>Senha de proprietário</span><input type="password" value={ownerPassword} onChange={(event) => setOwnerPassword(event.target.value)} autoComplete="new-password" /><small>Se ficar vazia, será usada a mesma senha de abertura.</small></label>}
+              {protectMode === "encrypt" && (
+                <section className="security-permissions">
+                  <div className="section-mini-title">Permissões para quem abrir com a senha de usuário</div>
+                  <label className="workflow-field">
+                    <span>Impressão</span>
+                    <select value={encryptionOptions.print} onChange={(event) => setEncryptionOptions((current) => ({ ...current, print: event.target.value as PdfEncryptionOptions["print"] }))}>
+                      <option value="full">Impressão completa</option>
+                      <option value="low">Somente baixa resolução</option>
+                      <option value="none">Bloquear impressão</option>
+                    </select>
+                  </label>
+                  <div className="two-column-fields">
+                    <label className="toggle-row"><input type="checkbox" checked={encryptionOptions.allowExtract} onChange={(event) => setEncryptionOptions((current) => ({ ...current, allowExtract: event.target.checked }))} /><span><strong>Copiar / extrair</strong><small>Texto e gráficos.</small></span></label>
+                    <label className="toggle-row"><input type="checkbox" checked={encryptionOptions.allowModify} onChange={(event) => setEncryptionOptions((current) => ({ ...current, allowModify: event.target.checked }))} /><span><strong>Editar documento</strong><small>Outras modificações de conteúdo.</small></span></label>
+                    <label className="toggle-row"><input type="checkbox" checked={encryptionOptions.allowAnnotations} onChange={(event) => setEncryptionOptions((current) => ({ ...current, allowAnnotations: event.target.checked }))} /><span><strong>Comentários</strong><small>Anotações e comentários.</small></span></label>
+                    <label className="toggle-row"><input type="checkbox" checked={encryptionOptions.allowForms} onChange={(event) => setEncryptionOptions((current) => ({ ...current, allowForms: event.target.checked }))} /><span><strong>Formulários</strong><small>Preencher campos e assinar.</small></span></label>
+                    <label className="toggle-row"><input type="checkbox" checked={encryptionOptions.allowAssembly} onChange={(event) => setEncryptionOptions((current) => ({ ...current, allowAssembly: event.target.checked }))} /><span><strong>Organizar páginas</strong><small>Montagem/assembly do documento.</small></span></label>
+                  </div>
+                  {(
+                    encryptionOptions.print !== "full"
+                    || !encryptionOptions.allowExtract
+                    || !encryptionOptions.allowModify
+                    || !encryptionOptions.allowAnnotations
+                    || !encryptionOptions.allowForms
+                    || !encryptionOptions.allowAssembly
+                  ) && (!ownerPassword || ownerPassword === userPassword) && (
+                    <div className="organizer-note organizer-note--warning">
+                      <SevenIcon name="shield" />
+                      <span>Defina uma senha de proprietário diferente para aplicar restrições.</span>
+                    </div>
+                  )}
+                </section>
+              )}
               <div className="organizer-note"><SevenIcon name="shield" /><span>A senha é passada diretamente ao processo local qpdf e não é armazenada pelo Seven Reader.</span></div>
-              <button className="primary-button workflow-submit" disabled={!userPassword} onClick={() => void submitProtection()}><SevenIcon name="lock" /> Aplicar</button>
+              <button
+                className="primary-button workflow-submit"
+                disabled={!userPassword || (protectMode === "encrypt" && (encryptionOptions.print !== "full" || !encryptionOptions.allowExtract || !encryptionOptions.allowModify || !encryptionOptions.allowAnnotations || !encryptionOptions.allowForms || !encryptionOptions.allowAssembly) && (!ownerPassword || ownerPassword === userPassword))}
+                onClick={() => void submitProtection()}
+              ><SevenIcon name="lock" /> Aplicar</button>
             </>
           ) : (
             <>

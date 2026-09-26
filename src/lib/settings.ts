@@ -22,6 +22,11 @@ export interface SevenSettings {
   quickTools: QuickToolId[];
   quickToolsPosition: { x: number; y: number } | null;
   sidePanels: SidePanelId[];
+  highContrast: boolean;
+  reducedMotion: boolean;
+  reflowFontSize: number;
+  readAloudRate: number;
+  readAloudPitch: number;
 }
 
 const KEY = "seven-reader:settings:v1";
@@ -42,6 +47,11 @@ export const defaultSettings: SevenSettings = {
   quickTools: ["select", "hand", "comment", "highlight", "underline", "strikeout", "draw", "text", "fill", "sign", "eraser"],
   quickToolsPosition: null,
   sidePanels: ["thumbs", "search", "bookmarks", "comments", "attachments", "layers", "signatures", "fields", "tasks"],
+  highContrast: false,
+  reducedMotion: false,
+  reflowFontSize: 18,
+  readAloudRate: 1,
+  readAloudPitch: 1,
 };
 
 export function loadSettings(): SevenSettings {
@@ -82,4 +92,10 @@ export function isTrustedPath(path: string, trustedLocations: string[]): boolean
 
 export function applyAppearance(mode: AppearanceMode): void {
   document.documentElement.dataset.theme = mode;
+}
+
+export function applyAccessibilityPreferences(settings: SevenSettings): void {
+  document.documentElement.dataset.contrast = settings.highContrast ? "high" : "normal";
+  document.documentElement.dataset.motion = settings.reducedMotion ? "reduced" : "normal";
+  document.documentElement.style.setProperty("--reflow-font-size", `${Math.max(12, Math.min(40, settings.reflowFontSize))}px`);
 }

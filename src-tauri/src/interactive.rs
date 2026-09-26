@@ -5,7 +5,7 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::HashSet,
     fs,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 #[derive(Debug, Clone, Serialize)]
@@ -19,6 +19,7 @@ pub struct InteractiveAssetInfo {
     pub mime: String,
     pub size: usize,
     pub sha256: String,
+    pub safe_to_open: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -98,6 +99,32 @@ fn stream_payload(stream: &Stream) -> Vec<u8> {
     stream.decompressed_content().unwrap_or_else(|_| stream.content.clone())
 }
 
+fn media_type_from_name(name: &str) -> Option<(&'static str, bool)> {
+    let extension = Path::new(name)
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    match extension.as_str() {
+        "mp3" => Some(("audio/mpeg", true)),
+        "wav" => Some(("audio/wav", true)),
+        "ogg" | "oga" => Some(("audio/ogg", true)),
+        "m4a" => Some(("audio/mp4", true)),
+        "aac" => Some(("audio/aac", true)),
+        "flac" => Some(("audio/flac", true)),
+        "mp4" | "m4v" => Some(("video/mp4", true)),
+        "webm" => Some(("video/webm", true)),
+        "mov" => Some(("video/quicktime", true)),
+        "avi" => Some(("video/x-msvideo", true)),
+        "wmv" => Some(("video/x-ms-wmv", true)),
+        _ => None,
+    }
+}
+
+fn safe_media_name(name: &str) -> bool {
+    media_type_from_name(name).is_some()
+}
+
 fn push_asset(
     output: &mut Vec<InteractiveAssetInfo>,
     seen: &mut HashSet<ObjectId>,
@@ -117,23 +144,28 @@ fn push_asset(
         .ok()
         .map(object_text)
         .unwrap_or_default();
-    let mime = if subtype.contains('/') {
-        subtype.clone()
-    } else if kind == "3d" {
-        match subtype.as_str() {
-            "U3D" => "model/u3d".into(),
-            "PRC" => "model/prc".into(),
-            _ => "application/octet-stream".into(),
-        }
-    } else {
-        "application/octet-stream".into()
-    };
     let extension = match subtype.as_str() {
         "U3D" => "u3d",
         "PRC" => "prc",
         _ => "bin",
     };
     let name = name.unwrap_or_else(|| format!("object-{}-{}.{}", id.0, id.1, extension));
+    let mime = media_type_from_name(&name)
+        .map(|(mime, _)| mime.to_owned())
+        .unwrap_or_else(|| {
+            if subtype.contains('/') {
+                subtype.clone()
+            } else if kind == "3d" {
+                match subtype.as_str() {
+                    "U3D" => "model/u3d".into(),
+                    "PRC" => "model/prc".into(),
+                    _ => "application/octet-stream".into(),
+                }
+            } else {
+                "application/octet-stream".into()
+            }
+        });
+    let safe_to_open = safe_media_name(&name);
     let sha256 = hex::encode(Sha256::digest(&data));
     output.push(InteractiveAssetInfo {
         object_id: id_string(id),
@@ -144,6 +176,7 @@ fn push_asset(
         mime,
         size: data.len(),
         sha256,
+        safe_to_open,
     });
 }
 
@@ -540,4 +573,26 @@ pub fn resolve_geospatial_coordinate(
     Err(SevenError::OperationRejected(
         "O ponto selecionado não pertence a um viewport geoespacial compatível".into(),
     ))
+}
+
+pub fn materialize_interactive_media(
+    input: &Path,
+    object_id: &str,
+    display_name: &str,
+    cache_dir: &Path,
+) -> Result<PathBuf, SevenError> {
+    if !safe_media_name(display_name) {
+        return Err(SevenError::OperationRejected(
+            "Somente formatos de áudio/vídeo permitidos podem ser abertos externamente".into(),
+        ));
+    }
+    let clean_name = Path::new(display_name)
+        .file_name()
+        .and_then(|value| value.to_str())
+        .filter(|value| !value.is_empty())
+        .unwrap_or("media.bin");
+    fs::create_dir_all(cache_dir).map_err(|error| SevenError::Io(error.to_string()))?;
+    let destination = cache_dir.join(format!("{}-{}", uuid::Uuid::new_v4(), clean_name));
+    extract_interactive_asset(input, object_id, &destination)?;
+    Ok(destination)
 }

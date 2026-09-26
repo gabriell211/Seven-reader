@@ -795,6 +795,73 @@ fn page_action_dictionary(
     }
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PageActionInfo {
+    pub object_id: String,
+    pub page_index: usize,
+    pub trigger: String,
+    pub action_type: String,
+    pub target: String,
+    pub blocked: bool,
+}
+
+fn action_target_summary(document: &Document, dictionary: &Dictionary, action_type: &str) -> String {
+    match action_type {
+        "URI" => dictionary.get(b"URI").ok().map(object_text).unwrap_or_default(),
+        "JavaScript" => dictionary.get(b"JS").ok().map(|value| resolved_text(document, value, 320)).unwrap_or_default(),
+        "Launch" | "SubmitForm" | "GoToR" => dictionary.get(b"F").ok().map(object_text).unwrap_or_default(),
+        "Named" => dictionary.get(b"N").ok().map(object_text).unwrap_or_default(),
+        "GoTo" => dictionary.get(b"D").ok().map(|value| format!("{value:?}")).unwrap_or_default(),
+        "ResetForm" => "Resetar formulário".into(),
+        _ => String::new(),
+    }
+}
+
+pub fn list_page_actions(path: &Path) -> Result<Vec<PageActionInfo>, SevenError> {
+    let document = Document::load(path).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let mut output = Vec::new();
+
+    for (page_number, page_id) in document.get_pages() {
+        let Ok(page) = document.get_object(page_id).and_then(Object::as_dict) else { continue };
+        let Some(aa) = page.get(b"AA").ok().and_then(|value| resolved_dictionary(&document, value)) else { continue };
+
+        for (key, trigger) in [(b"O".as_slice(), "open"), (b"C".as_slice(), "close")] {
+            let Ok(action_object) = aa.get(key) else { continue };
+            let (object_id, action) = match action_object {
+                Object::Reference(id) => (
+                    id_string(*id),
+                    document.get_object(*id).ok().and_then(|value| value.as_dict().ok()),
+                ),
+                Object::Dictionary(dictionary) => (
+                    format!("inline:{}:{trigger}", page_number),
+                    Some(dictionary),
+                ),
+                _ => (String::new(), None),
+            };
+            let Some(action) = action else { continue };
+            let action_type = action
+                .get(b"S")
+                .ok()
+                .and_then(|value| value.as_name().ok())
+                .map(|value| String::from_utf8_lossy(value).into_owned())
+                .unwrap_or_else(|| "Unknown".into());
+            let target = action_target_summary(&document, action, &action_type);
+            output.push(PageActionInfo {
+                object_id,
+                page_index: page_number.saturating_sub(1) as usize,
+                trigger: trigger.into(),
+                blocked: matches!(action_type.as_str(), "JavaScript" | "Launch" | "ImportData" | "SubmitForm"),
+                action_type,
+                target,
+            });
+        }
+    }
+
+    output.sort_by_key(|action| (action.page_index, action.trigger.clone()));
+    Ok(output)
+}
+
 pub fn set_page_action(
     input: &Path,
     output: &Path,

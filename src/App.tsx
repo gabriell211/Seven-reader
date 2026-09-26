@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebviewWindow, WebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { message, open, save } from "@tauri-apps/plugin-dialog";
+import { confirm, message, open, save } from "@tauri-apps/plugin-dialog";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { SplashScreen } from "./components/SplashScreen";
 import { Home } from "./components/Home";
 import { DocumentWorkspace } from "./components/DocumentWorkspace";
@@ -64,6 +65,10 @@ import {
   listAnnotations,
   listFormFields,
   listPdfActions,
+  listPdfPageActions,
+  sessionSetPdfPageAction,
+  sessionRemovePdfPageAction,
+  resolvePdfAction,
   extractPdfAttachment,
   openDocument,
   printDocument,
@@ -234,6 +239,8 @@ import type {
   OptimizeOptions,
   OverlayTextOptions,
   PdfActionInfo,
+  PageActionInfo,
+  PageActionInput,
   PrintPreflightReport,
   PortfolioPreview,
   PortfolioSearchHit,
@@ -402,6 +409,7 @@ export default function App() {
   const [portfolioSearching, setPortfolioSearching] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [pdfActions, setPdfActions] = useState<PdfActionInfo[]>([]);
+  const [pageActions, setPageActions] = useState<PageActionInfo[]>([]);
   const [actionsLoading, setActionsLoading] = useState(false);
   const [printProductionOpen, setPrintProductionOpen] = useState(false);
   const [printPreflight, setPrintPreflight] = useState<PrintPreflightReport | null>(null);
@@ -1461,6 +1469,7 @@ export default function App() {
           return;
         }
         setPdfActions([]);
+        setPageActions([]);
         setActionsOpen(true);
         return;
       }
@@ -1685,15 +1694,107 @@ export default function App() {
     }
   };
 
-  const reloadPdfActions = async () => {
-    if (!document) return;
+  const reloadPdfActions = async (summary = document) => {
+    if (!summary) return;
     try {
       setActionsLoading(true);
-      setPdfActions(await listPdfActions(document.activePath));
+      const [actions, pages] = await Promise.all([
+        listPdfActions(summary.activePath),
+        listPdfPageActions(summary.activePath),
+      ]);
+      setPdfActions(actions);
+      setPageActions(pages);
     } catch (error) {
       setNotice(errorMessage(error));
     } finally {
       setActionsLoading(false);
+    }
+  };
+
+  const runSetPageAction = async (request: PageActionInput) => {
+    if (!document) return;
+    try {
+      const summary = await sessionSetPdfPageAction(document.id, request);
+      await acceptDocumentRevision(summary, `Ação ${request.trigger} da página ${request.pageIndex + 1} atualizada.`);
+      await reloadPdfActions(summary);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runRemovePageAction = async (pageIndex: number, trigger: string) => {
+    if (!document) return;
+    try {
+      const summary = await sessionRemovePdfPageAction(document.id, pageIndex, trigger);
+      await acceptDocumentRevision(summary, "Ação de página removida.");
+      await reloadPdfActions(summary);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const runExecutePdfAction = async (action: PdfActionInfo) => {
+    if (!document || action.objectId.startsWith("inline:")) return;
+    try {
+      const execution = await resolvePdfAction(document.activePath, action.objectId);
+      if (execution.blocked) {
+        setNotice(execution.reason || "Esta ação é bloqueada pela política de segurança.");
+        return;
+      }
+
+      if (execution.actionType === "URI") {
+        const parsed = new URL(execution.target);
+        const host = parsed.hostname.toLocaleLowerCase();
+        const trusted = settings.trustedHosts.some((entry) => entry.toLocaleLowerCase() === host);
+        if (settings.warnExternalUrls && !trusted) {
+          const approved = await confirm(
+            `Abrir endereço externo?\n\n${execution.target}`,
+            { title: "Seven Reader · Link externo", kind: "warning" },
+          );
+          if (!approved) return;
+        }
+        await openUrl(execution.target);
+        return;
+      }
+
+      if (execution.actionType === "GoTo") {
+        if (execution.pageIndex !== undefined) {
+          await render(execution.pageIndex, zoom);
+          setActionsOpen(false);
+          return;
+        }
+        if (execution.target) {
+          const destinations = await listPdfNamedDestinations(document.id);
+          const destination = destinations.find((item) => item.name === execution.target);
+          if (destination) {
+            await render(destination.pageIndex, zoom);
+            setActionsOpen(false);
+            return;
+          }
+        }
+      }
+
+      if (execution.actionType === "Named") {
+        if (execution.target === "NextPage") await render(Math.min(document.pageCount - 1, page + 1), zoom);
+        else if (execution.target === "PrevPage") await render(Math.max(0, page - 1), zoom);
+        else if (execution.target === "FirstPage") await render(0, zoom);
+        else if (execution.target === "LastPage") await render(document.pageCount - 1, zoom);
+        else {
+          setNotice(`Ação Named "${execution.target}" não possui execução segura mapeada.`);
+          return;
+        }
+        setActionsOpen(false);
+        return;
+      }
+
+      if (execution.actionType === "ResetForm") {
+        await runResetForm(true);
+        return;
+      }
+
+      setNotice(`Ação ${execution.actionType} inspecionada, mas não executada.`);
+    } catch (error) {
+      setNotice(errorMessage(error));
     }
   };
 
@@ -3298,9 +3399,15 @@ export default function App() {
       {actionsOpen && document && (
         <ActionsDialog
           actions={pdfActions}
+          pageActions={pageActions}
+          pageIndex={page}
+          pageCount={document.pageCount}
           loading={actionsLoading}
           onClose={() => setActionsOpen(false)}
           onReload={() => void reloadPdfActions()}
+          onSetPageAction={(request) => void runSetPageAction(request)}
+          onRemovePageAction={(pageIndex, trigger) => void runRemovePageAction(pageIndex, trigger)}
+          onExecute={(action) => void runExecutePdfAction(action)}
         />
       )}
       {advancedTab && document && (

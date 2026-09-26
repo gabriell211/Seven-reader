@@ -221,6 +221,9 @@ import {
   startOcrAdvanced,
   startOptimizeAdvanced,
   startBatchOptimize,
+  startWatchFolder,
+  stopWatchFolder,
+  listWatchFolders,
 } from "./lib/native";
 import { canRunTool } from "./data/tools";
 import type {
@@ -300,12 +303,15 @@ import type {
   TextPlacement,
   ToolId,
   ViewMode,
+  WatchFolderConfig,
+  WatchFolderEvent,
 } from "./types";
 
 const RECENTS_KEY = "seven-reader:recents:v1";
 const TASKS_KEY = "seven-reader:tasks:v1";
 const RECENT_TOOLS_KEY = "seven-reader:recent-tools:v1";
 const SESSION_KEY = "seven-reader:session:v1";
+const WATCH_FOLDERS_KEY = "seven-reader:watch-folders:v1";
 
 const emptyCapabilities: Capabilities = {
   pdf_engine: { available: false },
@@ -414,6 +420,8 @@ export default function App() {
   const [organizerOpen, setOrganizerOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [conversionOpen, setConversionOpen] = useState(false);
+  const [watchFolders, setWatchFolders] = useState<WatchFolderConfig[]>([]);
+  const [watchFolderEvents, setWatchFolderEvents] = useState<WatchFolderEvent[]>([]);
   const [securityMode, setSecurityMode] = useState<"protect" | "sanitize" | null>(null);
   const [propertiesOpen, setPropertiesOpen] = useState(false);
   const [reportMode, setReportMode] = useState<"compare" | "accessibility" | null>(null);

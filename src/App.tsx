@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { getCurrentWebviewWindow, WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { message, open, save } from "@tauri-apps/plugin-dialog";
 import { SplashScreen } from "./components/SplashScreen";
 import { Home } from "./components/Home";
@@ -274,6 +274,9 @@ function loadRecentTools(): ToolId[] {
 
 export default function App() {
   const native = isNativeDesktop();
+  const currentWindowLabel = native ? getCurrentWebviewWindow().label : "browser";
+  const windowSessionKey = `${SESSION_KEY}:${currentWindowLabel}`;
+  const launchPathRef = useRef(new URLSearchParams(window.location.search).get("open"));
   const [splash, setSplash] = useState(true);
   const [leavingSplash, setLeavingSplash] = useState(false);
   const [capabilities, setCapabilities] = useState<Capabilities | null>(native ? emptyCapabilities : null);
@@ -486,7 +489,7 @@ export default function App() {
         zoom: view.zoom,
       };
     });
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    localStorage.setItem(windowSessionKey, JSON.stringify(session));
   }, [native, openTabs, tabViews, document?.id, page, zoom, settings.defaultZoom]);
 
   const activeJobs = useMemo(
@@ -636,7 +639,8 @@ export default function App() {
   const restoreSession = async () => {
     if (!native) return;
     try {
-      const raw = localStorage.getItem(SESSION_KEY);
+      const raw = localStorage.getItem(windowSessionKey)
+        ?? (currentWindowLabel === "main" ? localStorage.getItem(SESSION_KEY) : null);
       const parsed = raw ? JSON.parse(raw) : [];
       const session = Array.isArray(parsed)
         ? parsed.filter((item): item is {
@@ -699,10 +703,46 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (!native || splash || sessionRestoredRef.current || !settings.reopenLastDocument) return;
+    if (!native || splash || sessionRestoredRef.current) return;
+    const launchPath = launchPathRef.current;
+    if (launchPath) {
+      sessionRestoredRef.current = true;
+      void openPath(launchPath);
+      return;
+    }
+    if (!settings.reopenLastDocument) return;
     sessionRestoredRef.current = true;
     void restoreSession();
-  }, [native, splash, settings.reopenLastDocument]);
+  }, [native, splash, settings.reopenLastDocument, currentWindowLabel]);
+
+  const openTabInNewWindow = async (documentId: string, move: boolean) => {
+    if (!native || currentWindowLabel !== "main") {
+      setNotice("A criação de novas janelas fica restrita à janela principal por segurança.");
+      return;
+    }
+    const tab = openTabs.find((item) => item.id === documentId);
+    if (!tab) return;
+
+    const label = `document-${crypto.randomUUID().replace(/-/g, "")}`;
+    const child = new WebviewWindow(label, {
+      url: `/?open=${encodeURIComponent(tab.path)}`,
+      title: `Seven Reader — ${tab.name}`,
+      width: 1280,
+      height: 860,
+      minWidth: 900,
+      minHeight: 620,
+      center: true,
+      resizable: true,
+    });
+
+    child.once("tauri://created", () => {
+      setNotice(move ? "Documento movido para uma nova janela." : "Documento aberto em uma nova janela.");
+      if (move) void closeTab(documentId);
+    });
+    child.once("tauri://error", (event) => {
+      setNotice(`Não foi possível criar a nova janela: ${String(event.payload)}`);
+    });
+  };
 
   const choosePdf = async () => {
     if (!native) return;
@@ -787,7 +827,7 @@ export default function App() {
 
     const remaining = openTabs.filter((tab) => !ids.includes(tab.id));
     setOpenTabs(remaining);
-    if (!remaining.length) localStorage.removeItem(SESSION_KEY);
+    if (!remaining.length) localStorage.removeItem(windowSessionKey);
     setTabViews((current) => {
       const next = { ...current };
       ids.forEach((id) => delete next[id]);
@@ -878,9 +918,9 @@ export default function App() {
               zoom: view.zoom,
             };
           });
-          localStorage.setItem(SESSION_KEY, JSON.stringify(cleanSession));
+          localStorage.setItem(windowSessionKey, JSON.stringify(cleanSession));
         } else {
-          localStorage.removeItem(SESSION_KEY);
+          localStorage.removeItem(windowSessionKey);
         }
 
         for (const tab of openTabs) {
@@ -2888,6 +2928,9 @@ export default function App() {
           onCloseOtherTabs={(documentId) => void closeOtherTabs(documentId)}
           onReopenClosed={() => void reopenClosedTab()}
           onReorderTabs={reorderTabs}
+          canCreateWindow={currentWindowLabel === "main"}
+          onOpenInNewWindow={(documentId) => void openTabInNewWindow(documentId, false)}
+          onMoveToNewWindow={(documentId) => void openTabInNewWindow(documentId, true)}
           onNavigateBack={() => void navigateHistory(-1)}
           onNavigateForward={() => void navigateHistory(1)}
           onQuickToolsPositionChange={(position) => setSettings((current) => ({ ...current, quickToolsPosition: position }))}

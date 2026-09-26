@@ -281,6 +281,7 @@ const emptyCapabilities: Capabilities = {
   pdftotext: { available: false },
   openssl: { available: false },
   tesseract: { available: false },
+  unpaper: { available: false },
   web_pdf: { available: false },
 };
 

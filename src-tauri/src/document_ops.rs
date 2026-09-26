@@ -507,6 +507,51 @@ fn cleanup_structure(document: &mut Document, removed: &mut usize) -> Result<(),
     Ok(())
 }
 
+fn inspect_sanitize_dictionary(dictionary: &Dictionary, analysis: &mut SanitizeAnalysis) {
+    if dictionary.get(b"Metadata").is_ok() || dictionary.get(b"PieceInfo").is_ok() { analysis.metadata_entries += 1; }
+    if dictionary.get(b"JS").is_ok() || dictionary.get(b"JavaScript").is_ok() { analysis.javascript_entries += 1; }
+    if dictionary.get(b"OpenAction").is_ok() || dictionary.get(b"AA").is_ok() { analysis.action_entries += 1; }
+    if dictionary.get(b"XFA").is_ok() { analysis.xfa_entries += 1; }
+    if dictionary.get(b"FT").is_ok() { analysis.form_field_count += 1; }
+    let subtype = dictionary.get(b"Subtype").ok().and_then(|value| value.as_name().ok()).unwrap_or_default();
+    if matches!(subtype, b"RichMedia" | b"3D" | b"Movie" | b"Sound" | b"Screen")
+        || dictionary.get(b"RichMediaContent").is_ok() || dictionary.get(b"3DD").is_ok() || dictionary.get(b"Rendition").is_ok()
+    { analysis.multimedia_entries += 1; }
+}
+
+pub fn analyze_sanitization(path: &Path) -> Result<SanitizeAnalysis, SevenError> {
+    let document = Document::load(path).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let mut analysis = SanitizeAnalysis::default();
+    if document.trailer.get(b"Info").is_ok() { analysis.metadata_entries += 1; }
+    for object in document.objects.values() {
+        match object {
+            Object::Dictionary(dictionary) => inspect_sanitize_dictionary(dictionary, &mut analysis),
+            Object::Stream(stream) => inspect_sanitize_dictionary(&stream.dict, &mut analysis),
+            _ => {}
+        }
+    }
+    for page_id in document.get_pages().values() {
+        if let Some(page) = document.get_object(*page_id).ok().and_then(|object| object.as_dict().ok()) {
+            if let Ok(Object::Array(annotations)) = page.get(b"Annots") { analysis.annotation_count += annotations.len(); }
+        }
+    }
+    if let Ok(catalog) = document.catalog() {
+        if catalog.get(b"AcroForm").is_ok() && analysis.form_field_count == 0 { analysis.form_field_count = 1; }
+        if let Ok(names_object) = catalog.get(b"Names") {
+            let names = match names_object {
+                Object::Dictionary(dictionary) => Some(dictionary),
+                Object::Reference(id) => document.get_object(*id).ok().and_then(|object| object.as_dict().ok()),
+                _ => None,
+            };
+            if let Some(names) = names {
+                if names.get(b"EmbeddedFiles").is_ok() { analysis.attachment_entries += 1; }
+                if names.get(b"JavaScript").is_ok() { analysis.javascript_entries += 1; }
+                if names.get(b"Renditions").is_ok() { analysis.multimedia_entries += 1; }
+            }
+        }
+    }
+    Ok(analysis)
+}
 pub fn sanitize_document(
     input: &Path,
     output: &Path,

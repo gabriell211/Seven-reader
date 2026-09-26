@@ -24,6 +24,8 @@ pub struct RedactionReport {
     pub areas_applied: usize,
     pub objects_removed: usize,
     pub annotations_removed: usize,
+    pub verified_areas: usize,
+    pub verification_passed: bool,
     pub output: String,
 }
 
@@ -84,6 +86,54 @@ pub fn find_text_matches(
     }
 
     Ok(results)
+}
+
+fn verify_redacted_text(
+    state: &AppState,
+    output: &Path,
+    areas: &[RedactionArea],
+) -> Result<usize, SevenError> {
+    let pdfium = bind_pdfium(&state.resource_dir).map_err(SevenError::PdfEngineUnavailable)?;
+    let document = pdfium
+        .load_pdf_from_file(output, None)
+        .map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+
+    let mut verified = 0usize;
+    for area in areas {
+        let Some(source_text) = area
+            .source_text
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        else {
+            continue;
+        };
+        let page = document
+            .pages()
+            .get(area.page_index as PdfPageIndex)
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+        let text = page
+            .text()
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+        let search = text
+            .search(
+                source_text,
+                &PdfSearchOptions::new().match_case(true).match_whole_word(false),
+            )
+            .map_err(|error| SevenError::Operation(error.to_string()))?;
+        let redacted_rect = area_rect(area)?;
+        let still_present = search
+            .iter()
+            .any(|segment| segment.bounds().does_overlap(&redacted_rect));
+        if still_present {
+            return Err(SevenError::OperationRejected(format!(
+                "Verificação pós-redação falhou na página {}: conteúdo ainda é recuperável na área marcada",
+                area.page_index + 1,
+            )));
+        }
+        verified += 1;
+    }
+    Ok(verified)
 }
 
 pub fn apply_redactions(
@@ -175,10 +225,20 @@ pub fn apply_redactions(
     }
     fs::rename(&temp, output).map_err(|error| SevenError::Io(error.to_string()))?;
 
+    let verified_areas = match verify_redacted_text(state, output, areas) {
+        Ok(value) => value,
+        Err(error) => {
+            let _ = fs::remove_file(output);
+            return Err(error);
+        }
+    };
+
     Ok(RedactionReport {
         areas_applied: areas.len(),
         objects_removed,
         annotations_removed,
+        verified_areas,
+        verification_passed: true,
         output: output.to_string_lossy().into_owned(),
     })
 }

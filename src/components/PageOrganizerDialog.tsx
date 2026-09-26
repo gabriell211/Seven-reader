@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
+import { readImage, readText } from "@tauri-apps/plugin-clipboard-manager";
 import { SevenIcon } from "./SevenIcon";
 import { nativeAssetUrl, renderPage } from "../lib/native";
+import type { Capabilities } from "../types";
 
 export type PageOperation =
   | "reorder"
@@ -11,6 +13,8 @@ export type PageOperation =
   | "delete"
   | "insert"
   | "replace";
+
+export type InsertSourceKind = "pdf" | "blank" | "images" | "clipboard-text" | "clipboard-image" | "web" | "scan";
 
 export interface PageOperationRequest {
   operation: PageOperation;
@@ -23,12 +27,24 @@ export interface PageOperationRequest {
   targetStart?: number;
   sourceStart?: number;
   count?: number;
+  insertKind?: InsertSourceKind;
+  images?: string[];
+  text?: string;
+  rgba?: number[];
+  imageWidth?: number;
+  imageHeight?: number;
+  dpi?: number;
+  pageSize?: "a4" | "letter" | "legal";
+  blankPageCount?: number;
+  fontSize?: number;
+  url?: string;
 }
 
 interface PageOrganizerDialogProps {
   documentId: string;
   fileName: string;
   pageCount?: number;
+  capabilities: Capabilities | null;
   onClose: () => void;
   onRun: (request: PageOperationRequest) => void;
 }
@@ -43,7 +59,7 @@ const operations: Array<{ id: PageOperation; title: string; description: string 
   { id: "split", title: "Dividir", description: "Separe o documento em arquivos menores por quantidade de páginas." },
 ];
 
-export function PageOrganizerDialog({ documentId, fileName, pageCount, onClose, onRun }: PageOrganizerDialogProps) {
+export function PageOrganizerDialog({ documentId, fileName, pageCount, capabilities, onClose, onRun }: PageOrganizerDialogProps) {
   const [operation, setOperation] = useState<PageOperation>("reorder");
   const [expression, setExpression] = useState("1-z");
   const [angle, setAngle] = useState<90 | 180 | 270>(90);
@@ -54,6 +70,16 @@ export function PageOrganizerDialog({ documentId, fileName, pageCount, onClose, 
   const [targetStart, setTargetStart] = useState(1);
   const [sourceStart, setSourceStart] = useState(1);
   const [count, setCount] = useState(1);
+  const [insertKind, setInsertKind] = useState<InsertSourceKind>("pdf");
+  const [insertImages, setInsertImages] = useState<string[]>([]);
+  const [insertText, setInsertText] = useState("");
+  const [insertUrl, setInsertUrl] = useState("");
+  const [insertPageSize, setInsertPageSize] = useState<"a4" | "letter" | "legal">("a4");
+  const [insertBlankCount, setInsertBlankCount] = useState(1);
+  const [insertFontSize, setInsertFontSize] = useState(11);
+  const [insertDpi, setInsertDpi] = useState(150);
+  const [clipboardImage, setClipboardImage] = useState<{ rgba: number[]; width: number; height: number } | null>(null);
+  const [clipboardError, setClipboardError] = useState("");
   const [pageOrder, setPageOrder] = useState<number[]>(() => Array.from({ length: pageCount ?? 0 }, (_, index) => index));
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [anchor, setAnchor] = useState<number | null>(null);
@@ -193,6 +219,45 @@ export function PageOrganizerDialog({ documentId, fileName, pageCount, onClose, 
     setDraggedPosition(null);
   };
 
+  const chooseInsertImages = async () => {
+    const selected = await open({
+      title: "Selecionar imagens para inserir como páginas",
+      multiple: true,
+      directory: false,
+      filters: [{ name: "Imagens", extensions: ["png", "jpg", "jpeg", "tif", "tiff", "bmp", "webp"] }],
+    });
+    if (Array.isArray(selected)) setInsertImages(selected);
+    else if (typeof selected === "string") setInsertImages([selected]);
+  };
+
+  const readClipboardTextForInsert = async () => {
+    try {
+      const value = await readText();
+      setInsertText(value);
+      setClipboardImage(null);
+      setClipboardError(value ? "" : "O clipboard não contém texto.");
+    } catch {
+      setClipboardError("Não foi possível ler texto do clipboard.");
+    }
+  };
+
+  const readClipboardImageForInsert = async () => {
+    try {
+      const image = await readImage();
+      const [{ width, height }, rgba] = await Promise.all([image.size(), image.rgba()]);
+      await image.close();
+      if (!width || !height || rgba.length !== width * height * 4) {
+        throw new Error("Imagem do clipboard inválida");
+      }
+      setClipboardImage({ rgba: Array.from(rgba), width, height });
+      setInsertText("");
+      setClipboardError("");
+    } catch {
+      setClipboardImage(null);
+      setClipboardError("O clipboard não contém uma imagem compatível.");
+    }
+  };
+
   const chooseSource = async () => {
     const selected = await open({
       title: operation === "replace" ? "Selecionar PDF com páginas de substituição" : "Selecionar PDF para inserir páginas",
@@ -215,9 +280,18 @@ export function PageOrganizerDialog({ documentId, fileName, pageCount, onClose, 
 
   const pageExpressionValid = expression.trim().length > 0 && expression.length <= 512;
   const sourceRangeValid = sourceRange.trim().length > 0 && sourceRange.length <= 512;
+  const insertValid =
+    insertKind === "pdf" ? Boolean(source) && sourceRangeValid :
+      insertKind === "blank" ? insertBlankCount >= 1 :
+        insertKind === "images" ? insertImages.length > 0 :
+          insertKind === "clipboard-text" ? Boolean(insertText.trim()) :
+            insertKind === "clipboard-image" ? Boolean(clipboardImage) :
+              insertKind === "web" ? Boolean(insertUrl.trim()) && Boolean(capabilities?.web_pdf.available) :
+                Boolean(capabilities?.scanner.available);
+
   const valid =
     operation === "split" ? pagesPerFile >= 1 :
-      operation === "insert" ? Boolean(source) && sourceRangeValid && insertAfter >= 0 :
+      operation === "insert" ? insertValid && insertAfter >= 0 :
         operation === "replace" ? Boolean(source) && targetStart >= 1 && sourceStart >= 1 && count >= 1 :
           pageExpressionValid;
 
@@ -233,6 +307,17 @@ export function PageOrganizerDialog({ documentId, fileName, pageCount, onClose, 
       targetStart,
       sourceStart,
       count,
+      insertKind,
+      images: insertImages,
+      text: insertText,
+      rgba: clipboardImage?.rgba,
+      imageWidth: clipboardImage?.width,
+      imageHeight: clipboardImage?.height,
+      dpi: insertDpi,
+      pageSize: insertPageSize,
+      blankPageCount: insertBlankCount,
+      fontSize: insertFontSize,
+      url: insertUrl.trim() || undefined,
     });
   };
 
@@ -353,46 +438,102 @@ export function PageOrganizerDialog({ documentId, fileName, pageCount, onClose, 
 
           {(operation === "insert" || operation === "replace") && (
             <>
-              <button className="image-drop image-drop--compact" onClick={() => void chooseSource()}>
-                <SevenIcon name="open" />
-                <strong>{source ? source.replace(/\\/g, "/").split("/").pop() : "Selecionar PDF de origem"}</strong>
-                <small>{source || "O arquivo é lido localmente; nenhum documento é enviado para servidores."}</small>
-              </button>
-
               {operation === "insert" ? (
-                <div className="two-column-fields">
-                  <label className="workflow-field">
-                    <span>Páginas da origem</span>
-                    <input value={sourceRange} onChange={(event) => setSourceRange(event.target.value)} placeholder="1-z" />
-                    <small>Ex.: 1-3,5 ou 1-z.</small>
-                  </label>
+                <>
+                  <div className="insert-source-grid">
+                    {([
+                      ["pdf", "PDF", "pages"],
+                      ["blank", "Em branco", "create"],
+                      ["images", "Imagens", "open"],
+                      ["clipboard-text", "Clipboard texto", "text"],
+                      ["clipboard-image", "Clipboard imagem", "open"],
+                      ["web", "Web", "convert"],
+                      ["scan", "Scanner", "scan"],
+                    ] as const).map(([id, label, icon]) => {
+                      const disabled =
+                        (id === "web" && !capabilities?.web_pdf.available)
+                        || (id === "scan" && !capabilities?.scanner.available);
+                      return (
+                        <button key={id} disabled={disabled} className={insertKind === id ? "active" : ""} onClick={() => setInsertKind(id)}>
+                          <SevenIcon name={icon} /><span>{label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {insertKind === "pdf" && (
+                    <>
+                      <button className="image-drop image-drop--compact" onClick={() => void chooseSource()}>
+                        <SevenIcon name="open" />
+                        <strong>{source ? source.replace(/\\/g, "/").split("/").pop() : "Selecionar PDF de origem"}</strong>
+                        <small>{source || "As páginas são copiadas estruturalmente com qpdf."}</small>
+                      </button>
+                      <label className="workflow-field"><span>Páginas da origem</span><input value={sourceRange} onChange={(event) => setSourceRange(event.target.value)} placeholder="1-z" /><small>Ex.: 1-3,5 ou 1-z.</small></label>
+                    </>
+                  )}
+
+                  {insertKind === "blank" && (
+                    <div className="two-column-fields">
+                      <label className="workflow-field"><span>Tamanho</span><select value={insertPageSize} onChange={(event) => setInsertPageSize(event.target.value as typeof insertPageSize)}><option value="a4">A4</option><option value="letter">Carta</option><option value="legal">Legal</option></select></label>
+                      <label className="workflow-field"><span>Quantidade</span><input type="number" min={1} max={500} value={insertBlankCount} onChange={(event) => setInsertBlankCount(Math.max(1, Math.min(500, Number(event.target.value) || 1)))} /></label>
+                    </div>
+                  )}
+
+                  {insertKind === "images" && (
+                    <>
+                      <button className="image-drop image-drop--compact" onClick={() => void chooseInsertImages()}><SevenIcon name="open" /><strong>{insertImages.length ? `${insertImages.length} imagem(ns)` : "Selecionar imagens"}</strong><small>Cada imagem será uma página, na ordem selecionada.</small></button>
+                      <label className="workflow-field"><span>DPI</span><input type="number" min={72} max={600} value={insertDpi} onChange={(event) => setInsertDpi(Math.max(72, Math.min(600, Number(event.target.value) || 150)))} /></label>
+                    </>
+                  )}
+
+                  {insertKind === "clipboard-text" && (
+                    <>
+                      <button className="secondary-light-button choose-wide" onClick={() => void readClipboardTextForInsert()}><SevenIcon name="text" /> Ler texto do clipboard</button>
+                      <label className="workflow-field"><span>Texto</span><textarea rows={6} value={insertText} onChange={(event) => setInsertText(event.target.value)} /></label>
+                      <div className="two-column-fields"><label className="workflow-field"><span>Tamanho</span><select value={insertPageSize} onChange={(event) => setInsertPageSize(event.target.value as typeof insertPageSize)}><option value="a4">A4</option><option value="letter">Carta</option><option value="legal">Legal</option></select></label><label className="workflow-field"><span>Fonte</span><input type="number" min={8} max={36} value={insertFontSize} onChange={(event) => setInsertFontSize(Math.max(8, Math.min(36, Number(event.target.value) || 11)))} /></label></div>
+                      {clipboardError && <small className="dependency-note">{clipboardError}</small>}
+                    </>
+                  )}
+
+                  {insertKind === "clipboard-image" && (
+                    <>
+                      <button className="secondary-light-button choose-wide" onClick={() => void readClipboardImageForInsert()}><SevenIcon name="open" /> Ler imagem do clipboard</button>
+                      {clipboardImage && <div className="organizer-note"><SevenIcon name="open" /><span>Imagem {clipboardImage.width}×{clipboardImage.height}px pronta para virar uma página.</span></div>}
+                      <label className="workflow-field"><span>DPI</span><input type="number" min={72} max={600} value={insertDpi} onChange={(event) => setInsertDpi(Math.max(72, Math.min(600, Number(event.target.value) || 150)))} /></label>
+                      {clipboardError && <small className="dependency-note">{clipboardError}</small>}
+                    </>
+                  )}
+
+                  {insertKind === "web" && (
+                    <label className="workflow-field"><span>URL</span><input value={insertUrl} onChange={(event) => setInsertUrl(event.target.value)} placeholder="https://..." /><small>Chrome/Chromium/Edge headless captura a página e qpdf a insere no PDF.</small></label>
+                  )}
+
+                  {insertKind === "scan" && (
+                    <div className="two-column-fields">
+                      <div className="organizer-note"><SevenIcon name="scan" /><span>Windows usa WIA; Linux usa SANE/scanimage. O seletor do scanner aparece ao continuar.</span></div>
+                      <label className="workflow-field"><span>DPI</span><input type="number" min={75} max={1200} value={insertDpi} onChange={(event) => setInsertDpi(Math.max(75, Math.min(1200, Number(event.target.value) || 150)))} /></label>
+                    </div>
+                  )}
+
                   <label className="workflow-field">
                     <span>Inserir depois da página</span>
-                    <input
-                      type="number"
-                      min={0}
-                      max={pageCount ?? 999999}
-                      value={insertAfter}
-                      onChange={(event) => setInsertAfter(Math.max(0, Number(event.target.value) || 0))}
-                    />
-                    <small>Use 0 para inserir no início. Use {pageCount ?? "a última página"} para inserir ao final.</small>
+                    <input type="number" min={0} max={pageCount ?? 999999} value={insertAfter} onChange={(event) => setInsertAfter(Math.max(0, Number(event.target.value) || 0))} />
+                    <small>0 = início; {pageCount ?? "última página"} = final do documento.</small>
                   </label>
-                </div>
+                </>
               ) : (
-                <div className="three-column-fields">
-                  <label className="workflow-field">
-                    <span>Destino começa em</span>
-                    <input type="number" min={1} value={targetStart} onChange={(event) => setTargetStart(Math.max(1, Number(event.target.value) || 1))} />
-                  </label>
-                  <label className="workflow-field">
-                    <span>Origem começa em</span>
-                    <input type="number" min={1} value={sourceStart} onChange={(event) => setSourceStart(Math.max(1, Number(event.target.value) || 1))} />
-                  </label>
-                  <label className="workflow-field">
-                    <span>Quantidade</span>
-                    <input type="number" min={1} max={5000} value={count} onChange={(event) => setCount(Math.max(1, Math.min(5000, Number(event.target.value) || 1)))} />
-                  </label>
-                </div>
+                <>
+                  <button className="image-drop image-drop--compact" onClick={() => void chooseSource()}>
+                    <SevenIcon name="open" />
+                    <strong>{source ? source.replace(/\\/g, "/").split("/").pop() : "Selecionar PDF com páginas de substituição"}</strong>
+                    <small>{source || "O arquivo de origem é processado localmente."}</small>
+                  </button>
+                  <div className="three-column-fields">
+                    <label className="workflow-field"><span>Destino começa em</span><input type="number" min={1} value={targetStart} onChange={(event) => setTargetStart(Math.max(1, Number(event.target.value) || 1))} /></label>
+                    <label className="workflow-field"><span>Origem começa em</span><input type="number" min={1} value={sourceStart} onChange={(event) => setSourceStart(Math.max(1, Number(event.target.value) || 1))} /></label>
+                    <label className="workflow-field"><span>Quantidade</span><input type="number" min={1} max={5000} value={count} onChange={(event) => setCount(Math.max(1, Math.min(5000, Number(event.target.value) || 1)))} /></label>
+                  </div>
+                </>
               )}
               <small className="workflow-inline-help">{helper}</small>
             </>

@@ -2247,39 +2247,39 @@ Módulo de colaboração sem IA. Pode utilizar backend configurável e deve perm
 - [ ] Screen readers
 - [ ] ARIA da própria interface
 - [ ] Foco visível
-- [ ] Alto contraste
-- [ ] Reduced motion
-- [ ] Escala
-- [ ] Read Out Loud
-- [ ] Reflow
-- [ ] Preferências de leitura
+- [x] Alto contraste
+- [x] Reduced motion
+- [x] Escala
+- [x] Read Out Loud
+- [x] Reflow
+- [x] Preferências de leitura
 
 ## Preparar acessibilidade
 
-- [ ] Accessibility checker
+- [x] Accessibility checker
 - [ ] Selecionar regras a verificar
-- [ ] Relatório
-- [ ] Resultado por regra
+- [x] Relatório
+- [x] Resultado por regra
 - [ ] Resultado por página
 - [ ] Navegar do erro até o conteúdo
-- [ ] Corrigir automaticamente quando a regra permitir
-- [ ] Corrigir manualmente
-- [ ] Explicação da regra
+- [x] Corrigir automaticamente quando a regra permitir
+- [x] Corrigir manualmente
+- [x] Explicação da regra
 - [ ] Marcar item como verificado manualmente quando aplicável
-- [ ] Autotag
-- [ ] Detectar PDF somente imagem
-- [ ] Sugerir OCR
-- [ ] Definir idioma
-- [ ] Título do documento
-- [ ] Tab order
-- [ ] Tags
-- [ ] Reading order
-- [ ] Alternate text
-- [ ] Form field descriptions
-- [ ] Tables
-- [ ] Headers
-- [ ] Lists
-- [ ] Artifacts
+- [x] Autotag
+- [x] Detectar PDF somente imagem
+- [x] Sugerir OCR
+- [x] Definir idioma
+- [x] Título do documento
+- [x] Tab order
+- [x] Tags
+- [x] Reading order
+- [x] Alternate text
+- [x] Form field descriptions
+- [x] Tables
+- [x] Headers
+- [x] Lists
+- [x] Artifacts
 
 ## Reading Order
 
@@ -2295,15 +2295,15 @@ Módulo de colaboração sem IA. Pode utilizar backend configurável e deve perm
 
 ## Tags panel
 
-- [ ] Visualizar árvore
+- [x] Visualizar árvore
 - [ ] Criar tag
-- [ ] Remover
-- [ ] Reordenar
-- [ ] Alterar tipo
+- [x] Remover
+- [x] Reordenar
+- [x] Alterar tipo
 - [ ] Corrigir tabela complexa
-- [ ] Alt text
-- [ ] Links
-- [ ] Artifacts
+- [x] Alt text
+- [x] Links
+- [x] Artifacts
 
 ## MathML
 

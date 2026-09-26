@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import type {
   GeospatialCoordinate,
+  GeospatialLocation,
+  GeospatialMeasurementResult,
   GeospatialViewportInfo,
   InteractiveAssetInfo,
 } from "../types";
@@ -15,12 +17,16 @@ interface InteractiveContentDialogProps {
   assets: InteractiveAssetInfo[];
   viewports: GeospatialViewportInfo[];
   coordinate: GeospatialCoordinate | null;
+  location: GeospatialLocation | null;
+  measurement: GeospatialMeasurementResult | null;
   loading: boolean;
   onClose: () => void;
   onReload: () => void;
   onExtract: (objectId: string, destination: string) => void;
   onOpenMedia: (asset: InteractiveAssetInfo) => void;
   onResolve: (pageIndex: number, normalizedX: number, normalizedY: number) => void;
+  onLocate: (pageIndex: number, first: number, second: number) => void;
+  onMeasure: (pageIndex: number, kind: "distance" | "perimeter" | "area", points: Array<[number, number]>) => void;
 }
 
 function bytes(value: number): string {
@@ -35,16 +41,25 @@ export function InteractiveContentDialog({
   assets,
   viewports,
   coordinate,
+  location,
+  measurement,
   loading,
   onClose,
   onReload,
   onExtract,
   onOpenMedia,
   onResolve,
+  onLocate,
+  onMeasure,
 }: InteractiveContentDialogProps) {
   const [geoPage, setGeoPage] = useState(pageIndex + 1);
   const [x, setX] = useState(0.5);
   const [y, setY] = useState(0.5);
+  const [geoFirst, setGeoFirst] = useState(0);
+  const [geoSecond, setGeoSecond] = useState(0);
+  const [measureKind, setMeasureKind] = useState<"distance" | "perimeter" | "area">("distance");
+  const [measurePointsText, setMeasurePointsText] = useState("0.25,0.25\n0.75,0.75");
+  const [measureError, setMeasureError] = useState("");
 
   useEffect(() => { onReload(); }, [mode]);
 
@@ -57,6 +72,32 @@ export function InteractiveContentDialog({
     mode === "3d" ? "Conteúdo 3D" :
       mode === "geospatial" ? "Dados geoespaciais" :
         "Rich Media";
+
+  const parsedMeasurePoints = (): Array<[number, number]> | null => {
+    const points: Array<[number, number]> = [];
+    for (const line of measurePointsText.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      const values = trimmed.split(/[;,\s]+/).filter(Boolean).map(Number);
+      if (values.length !== 2 || values.some((value) => !Number.isFinite(value) || value < 0 || value > 1)) {
+        setMeasureError("Use um ponto normalizado por linha no formato X,Y, com valores entre 0 e 1.");
+        return null;
+      }
+      points.push([values[0], values[1]]);
+    }
+    const minimum = measureKind === "distance" ? 2 : 3;
+    if (points.length < minimum) {
+      setMeasureError(`A medição ${measureKind} exige pelo menos ${minimum} pontos.`);
+      return null;
+    }
+    setMeasureError("");
+    return points;
+  };
+
+  const submitMeasurement = () => {
+    const points = parsedMeasurePoints();
+    if (points) onMeasure(Math.max(0, geoPage - 1), measureKind, points);
+  };
 
   const extract = async (asset: InteractiveAssetInfo) => {
     const destination = await save({
@@ -139,6 +180,37 @@ export function InteractiveContentDialog({
                       <small>Local {coordinate.localX.toFixed(5)}, {coordinate.localY.toFixed(5)}{coordinate.epsg ? ` · EPSG:${coordinate.epsg}` : ""}</small>
                     </div>
                   )}
+
+                  <div className="geo-professional-grid">
+                    <section className="geo-tool-card">
+                      <div className="section-mini-title">Localizar coordenada no documento</div>
+                      <div className="two-column-fields">
+                        <label className="workflow-field"><span>Primeira coordenada</span><input type="number" step="any" value={geoFirst} onChange={(event)=>setGeoFirst(Number(event.target.value)||0)}/></label>
+                        <label className="workflow-field"><span>Segunda coordenada</span><input type="number" step="any" value={geoSecond} onChange={(event)=>setGeoSecond(Number(event.target.value)||0)}/></label>
+                      </div>
+                      <button className="secondary-light-button" onClick={()=>onLocate(Math.max(0,geoPage-1),geoFirst,geoSecond)}>Localizar na página</button>
+                      {location && (
+                        <div className="geo-location-result">
+                          <strong>Página {location.pageIndex+1} · X {location.normalizedX.toFixed(5)} · Y {location.normalizedY.toFixed(5)}</strong>
+                          <small>{location.coordinateKind}{location.epsg ? ` · EPSG:${location.epsg}` : ""}</small>
+                        </div>
+                      )}
+                    </section>
+
+                    <section className="geo-tool-card">
+                      <div className="section-mini-title">Medição geoespacial</div>
+                      <label className="workflow-field"><span>Tipo</span><select value={measureKind} onChange={(event)=>setMeasureKind(event.target.value as typeof measureKind)}><option value="distance">Distância</option><option value="perimeter">Perímetro</option><option value="area">Área</option></select></label>
+                      <label className="workflow-field"><span>Pontos normalizados (X,Y por linha)</span><textarea rows={5} value={measurePointsText} onChange={(event)=>{setMeasurePointsText(event.target.value);setMeasureError("");}} spellCheck={false}/><small>Os pontos são transformados pelo viewport geoespacial antes do cálculo.</small></label>
+                      {measureError&&<small className="settings-error">{measureError}</small>}
+                      <button className="secondary-light-button" onClick={submitMeasurement}>Calcular</button>
+                      {measurement&&(
+                        <div className="geo-location-result">
+                          <strong>{measurement.value.toFixed(3)} {measurement.unit}</strong>
+                          <small>{measurement.kind} · {measurement.coordinateKind}{measurement.epsg ? ` · EPSG:${measurement.epsg}` : ""} · {measurement.points.length} ponto(s)</small>
+                        </div>
+                      )}
+                    </section>
+                  </div>
                 </section>
               )}
             </>

@@ -34,6 +34,7 @@ import type {
   FormFieldUpdate,
   FormValue,
   ImagePlacement,
+  IsoValidationReport,
   InteractiveAssetInfo,
   GeospatialViewportInfo,
   GeospatialCoordinate,
@@ -1395,6 +1396,18 @@ export async function getPagePreflight(
   pageIndex: number,
 ): Promise<PagePreflight> {
   return invoke<PagePreflight>("get_page_preflight", { documentId, pageIndex });
+}
+
+export async function validatePdfIso(
+  input: string,
+  flavour: string,
+  customProfile?: string,
+): Promise<IsoValidationReport> {
+  return invoke<IsoValidationReport>("validate_pdf_iso", {
+    input,
+    flavour,
+    customProfile: customProfile ?? null,
+  });
 }
 
 export async function getPrintPreflight(path: string): Promise<PrintPreflightReport> {

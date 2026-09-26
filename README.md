@@ -776,41 +776,41 @@ Não converter o documento inteiro em imagens para simular edição.
 
 ## Visualização
 
-- [ ] Miniaturas grandes
-- [ ] Seleção múltipla
-- [ ] Ctrl/Cmd + clique
-- [ ] Shift + clique
-- [ ] Drag and drop
+- [x] Miniaturas grandes
+- [x] Seleção múltipla
+- [x] Ctrl/Cmd + clique
+- [x] Shift + clique
+- [x] Drag and drop
 - [ ] Menu contextual
-- [ ] Preview antes de aplicar
+- [x] Preview antes de aplicar
 
 ## Operações
 
-- [ ] Reordenar
-- [ ] Recortar
-- [ ] Copiar
-- [ ] Colar
-- [ ] Duplicar
-- [ ] Excluir
-- [ ] Girar
-- [ ] Recortar página
-- [ ] Redimensionar página
-- [ ] Substituir
-- [ ] Renumerar
-- [ ] Extrair
-- [ ] Dividir
+- [x] Reordenar
+- [x] Recortar
+- [x] Copiar
+- [x] Colar
+- [x] Duplicar
+- [x] Excluir
+- [x] Girar
+- [x] Recortar página
+- [x] Redimensionar página
+- [x] Substituir
+- [x] Renumerar
+- [x] Extrair
+- [x] Dividir
 
 ## Inserir
 
 Inserir páginas de:
 
-- [ ] arquivo
-- [ ] outro PDF
-- [ ] imagem
-- [ ] clipboard
-- [ ] scanner
-- [ ] página web
-- [ ] página em branco
+- [x] arquivo
+- [x] outro PDF
+- [x] imagem
+- [x] clipboard
+- [x] scanner
+- [x] página web
+- [x] página em branco
 
 Permitir inserir:
 
@@ -823,23 +823,23 @@ Permitir inserir:
 
 ## Mover e copiar entre documentos
 
-- [ ] Abrir dois PDFs lado a lado
-- [ ] Tile vertical/horizontal
-- [ ] Selecionar uma ou várias páginas
+- [x] Abrir dois PDFs lado a lado
+- [x] Tile vertical/horizontal
+- [x] Selecionar uma ou várias páginas
 - [ ] Arrastar páginas para outro PDF para mover
-- [ ] Copiar e colar páginas entre PDFs
+- [x] Copiar e colar páginas entre PDFs
 - [ ] Preservar conteúdo, campos, comentários e links compatíveis
-- [ ] Atualizar os dois documentos sem corromper o original
-- [ ] Undo antes do salvamento quando tecnicamente seguro
+- [x] Atualizar os dois documentos sem corromper o original
+- [x] Undo antes do salvamento quando tecnicamente seguro
 
 ## Extrair
 
-- [ ] Intervalo
-- [ ] Seleção
-- [ ] Manter no original
+- [x] Intervalo
+- [x] Seleção
+- [x] Manter no original
 - [ ] Excluir do original após extrair
-- [ ] Criar um PDF único
-- [ ] Extrair cada página como arquivo separado
+- [x] Criar um PDF único
+- [x] Extrair cada página como arquivo separado
 - [ ] Preservar forms/comments/links quando tecnicamente aplicável
 - [ ] Informar que bookmarks e article threads associados às páginas podem não acompanhar a extração
 - [ ] Validar permissões do documento antes de extrair
@@ -848,14 +848,14 @@ Permitir inserir:
 
 Dividir por:
 
-- [ ] número máximo de páginas
+- [x] número máximo de páginas
 - [ ] tamanho máximo do arquivo
 - [ ] marcadores de nível superior
 
 Opções:
 
 - [ ] vários arquivos de entrada
-- [ ] pasta de saída
+- [x] pasta de saída
 - [ ] padrão de nome
 - [ ] preview do plano de divisão
 

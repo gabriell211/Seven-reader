@@ -10,6 +10,7 @@ mod forms;
 mod jobs;
 mod ocr;
 mod optimizer;
+mod page_transfer;
 mod pdf;
 mod print_production;
 mod redaction;
@@ -48,6 +49,7 @@ pub fn run() {
             commands::delete_catalog,
             commands::open_document,
             commands::restore_document_session,
+            commands::session_transfer_pages,
             commands::get_external_file_status,
             commands::reload_document_from_source,
             commands::close_document,

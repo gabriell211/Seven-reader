@@ -161,6 +161,7 @@ pub fn run() {
             commands::list_form_fields,
             commands::fill_form_fields,
             commands::create_form_field,
+            commands::get_page_preflight,
             commands::get_print_preflight,
             commands::session_set_page_geometry,
             commands::session_set_page_boxes,

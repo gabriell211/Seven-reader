@@ -1,13 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import type { PageBoxUpdate, PrintPreflightReport } from "../types";
+import { open } from "@tauri-apps/plugin-dialog";
+import type { IsoValidationReport, PageBoxUpdate, PrintPreflightReport } from "../types";
 import { SevenIcon } from "./SevenIcon";
 
 interface PrintProductionDialogProps {
   report: PrintPreflightReport | null;
   loading: boolean;
+  isoReport: IsoValidationReport | null;
+  isoLoading: boolean;
+  veraPdfAvailable: boolean;
   pageCount: number;
   onClose: () => void;
   onReload: () => void;
+  onValidateIso: (flavour: string, customProfile?: string) => void;
   onSetBoxes: (update: PageBoxUpdate) => void;
 }
 
@@ -25,12 +30,18 @@ function boxText(box?: [number, number, number, number]): string {
 export function PrintProductionDialog({
   report,
   loading,
+  isoReport,
+  isoLoading,
+  veraPdfAvailable,
   pageCount,
   onClose,
   onReload,
+  onValidateIso,
   onSetBoxes,
 }: PrintProductionDialogProps) {
-  const [tab, setTab] = useState<"preflight" | "fonts" | "pages">("preflight");
+  const [tab, setTab] = useState<"preflight" | "iso" | "fonts" | "pages">("preflight");
+  const [isoFlavour, setIsoFlavour] = useState("2b");
+  const [customProfile, setCustomProfile] = useState("");
   const [pageStart, setPageStart] = useState(1);
   const [pageEnd, setPageEnd] = useState(pageCount);
   const [trimMm, setTrimMm] = useState(3);
@@ -43,6 +54,19 @@ export function PrintProductionDialog({
     () => report?.fonts.filter((font) => !font.embedded).length ?? 0,
     [report],
   );
+
+  const chooseCustomProfile = async () => {
+    const selected = await open({
+      title: "Selecionar perfil de validação veraPDF",
+      multiple: false,
+      directory: false,
+      filters: [{ name: "Perfil veraPDF", extensions: ["xml"] }],
+    });
+    if (typeof selected === "string") {
+      setCustomProfile(selected);
+      onValidateIso("0", selected);
+    }
+  };
 
   const applyBoxes = () => {
     onSetBoxes({
@@ -68,6 +92,7 @@ export function PrintProductionDialog({
 
         <div className="workflow-tabs">
           <button className={tab === "preflight" ? "active" : ""} onClick={() => setTab("preflight")}>Preflight</button>
+          <button className={tab === "iso" ? "active" : ""} onClick={() => setTab("iso")}>PDF/A · PDF/UA</button>
           <button className={tab === "fonts" ? "active" : ""} onClick={() => setTab("fonts")}>Fontes</button>
           <button className={tab === "pages" ? "active" : ""} onClick={() => setTab("pages")}>Boxes</button>
         </div>
@@ -108,6 +133,88 @@ export function PrintProductionDialog({
                   ))}
               </div>
             </>
+          )}
+
+          {tab === "iso" && (
+            <div className="iso-preflight">
+              <div className={veraPdfAvailable ? "capability-inline ok" : "capability-inline"}>
+                <SevenIcon name="shield" />
+                <div>
+                  <strong>{veraPdfAvailable ? "veraPDF disponível" : "veraPDF não detectado"}</strong>
+                  <small>{veraPdfAvailable
+                    ? "Validação completa contra perfis PDF/A e PDF/UA built-in."
+                    : "A validação ISO completa fica indisponível; o preflight estrutural interno continua ativo."}</small>
+                </div>
+              </div>
+
+              <div className="iso-profile-row">
+                <label className="workflow-field">
+                  <span>Perfil de validação</span>
+                  <select value={isoFlavour} disabled={!veraPdfAvailable} onChange={(event) => setIsoFlavour(event.target.value)}>
+                    <option value="0">Auto-detectar declaração</option>
+                    <optgroup label="PDF/A">
+                      <option value="1a">PDF/A-1a</option>
+                      <option value="1b">PDF/A-1b</option>
+                      <option value="2a">PDF/A-2a</option>
+                      <option value="2b">PDF/A-2b</option>
+                      <option value="2u">PDF/A-2u</option>
+                      <option value="3a">PDF/A-3a</option>
+                      <option value="3b">PDF/A-3b</option>
+                      <option value="3u">PDF/A-3u</option>
+                      <option value="4">PDF/A-4</option>
+                      <option value="4e">PDF/A-4e</option>
+                      <option value="4f">PDF/A-4f</option>
+                    </optgroup>
+                    <optgroup label="Acessibilidade">
+                      <option value="ua1">PDF/UA-1</option>
+                      <option value="ua2">PDF/UA-2</option>
+                      <option value="wt1a">WTPDF 1.0 Accessibility</option>
+                      <option value="wt1r">WTPDF 1.0 Reuse</option>
+                    </optgroup>
+                  </select>
+                </label>
+                <button className="primary-button" disabled={!veraPdfAvailable || isoLoading} onClick={() => onValidateIso(isoFlavour)}>
+                  <SevenIcon name="shield" /> Validar
+                </button>
+                <button className="secondary-light-button" disabled={!veraPdfAvailable || isoLoading} onClick={() => void chooseCustomProfile()}>
+                  Perfil XML…
+                </button>
+              </div>
+
+              {customProfile && <div className="selected-path"><strong>Perfil customizado</strong><span>{customProfile}</span></div>}
+              {isoLoading && <div className="report-loading"><span className="loader-ring" /> Executando validação ISO…</div>}
+
+              {!isoLoading && isoReport && (
+                <>
+                  <div className={isoReport.compliant ? "iso-validation-summary compliant" : "iso-validation-summary failed"}>
+                    <SevenIcon name={isoReport.compliant ? "shield" : "comment"} />
+                    <div>
+                      <strong>{isoReport.profileName || "Perfil veraPDF"}</strong>
+                      <span>{isoReport.statement || (isoReport.compliant ? "Conforme." : "Não conforme.")}</span>
+                    </div>
+                    <b>{isoReport.compliant ? "CONFORME" : "FALHOU"}</b>
+                  </div>
+                  <div className="production-summary-grid">
+                    <div><span>Regras aprovadas</span><strong>{isoReport.passedRules}</strong></div>
+                    <div><span>Regras falhas</span><strong>{isoReport.failedRules}</strong></div>
+                    <div><span>Checks aprovados</span><strong>{isoReport.passedChecks}</strong></div>
+                    <div><span>Checks falhos</span><strong>{isoReport.failedChecks}</strong></div>
+                  </div>
+                  <div className="iso-failure-list">
+                    {isoReport.failures.length === 0 && !isoReport.compliant && (
+                      <div className="empty-panel">O relatório marcou não conformidade, mas não retornou detalhes de regra no limite configurado.</div>
+                    )}
+                    {isoReport.failures.map((failure, index) => (
+                      <article key={`${failure.specification}-${failure.clause}-${failure.testNumber}-${index}`}>
+                        <div><strong>{failure.specification || "ISO"} · cláusula {failure.clause || "—"}</strong><small>Teste {failure.testNumber || "—"} · {failure.failedChecks} check(s) falho(s)</small></div>
+                        <p>{failure.description}</p>
+                        {failure.object && <code>{failure.object}</code>}
+                      </article>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           )}
 
           {!loading && report && tab === "fonts" && (

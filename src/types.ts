@@ -644,6 +644,11 @@ export interface LayerInfo {
   intent: string[];
 }
 
+export interface SessionFlattenLayersResult {
+  document: DocumentSummary;
+  changedPages: number;
+}
+
 export interface LayerPropertiesUpdate {
   objectId: string;
   name: string;

@@ -500,6 +500,40 @@ export default function App() {
     currentNavigation && currentNavigation.index < currentNavigation.entries.length - 1,
   );
 
+  const pagesForView = (pageCount: number, anchor: number, mode: ViewMode): number[] => {
+    const bounded = Math.max(0, Math.min(pageCount - 1, anchor));
+    if (mode === "single") return [bounded];
+    if (mode === "facing") {
+      const start = Math.floor(bounded / 2) * 2;
+      return [start, start + 1].filter((pageIndex) => pageIndex < pageCount);
+    }
+    if (mode === "continuous") {
+      const start = Math.max(0, bounded - 2);
+      const end = Math.min(pageCount - 1, bounded + 3);
+      return Array.from({ length: end - start + 1 }, (_, index) => start + index);
+    }
+    const pairStart = Math.floor(bounded / 2) * 2;
+    const start = Math.max(0, pairStart - 2);
+    const end = Math.min(pageCount - 1, pairStart + 3);
+    return Array.from({ length: end - start + 1 }, (_, index) => start + index);
+  };
+
+  const renderDocumentWindow = async (
+    summary: DocumentSummary,
+    anchor: number,
+    nextZoom: number,
+    mode: ViewMode = viewMode,
+  ) => {
+    const pages = pagesForView(summary.pageCount, anchor, mode);
+    const baseWidth = mode === "facing" || mode === "facing-continuous" ? 980 : 1400;
+    const targetWidth = Math.max(640, Math.min(6000, Math.round(baseWidth * (nextZoom / 100))));
+    const results = pages.length === 1
+      ? [await renderPage(summary.id, pages[0], targetWidth)]
+      : await renderPages(summary.id, pages, targetWidth);
+    setRenderedPages(results);
+    setRendered(results.find((result) => result.pageIndex === anchor) ?? results[0] ?? null);
+  };
+
   const rememberRecent = (summary: DocumentSummary) => {
     setRecents((current) => {
       const previous = current.find((item) => item.path === summary.path);
@@ -555,10 +589,7 @@ export default function App() {
       setProtectedView(settings.protectedView && !isTrustedPath(summary.path, settings.trustedLocations));
     }
 
-    const targetWidth = Math.max(900, Math.min(6000, Math.round(1400 * (nextZoom / 100))));
-    const first = await renderPage(summary.id, nextPage, targetWidth);
-    setRendered(first);
-    setRenderedPages([first]);
+    await renderDocumentWindow(summary, nextPage, nextZoom);
   };
 
   const openPath = async (path: string, preferredView?: { page: number; zoom: number }) => {
@@ -939,10 +970,18 @@ export default function App() {
       });
     }
 
-    const targetWidth = Math.max(900, Math.min(6000, Math.round(1400 * (boundedZoom / 100))));
     try {
-      const next = await renderPage(document.id, boundedPage, targetWidth);
-      setRendered(next);
+      await renderDocumentWindow(document, boundedPage, boundedZoom);
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
+  const changeViewMode = async (mode: ViewMode) => {
+    if (!document) return;
+    setViewMode(mode);
+    try {
+      await renderDocumentWindow(document, page, zoom, mode);
     } catch (error) {
       setNotice(errorMessage(error));
     }
@@ -993,9 +1032,7 @@ export default function App() {
   ) => {
     setDocument(summary);
     setOpenTabs((current) => current.map((tab) => tab.id === summary.id ? summary : tab));
-    const targetWidth = Math.max(900, Math.min(6000, Math.round(1400 * (zoom / 100))));
-    const next = await renderPage(summary.id, page, targetWidth);
-    setRendered(next);
+    await renderDocumentWindow(summary, page, zoom);
     setNotice(successMessage);
   };
 
@@ -2804,6 +2841,8 @@ export default function App() {
           document={document}
           tabs={openTabs}
           rendered={rendered}
+          renderedPages={renderedPages}
+          viewMode={viewMode}
           canReopenClosed={closedTabs.length > 0}
           canNavigateBack={canNavigateBack}
           canNavigateForward={canNavigateForward}
@@ -2832,6 +2871,8 @@ export default function App() {
           onRedo={() => void redoCurrent()}
           onPrint={() => void runPrint()}
           onRender={(nextPage, nextZoom) => void render(nextPage, nextZoom)}
+          onVisiblePage={(nextPage) => void render(nextPage, zoom, false)}
+          onViewModeChange={(mode) => void changeViewMode(mode)}
           onSearch={(query) => void runSearch(query)}
           onInk={(ink) => void runInkAnnotation(ink)}
           onMarkup={(kind, rect) => void runMarkupAnnotation(kind, rect)}

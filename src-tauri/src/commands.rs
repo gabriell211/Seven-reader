@@ -4194,6 +4194,17 @@ pub fn add_ink_annotation(
 }
 
 #[tauri::command]
+pub fn add_signature_image(
+    input: String,
+    output: String,
+    signature: annotations::SignatureImageInput,
+) -> CommandResult<()> {
+    let input = pdf::validate_pdf_path(&input).map_err(ErrorPayload::from)?;
+    let output = jobs::validated_output(&output, "pdf").map_err(ErrorPayload::from)?;
+    annotations::add_signature_image(&input, &output, signature).map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn delete_annotation(
     input: String,
     output: String,

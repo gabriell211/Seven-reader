@@ -1,18 +1,31 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
-import type { PdfEncryptionOptions, SanitizeOptions } from "../types";
+import type { PdfEncryptionOptions, SanitizeAnalysis, SanitizeOptions } from "../types";
 import { SevenIcon } from "./SevenIcon";
 
 interface SecurityDialogProps {
   mode: "protect" | "sanitize";
   currentPdf: string;
   onClose: () => void;
+  sanitizeAnalysis: SanitizeAnalysis | null;
+  sanitizeAnalysisLoading: boolean;
+  onAnalyzeSanitization: () => void;
   onEncrypt: (output: string, userPassword: string, ownerPassword: string, options: PdfEncryptionOptions) => void;
   onDecrypt: (output: string, password: string) => void;
   onSanitize: (output: string, options: SanitizeOptions) => void;
 }
 
-export function SecurityDialog({ mode, currentPdf, onClose, onEncrypt, onDecrypt, onSanitize }: SecurityDialogProps) {
+export function SecurityDialog({
+  mode,
+  currentPdf,
+  onClose,
+  sanitizeAnalysis,
+  sanitizeAnalysisLoading,
+  onAnalyzeSanitization,
+  onEncrypt,
+  onDecrypt,
+  onSanitize,
+}: SecurityDialogProps) {
   const [protectMode, setProtectMode] = useState<"encrypt" | "decrypt">("encrypt");
   const [userPassword, setUserPassword] = useState("");
   const [ownerPassword, setOwnerPassword] = useState("");
@@ -35,6 +48,42 @@ export function SecurityDialog({ mode, currentPdf, onClose, onEncrypt, onDecrypt
     removeMultimedia: false,
     cleanupStructure: false,
   });
+
+  useEffect(() => {
+    if (mode === "sanitize") onAnalyzeSanitization();
+  }, [mode, currentPdf]);
+
+  const detectedByOption = useMemo<Record<keyof SanitizeOptions, number>>(() => ({
+    removeJavascript: sanitizeAnalysis?.javascriptEntries ?? 0,
+    removeOpenActions: sanitizeAnalysis?.actionEntries ?? 0,
+    removeEmbeddedFiles: sanitizeAnalysis?.attachmentEntries ?? 0,
+    removeMetadata: sanitizeAnalysis?.metadataEntries ?? 0,
+    removeXfa: sanitizeAnalysis?.xfaEntries ?? 0,
+    removeAnnotations: sanitizeAnalysis?.annotationCount ?? 0,
+    removeForms: sanitizeAnalysis?.formFieldCount ?? 0,
+    removeMultimedia: sanitizeAnalysis?.multimediaEntries ?? 0,
+    cleanupStructure: sanitizeAnalysis?.invalidStructureEntries ?? 0,
+  }), [sanitizeAnalysis]);
+
+  const detectedTotal = useMemo(
+    () => Object.values(detectedByOption).reduce((sum, value) => sum + value, 0),
+    [detectedByOption],
+  );
+
+  const selectDetectedCategories = () => {
+    setOptions((current) => ({
+      ...current,
+      removeJavascript: detectedByOption.removeJavascript > 0,
+      removeOpenActions: detectedByOption.removeOpenActions > 0,
+      removeEmbeddedFiles: detectedByOption.removeEmbeddedFiles > 0,
+      removeMetadata: detectedByOption.removeMetadata > 0,
+      removeXfa: detectedByOption.removeXfa > 0,
+      removeAnnotations: detectedByOption.removeAnnotations > 0,
+      removeForms: detectedByOption.removeForms > 0,
+      removeMultimedia: detectedByOption.removeMultimedia > 0,
+      cleanupStructure: detectedByOption.cleanupStructure > 0,
+    }));
+  };
 
   const chooseOutput = async (suffix: string) => save({
     title: "Salvar resultado",
@@ -115,6 +164,36 @@ export function SecurityDialog({ mode, currentPdf, onClose, onEncrypt, onDecrypt
             </>
           ) : (
             <>
+              <section className="sanitize-preflight">
+                <div className="sanitize-preflight-head">
+                  <div>
+                    <strong>Análise do documento</strong>
+                    <small>Mostra categorias detectadas antes de remover qualquer conteúdo.</small>
+                  </div>
+                  <button className="secondary-light-button" disabled={sanitizeAnalysisLoading} onClick={onAnalyzeSanitization}>
+                    <SevenIcon name="recent" /> {sanitizeAnalysisLoading ? "Analisando…" : "Analisar novamente"}
+                  </button>
+                </div>
+                {sanitizeAnalysisLoading && <div className="report-loading"><span className="loader-ring" /> Inspecionando conteúdo oculto e ativo…</div>}
+                {!sanitizeAnalysisLoading && sanitizeAnalysis && (
+                  <>
+                    <div className="sanitize-summary-grid">
+                      <span><b>{sanitizeAnalysis.metadataEntries}</b> Metadados</span>
+                      <span><b>{sanitizeAnalysis.annotationCount}</b> Anotações</span>
+                      <span><b>{sanitizeAnalysis.attachmentEntries}</b> Anexos</span>
+                      <span><b>{sanitizeAnalysis.javascriptEntries}</b> Scripts</span>
+                      <span><b>{sanitizeAnalysis.actionEntries}</b> Ações</span>
+                      <span><b>{sanitizeAnalysis.xfaEntries}</b> XFA</span>
+                      <span><b>{sanitizeAnalysis.formFieldCount}</b> Campos</span>
+                      <span><b>{sanitizeAnalysis.multimediaEntries}</b> Multimídia</span>
+                    </div>
+                    <div className="sanitize-preflight-footer">
+                      <span>{detectedTotal} item(ns) classificado(s) para limpeza seletiva.</span>
+                      <button className="secondary-light-button" disabled={detectedTotal === 0} onClick={selectDetectedCategories}>Selecionar detectados</button>
+                    </div>
+                  </>
+                )}
+              </section>
               <div className="check-list">
                 {([
                   ["removeJavascript", "JavaScript embutido", "Remove entradas /JS e árvores JavaScript."],
@@ -129,7 +208,10 @@ export function SecurityDialog({ mode, currentPdf, onClose, onEncrypt, onDecrypt
                 ] as const).map(([key, title, detail]) => (
                   <label className="check-row" key={key}>
                     <input type="checkbox" checked={options[key]} onChange={(event) => setOptions((current) => ({ ...current, [key]: event.target.checked }))} />
-                    <span><strong>{title}</strong><small>{detail}</small></span>
+                    <span>
+                      <strong>{title}{detectedByOption[key] > 0 ? ` · ${detectedByOption[key]} encontrado(s)` : ""}</strong>
+                      <small>{detail}</small>
+                    </span>
                   </label>
                 ))}
               </div>

@@ -747,6 +747,29 @@ pub fn session_add_markup(
 }
 
 #[tauri::command]
+pub fn session_correct_ocr_word(
+    state: State<'_, AppState>,
+    document_id: String,
+    page_index: usize,
+    recognized: String,
+    replacement: String,
+    occurrence: usize,
+) -> CommandResult<pdf::DocumentSummary> {
+    session::apply_revision(&state, &document_id, "ocr-correction", move |input, output| {
+        editing::replace_text_occurrence(
+            input,
+            output,
+            &recognized,
+            &replacement,
+            page_index,
+            occurrence,
+        )
+    })
+    .map(|(summary, _)| summary)
+    .map_err(ErrorPayload::from)
+}
+
+#[tauri::command]
 pub fn session_edit_add_text(
     state: State<'_, AppState>,
     document_id: String,
@@ -2993,7 +3016,7 @@ pub async fn review_ocr_page(
     page_index: usize,
     language: String,
     threshold: f32,
-) -> CommandResult<Vec<ocr::OcrWord>> {
+) -> CommandResult<ocr::OcrReviewResult> {
     let document = state
         .documents
         .lock()

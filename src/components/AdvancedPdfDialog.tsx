@@ -49,6 +49,7 @@ interface AdvancedPdfDialogProps {
   onAddPortfolioItem: (filePath: string, displayName: string, description: string, folderPath: string) => void;
   onConfigurePortfolio: (view: "details" | "tile" | "hidden") => void;
   onSetPortfolioView: (view: "details" | "tile" | "hidden") => void;
+  onImportPortfolioDirectory: (directory: string, targetPath: string) => void;
   onCreatePortfolioFolder: (path: string, description: string) => void;
   onMovePortfolioItem: (objectId: string, folderPath: string) => void;
   onRenamePortfolioFolder: (folderId: string, newName: string) => void;
@@ -105,6 +106,7 @@ export function AdvancedPdfDialog({
   onAddPortfolioItem,
   onConfigurePortfolio,
   onSetPortfolioView,
+  onImportPortfolioDirectory,
   onCreatePortfolioFolder,
   onMovePortfolioItem,
   onRenamePortfolioFolder,
@@ -310,6 +312,17 @@ export function AdvancedPdfDialog({
     if (typeof path === "string") {
       setPortfolioItemPath(path);
       setPortfolioItemName(path.split(/[\\/]/).pop() || "componente");
+    }
+  };
+
+  const importPortfolioDirectory = async () => {
+    const selected = await open({
+      title: "Selecionar pasta para importar no portfólio",
+      directory: true,
+      multiple: false,
+    });
+    if (typeof selected === "string") {
+      onImportPortfolioDirectory(selected, portfolioSelectedFolder);
     }
   };
 

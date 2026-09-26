@@ -345,6 +345,13 @@ export interface CompareReport {
   pages: ComparePage[];
 }
 
+export interface ScannerInfo {
+  id: string;
+  name: string;
+  backend: "wia" | "sane";
+  isDefault: boolean;
+}
+
 export interface ScannedPage {
   cachePath: string;
   width: number;

@@ -247,6 +247,44 @@ fn inspect_dictionary(
     }
 }
 
+pub fn page_preflight(path: &Path, page_index: usize) -> Result<PagePreflight, SevenError> {
+    let document = Document::load(path).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
+    let page_id = document
+        .get_pages()
+        .get(&((page_index + 1) as u32))
+        .copied()
+        .ok_or_else(|| SevenError::OperationRejected("Página não existe".into()))?;
+    let media = inherited_box(&document, page_id, b"MediaBox").unwrap_or([0.0, 0.0, 612.0, 792.0]);
+    let crop = inherited_box(&document, page_id, b"CropBox");
+    let trim = inherited_box(&document, page_id, b"TrimBox");
+    let bleed = inherited_box(&document, page_id, b"BleedBox");
+    let art = inherited_box(&document, page_id, b"ArtBox");
+    let rotation = inherited_object(&document, page_id, b"Rotate")
+        .as_ref()
+        .and_then(|value| value.as_i64().ok())
+        .unwrap_or(0);
+    let annotations = document
+        .get_object(page_id)
+        .ok()
+        .and_then(|value| value.as_dict().ok())
+        .and_then(|dictionary| dictionary.get(b"Annots").ok())
+        .and_then(|value| value.as_array().ok())
+        .map(Vec::len)
+        .unwrap_or(0);
+    Ok(PagePreflight {
+        page_index,
+        width_pt: (media[2] - media[0]).abs(),
+        height_pt: (media[3] - media[1]).abs(),
+        media_box: media,
+        crop_box: crop,
+        trim_box: trim,
+        bleed_box: bleed,
+        art_box: art,
+        rotation,
+        annotations,
+    })
+}
+
 pub fn preflight(path: &Path) -> Result<PrintPreflightReport, SevenError> {
     let document = Document::load(path).map_err(|error| SevenError::PdfOpen(error.to_string()))?;
     let page_map = document.get_pages();

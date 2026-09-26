@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { confirm, open, save } from "@tauri-apps/plugin-dialog";
-import type { AdvancedPdfReport, BookmarkInfo, BookmarkUpdate, LayerPropertiesUpdate } from "../types";
+import type {
+  AdvancedPdfReport,
+  BookmarkInfo,
+  BookmarkUpdate,
+  LayerPropertiesUpdate,
+  PortfolioPreview,
+  PortfolioSearchHit,
+} from "../types";
+import { nativeAssetUrl } from "../lib/native";
 import { SevenIcon } from "./SevenIcon";
 
 type AdvancedTab = "overview" | "bookmarks" | "attachments" | "layers" | "portfolio";
@@ -10,6 +18,9 @@ interface AdvancedPdfDialogProps {
   report: AdvancedPdfReport | null;
   loading: boolean;
   initialTab?: AdvancedTab;
+  portfolioPreview: PortfolioPreview | null;
+  portfolioSearchHits: PortfolioSearchHit[];
+  portfolioSearching: boolean;
   onClose: () => void;
   onReload: () => void;
   onAddBookmark: (title: string, pageIndex: number) => void;
@@ -24,6 +35,10 @@ interface AdvancedPdfDialogProps {
   onUpdateAttachment: (objectId: string, name: string, description: string) => void;
   onRemoveAttachment: (objectId: string) => void;
   onExtractAttachment: (objectId: string, destination: string) => void;
+  onPreviewPortfolioItem: (objectId: string) => void;
+  onSearchPortfolioItems: (query: string) => void;
+  onOpenPortfolioItemExternal: (objectId: string) => void;
+  onOpenPortfolioPdf: (preview: PortfolioPreview) => void;
   onAddPortfolioItem: (filePath: string, displayName: string, description: string, folderPath: string) => void;
   onConfigurePortfolio: (view: "details" | "tile" | "hidden") => void;
   onSetPortfolioView: (view: "details" | "tile" | "hidden") => void;
@@ -53,6 +68,9 @@ export function AdvancedPdfDialog({
   report,
   loading,
   initialTab = "overview",
+  portfolioPreview,
+  portfolioSearchHits,
+  portfolioSearching,
   onClose,
   onReload,
   onAddBookmark,
@@ -67,6 +85,10 @@ export function AdvancedPdfDialog({
   onUpdateAttachment,
   onRemoveAttachment,
   onExtractAttachment,
+  onPreviewPortfolioItem,
+  onSearchPortfolioItems,
+  onOpenPortfolioItemExternal,
+  onOpenPortfolioPdf,
   onAddPortfolioItem,
   onConfigurePortfolio,
   onSetPortfolioView,
@@ -118,6 +140,7 @@ export function AdvancedPdfDialog({
   const [portfolioItemDescription, setPortfolioItemDescription] = useState("");
   const [portfolioItemMoves, setPortfolioItemMoves] = useState<Record<string,string>>({});
   const [portfolioQuery, setPortfolioQuery] = useState("");
+  const [portfolioContentQuery, setPortfolioContentQuery] = useState("");
   const [portfolioSort, setPortfolioSort] = useState<"name" | "size" | "type">("name");
 
   useEffect(() => { onReload(); }, [onReload]);
@@ -255,6 +278,14 @@ export function AdvancedPdfDialog({
     setPortfolioItemPath("");
     setPortfolioItemName("");
     setPortfolioItemDescription("");
+  };
+
+  const openPortfolioExternal = async (objectId: string, name: string) => {
+    const accepted = await confirm(
+      `Abrir "${name}" no aplicativo padrão do sistema? O arquivo será extraído apenas para o cache local do Seven Reader.`,
+      { title: "Abrir componente externamente", kind: "info" },
+    );
+    if (accepted) onOpenPortfolioItemExternal(objectId);
   };
 
   const removePortfolioFolder = async (folderId: string, path: string) => {

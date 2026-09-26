@@ -13,6 +13,7 @@ import type {
   RenderResult,
   SearchHit,
   ToolId,
+  ViewMode,
 } from "../types";
 import { cropPageSelection, extractTextInRect, nativeAssetUrl } from "../lib/native";
 import { writeImage, writeText } from "@tauri-apps/plugin-clipboard-manager";
@@ -23,6 +24,8 @@ interface WorkspaceProps {
   document: DocumentSummary;
   tabs: DocumentSummary[];
   rendered: RenderResult | null;
+  renderedPages: RenderResult[];
+  viewMode: ViewMode;
   canReopenClosed: boolean;
   canNavigateBack: boolean;
   canNavigateForward: boolean;
@@ -51,6 +54,8 @@ interface WorkspaceProps {
   onRedo: () => void;
   onPrint: () => void;
   onRender: (page: number, zoom: number) => void;
+  onVisiblePage: (page: number) => void;
+  onViewModeChange: (mode: ViewMode) => void;
   onSearch: (query: string) => void;
   onInk: (ink: InkAnnotationInput) => void;
   onMarkup: (kind: "highlight" | "underline" | "strikeout", rect: NormalizedRect) => void;
@@ -75,6 +80,8 @@ export function DocumentWorkspace({
   document,
   tabs,
   rendered,
+  renderedPages,
+  viewMode,
   canReopenClosed,
   canNavigateBack,
   canNavigateForward,
@@ -103,6 +110,8 @@ export function DocumentWorkspace({
   onRedo,
   onPrint,
   onRender,
+  onVisiblePage,
+  onViewModeChange,
   onSearch,
   onInk,
   onMarkup,
@@ -146,6 +155,8 @@ export function DocumentWorkspace({
   const [toolbarPosition, setToolbarPosition] = useState(quickToolsPosition);
   const toolbarDragRef = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null);
   const drawingRef = useRef(false);
+  const visiblePageRef = useRef(page);
+  const scrollFrameRef = useRef<number | null>(null);
   const [viewerTool, setViewerTool] = useState<"select" | "hand" | "draw" | "highlight" | "underline" | "strikeout">("select");
 
   useEffect(() => {
@@ -154,6 +165,7 @@ export function DocumentWorkspace({
     return () => window.removeEventListener("seven:focus-search", focus);
   }, []);
   useEffect(() => {
+    visiblePageRef.current = page;
     setPageInput(String(page + 1));
     setSelectionStart(null);
     setSelectionRect(null);
@@ -227,11 +239,37 @@ export function DocumentWorkspace({
     const scale = Math.max(0.01, zoom / 100);
     const baseWidth = rendered.width / scale;
     const baseHeight = rendered.height / scale;
-    const availableWidth = Math.max(320, stageRef.current.clientWidth - 96);
+    const facing = viewMode === "facing" || viewMode === "facing-continuous";
+    const availableWidth = Math.max(320, (stageRef.current.clientWidth - 96) / (facing ? 2 : 1) - (facing ? 18 : 0));
     const availableHeight = Math.max(320, stageRef.current.clientHeight - 132);
     const widthZoom = (availableWidth / baseWidth) * 100;
     const pageZoom = Math.min(widthZoom, (availableHeight / baseHeight) * 100);
     onRender(page, Math.max(25, Math.min(400, mode === "width" ? widthZoom : pageZoom)));
+  };
+
+  const handleStageScroll = () => {
+    if (viewMode !== "continuous" && viewMode !== "facing-continuous") return;
+    if (scrollFrameRef.current !== null) cancelAnimationFrame(scrollFrameRef.current);
+    scrollFrameRef.current = requestAnimationFrame(() => {
+      scrollFrameRef.current = null;
+      const stage = stageRef.current;
+      if (!stage) return;
+      const stageRect = stage.getBoundingClientRect();
+      const centerY = stageRect.top + stageRect.height / 2;
+      const pages = Array.from(stage.querySelectorAll<HTMLElement>("[data-page-index]"));
+      let best: { page: number; distance: number } | null = null;
+      for (const element of pages) {
+        const rect = element.getBoundingClientRect();
+        const distance = Math.abs(rect.top + rect.height / 2 - centerY);
+        const pageIndex = Number(element.dataset.pageIndex);
+        if (!Number.isFinite(pageIndex)) continue;
+        if (!best || distance < best.distance) best = { page: pageIndex, distance };
+      }
+      if (best && best.page !== visiblePageRef.current) {
+        visiblePageRef.current = best.page;
+        onVisiblePage(best.page);
+      }
+    });
   };
 
   const beginToolbarDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -695,77 +733,100 @@ export function DocumentWorkspace({
           </aside>
         )}
 
-        <main className="document-stage" ref={stageRef}>
-          <div className="document-canvas">
-            {rendered ? (
-              <div
-                className={[
-                  "rendered-page",
-                  viewerTool === "draw" ? "drawing-active" : "",
-                  isRectSelectionTool ? "selection-active" : "",
-                  viewerTool === "highlight" ? "markup-highlight" : "",
-                  viewerTool === "underline" ? "markup-underline" : "",
-                  viewerTool === "strikeout" ? "markup-strikeout" : "",
-                ].filter(Boolean).join(" ")}
-                style={{ width: rendered.width }}
-                ref={pageRef}
-                onPointerDown={(event) => {
-                  beginInk(event);
-                  beginSelection(event);
-                }}
-                onPointerMove={(event) => {
-                  moveInk(event);
-                  moveSelection(event);
-                }}
-                onPointerUp={(event) => {
-                  finishInk(event);
-                  finishSelection(event);
-                }}
-                onPointerCancel={(event) => {
-                  finishInk(event);
-                  finishSelection(event);
-                }}
-              >
-                <img src={nativeAssetUrl(rendered.cachePath)} alt={`Página ${page + 1}`} draggable={false} />
-                {isRectSelectionTool && selectionRect && (
+        <main className="document-stage" ref={stageRef} onScroll={handleStageScroll}>
+          <div className={`document-canvas document-canvas--${viewMode}`}>
+            {(renderedPages.length || rendered) ? (
+              (renderedPages.length ? renderedPages : rendered ? [rendered] : []).map((result) => {
+                const active = result.pageIndex === page;
+                if (!active) {
+                  return (
+                    <div
+                      className="rendered-page rendered-page--passive"
+                      style={{ width: result.width }}
+                      data-page-index={result.pageIndex}
+                      key={result.pageIndex}
+                      onDoubleClick={() => onRender(result.pageIndex, zoom)}
+                    >
+                      <img src={nativeAssetUrl(result.cachePath)} alt={`Página ${result.pageIndex + 1}`} draggable={false} />
+                      <span className="page-corner-label">{result.pageIndex + 1}</span>
+                    </div>
+                  );
+                }
+                return (
                   <div
-                    className={`selection-rect selection-rect--${viewerTool}`}
-                    style={{
-                      left: `${selectionRect.x * 100}%`,
-                      top: `${selectionRect.y * 100}%`,
-                      width: `${selectionRect.width * 100}%`,
-                      height: `${selectionRect.height * 100}%`,
+                    className={[
+                      "rendered-page",
+                      "rendered-page--active",
+                      viewerTool === "draw" ? "drawing-active" : "",
+                      isRectSelectionTool ? "selection-active" : "",
+                      viewerTool === "highlight" ? "markup-highlight" : "",
+                      viewerTool === "underline" ? "markup-underline" : "",
+                      viewerTool === "strikeout" ? "markup-strikeout" : "",
+                    ].filter(Boolean).join(" ")}
+                    style={{ width: result.width }}
+                    ref={pageRef}
+                    data-page-index={result.pageIndex}
+                    key={result.pageIndex}
+                    onPointerDown={(event) => {
+                      beginInk(event);
+                      beginSelection(event);
                     }}
-                    aria-hidden="true"
-                  />
-                )}
-                {viewerTool === "select" && selectionRect && selectionRect.width > 0.002 && selectionRect.height > 0.002 && (
-                  <div className="selection-actions" onPointerDown={(event) => event.stopPropagation()} onPointerUp={(event) => event.stopPropagation()}>
-                    <button disabled={!selectedText || selectionBusy} onClick={() => void copySelectedText()}>
-                      <SevenIcon name="text" /> Copiar texto
-                    </button>
-                    <button disabled={selectionBusy} onClick={() => void copySelectionImage()}>
-                      <SevenIcon name="open" /> Copiar imagem
-                    </button>
-                    <button disabled={selectionBusy} onClick={selectWholePage}>Página inteira</button>
-                    <button onClick={clearSelection} aria-label="Limpar seleção"><SevenIcon name="close" /></button>
-                    <small>{selectionBusy ? "Lendo seleção…" : selectedText ? `${selectedText.trim().length} caracteres` : "Sem texto na área"}</small>
+                    onPointerMove={(event) => {
+                      moveInk(event);
+                      moveSelection(event);
+                    }}
+                    onPointerUp={(event) => {
+                      finishInk(event);
+                      finishSelection(event);
+                    }}
+                    onPointerCancel={(event) => {
+                      finishInk(event);
+                      finishSelection(event);
+                    }}
+                  >
+                    <img src={nativeAssetUrl(result.cachePath)} alt={`Página ${result.pageIndex + 1}`} draggable={false} />
+                    {isRectSelectionTool && selectionRect && (
+                      <div
+                        className={`selection-rect selection-rect--${viewerTool}`}
+                        style={{
+                          left: `${selectionRect.x * 100}%`,
+                          top: `${selectionRect.y * 100}%`,
+                          width: `${selectionRect.width * 100}%`,
+                          height: `${selectionRect.height * 100}%`,
+                        }}
+                        aria-hidden="true"
+                      />
+                    )}
+                    {viewerTool === "select" && selectionRect && selectionRect.width > 0.002 && selectionRect.height > 0.002 && (
+                      <div className="selection-actions" onPointerDown={(event) => event.stopPropagation()} onPointerUp={(event) => event.stopPropagation()}>
+                        <button disabled={!selectedText || selectionBusy} onClick={() => void copySelectedText()}>
+                          <SevenIcon name="text" /> Copiar texto
+                        </button>
+                        <button disabled={selectionBusy} onClick={() => void copySelectionImage()}>
+                          <SevenIcon name="open" /> Copiar imagem
+                        </button>
+                        <button disabled={selectionBusy} onClick={selectWholePage}>Página inteira</button>
+                        <button onClick={clearSelection} aria-label="Limpar seleção"><SevenIcon name="close" /></button>
+                        <small>{selectionBusy ? "Lendo seleção…" : selectedText ? `${selectedText.trim().length} caracteres` : "Sem texto na área"}</small>
+                      </div>
+                    )}
+                    {viewerTool === "draw" && inkPoints.length > 0 && (
+                      <svg className="ink-preview" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
+                        <polyline
+                          points={inkPoints.map(([x, y]) => `${(x * 1000).toFixed(2)},${(y * 1000).toFixed(2)}`).join(" ")}
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth={Math.max(1.5, inkWidth * 1.8)}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          vectorEffect="non-scaling-stroke"
+                        />
+                      </svg>
+                    )}
+                    <span className="page-corner-label">{result.pageIndex + 1}</span>
                   </div>
-                )}
-                {viewerTool === "draw" && inkPoints.length > 0 && (
-                  <svg className="ink-preview" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
-                    <polyline
-                      points={inkPoints.map(([x, y]) => `${(x * 1000).toFixed(2)},${(y * 1000).toFixed(2)}`).join(" ")}
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={Math.max(1.5, inkWidth * 1.8)}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      vectorEffect="non-scaling-stroke"
-                    />
-                  </svg>
-                )}
-              </div>
+                );
+              })
             ) : (
               <div className="loading-page"><span className="loader-ring" /><strong>Renderizando página…</strong></div>
             )}
@@ -823,6 +884,11 @@ export function DocumentWorkspace({
             </label>
             <button aria-label="Próxima página" disabled={page >= document.pageCount - 1} onClick={() => onRender(page + 1, zoom)}><SevenIcon name="chevronRight" /></button>
             <button aria-label="Última página" disabled={page >= document.pageCount - 1} onClick={() => onRender(document.pageCount - 1, zoom)}><span className="edge-page">»</span></button>
+            <i />
+            <button className={viewMode === "single" ? "view-mode-button active" : "view-mode-button"} onClick={() => onViewModeChange("single")} title="Página única">1 pág.</button>
+            <button className={viewMode === "continuous" ? "view-mode-button active" : "view-mode-button"} onClick={() => onViewModeChange("continuous")} title="Rolagem contínua">Cont.</button>
+            <button className={viewMode === "facing" ? "view-mode-button active" : "view-mode-button"} onClick={() => onViewModeChange("facing")} title="Duas páginas">2 pág.</button>
+            <button className={viewMode === "facing-continuous" ? "view-mode-button active" : "view-mode-button"} onClick={() => onViewModeChange("facing-continuous")} title="Duas páginas contínuas">2 cont.</button>
             <i />
             <button className="view-mode-button" onClick={() => fitView("page")} title="Ajustar página">Página</button>
             <button className="view-mode-button" onClick={() => fitView("width")} title="Ajustar largura">Largura</button>

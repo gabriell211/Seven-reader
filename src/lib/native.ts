@@ -61,6 +61,8 @@ import type {
   PageActionInput,
   ActionExecution,
   PrintPreflightReport,
+  PrinterInfo,
+  PrintOptions,
   PortfolioPreview,
   PortfolioSearchHit,
   PageBoxUpdate,
@@ -928,6 +930,17 @@ export async function sessionUpdateDocumentMetadata(
   update: MetadataUpdate,
 ): Promise<DocumentSummary> {
   return invoke<DocumentSummary>("session_update_document_metadata", { documentId, update });
+}
+
+export async function listPrinters(): Promise<PrinterInfo[]> {
+  return invoke<PrinterInfo[]>("list_printers");
+}
+
+export async function printDocumentAdvanced(
+  input: string,
+  options: PrintOptions,
+): Promise<JobStart> {
+  return invoke<JobStart>("start_print_document_advanced", { input, options });
 }
 
 export async function printDocument(input: string): Promise<JobStart> {

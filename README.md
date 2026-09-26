@@ -1778,49 +1778,49 @@ Um retângulo visual sobre o conteúdo **não** é redação.
 
 ## Rápida
 
-- [ ] Baixa
-- [ ] Média
-- [ ] Alta
+- [x] Baixa
+- [x] Média
+- [x] Alta
 
 ## Otimizador avançado
 
-- [ ] Auditoria de uso de espaço
-- [ ] Compatibilidade alvo / versão PDF
-- [ ] Aplicar a um arquivo
-- [ ] Aplicar a múltiplos arquivos
+- [x] Auditoria de uso de espaço
+- [x] Compatibilidade alvo / versão PDF
+- [x] Aplicar a um arquivo
+- [x] Aplicar a múltiplos arquivos
 - [ ] Pasta, nome e regra de sobrescrita
-- [ ] Downsample color
-- [ ] Downsample grayscale
-- [ ] Downsample monochrome
-- [ ] Average downsampling
-- [ ] Subsampling
-- [ ] Bicubic downsampling
-- [ ] JPEG
+- [x] Downsample color
+- [x] Downsample grayscale
+- [x] Downsample monochrome
+- [x] Average downsampling
+- [x] Subsampling
+- [x] Bicubic downsampling
+- [x] JPEG
 - [ ] JPEG2000 quando suportado
-- [ ] ZIP/Flate
+- [x] ZIP/Flate
 - [ ] JBIG2 quando suportado
 - [ ] Qualidade por tipo de imagem
 - [ ] Remover thumbnails incorporadas
-- [ ] Desincorporar fontes quando seguro
-- [ ] Subset fonts
+- [x] Desincorporar fontes quando seguro
+- [x] Subset fonts
 - [ ] Painel Transparency
 - [ ] Flatten transparency
 - [ ] Painel Discard Objects
 - [ ] Remover objetos incompatíveis/obsoletos selecionados
-- [ ] Painel Discard User Data
-- [ ] Remover comentários, forms, multimídia e dados privados conforme seleção
-- [ ] Painel Clean Up
-- [ ] Flate em streams não codificados
+- [x] Painel Discard User Data
+- [x] Remover comentários, forms, multimídia e dados privados conforme seleção
+- [x] Painel Clean Up
+- [x] Flate em streams não codificados
 - [ ] Converter LZW para Flate quando aplicável
-- [ ] Remover bookmarks inválidos
-- [ ] Remover links inválidos
+- [x] Remover bookmarks inválidos
+- [x] Remover links inválidos
 - [ ] Remover named destinations não referenciados
 - [ ] Optimize page content
 - [ ] Descartar conteúdo de layers ocultas quando selecionado
 - [ ] Flatten de layers visíveis quando selecionado
-- [ ] Linearização/Fast Web View
-- [ ] Estimativa antes/depois
-- [ ] Salvar preset
+- [x] Linearização/Fast Web View
+- [x] Estimativa antes/depois
+- [x] Salvar preset
 
 ---
 

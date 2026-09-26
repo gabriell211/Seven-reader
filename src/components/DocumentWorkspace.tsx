@@ -1471,6 +1471,24 @@ export function DocumentWorkspace({
                     }}
                   >
                     <img src={nativeAssetUrl(result.cachePath)} alt={`Página ${result.pageIndex + 1}`} draggable={false} />
+                    {currentPageSearchHighlights.length > 0 && (
+                      <div className="search-highlight-layer" aria-hidden="true">
+                        {currentPageSearchHighlights.flatMap(({ occurrence, index }) =>
+                          occurrence.rects.map((rect, rectIndex) => (
+                            <span
+                              key={`${index}-${rectIndex}`}
+                              className={index === searchOccurrenceIndex ? "search-highlight current" : "search-highlight"}
+                              style={{
+                                left: `${rect.x * 100}%`,
+                                top: `${rect.y * 100}%`,
+                                width: `${rect.width * 100}%`,
+                                height: `${rect.height * 100}%`,
+                              }}
+                            />
+                          )),
+                        )}
+                      </div>
+                    )}
                     {showGrid && pageGeometry && (
                       <div
                         className="page-grid-overlay"

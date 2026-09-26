@@ -3388,9 +3388,10 @@ export default function App() {
   const captureScanPage = async (
     dpi: number,
     colorMode: "color" | "gray" | "lineart",
+    scannerId?: string,
   ) => {
     try {
-      return await scanPageImage(dpi, colorMode);
+      return await scanPageImage(dpi, colorMode, scannerId);
     } catch (error) {
       setNotice(errorMessage(error));
       throw error;

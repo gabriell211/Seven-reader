@@ -2556,6 +2556,44 @@ pub fn start_combine_documents(
         },
     ))
 }
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CombinePdfPreview {
+    pub page_count: usize,
+    pub pages: Vec<pdf::RenderResult>,
+}
+
+#[tauri::command]
+pub async fn preview_combine_pdf(
+    state: State<'_, AppState>,
+    path: String,
+    max_pages: usize,
+) -> CommandResult<CombinePdfPreview> {
+    let input = pdf::validate_pdf_path(&path).map_err(ErrorPayload::from)?;
+    let snapshot = AppState {
+        documents: state.documents.clone(),
+        jobs: state.jobs.clone(),
+        watch_folders: state.watch_folders.clone(),
+        cache_dir: state.cache_dir.clone(),
+        resource_dir: state.resource_dir.clone(),
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        let document = pdf::inspect(&input, None)?;
+        let limit = max_pages.clamp(1, 12).min(document.page_count);
+        let mut pages = Vec::with_capacity(limit);
+        for page_index in 0..limit {
+            pages.push(pdf::render_page(&snapshot, &document, page_index, 180)?);
+        }
+        Ok::<_, SevenError>(CombinePdfPreview {
+            page_count: document.page_count,
+            pages,
+        })
+    })
+    .await
+    .map_err(|error| ErrorPayload::from(SevenError::Operation(error.to_string())))?
+    .map_err(ErrorPayload::from)
+}
+
 #[derive(Clone)]
 enum CombineInputKind {
     Pdf,

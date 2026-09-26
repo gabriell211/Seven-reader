@@ -905,6 +905,31 @@ export interface PageBoxUpdate {
   cropToTrim: boolean;
 }
 
+export interface PageActionInput {
+  pageIndex: number;
+  trigger: "open" | "close";
+  actionType: "uri" | "goto" | "named" | "reset" | "submit" | "javascript";
+  target: string;
+  targetPage?: number;
+}
+
+export interface PageActionInfo {
+  objectId: string;
+  pageIndex: number;
+  trigger: "open" | "close" | string;
+  actionType: string;
+  target: string;
+  blocked: boolean;
+}
+
+export interface ActionExecution {
+  actionType: string;
+  target: string;
+  pageIndex?: number;
+  blocked: boolean;
+  reason?: string;
+}
+
 export interface PdfActionInfo {
   objectId: string;
   actionType: string;
